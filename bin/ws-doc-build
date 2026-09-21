@@ -2,14 +2,13 @@
 set -eu
 
 repo="${WORKSTATION_CONFIG:-$HOME/.local/share/workstation-config}"
-mkdir -p "$repo/man/man1"
+mandir="$repo/man/man1"
 
-lowdown -s -tman "$repo/docs/terminal.md" ' \
+mkdir -p "$mandir"
 
--s
--tman
-/home/king/.local/share/workstation-config/docs/workstation.md
-'
-    > "$repo/man/man1/ws-workstation.1"
+lowdown -s -t man "$repo/docs/terminal.md" > "$mandir/ws-terminal.1"
+lowdown -s -t man "$repo/docs/workstation.md" > "$mandir/ws-workstation.1"
 
-echo "Man pages rebuilt."
+echo "Generated:"
+echo "  $mandir/ws-terminal.1"
+echo "  $mandir/ws-workstation.1"

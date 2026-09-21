@@ -1,0 +1,12 @@
+{
+    "colorscheme": "atom-dark",
+    "truecolor": "on",
+    "syntax": true,
+    "softwrap": true,
+    "wordwrap": true,
+    "cursorline": true,
+    "statusline": true,
+    "tabalways": false,
+    "ruler": false,
+    "scrollbar": true
+}

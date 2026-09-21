@@ -1,0 +1,807 @@
+.\" -*- mode: troff; coding: utf-8 -*-
+.TH "ws-workstation" "1" "2026-09-21" "Workstation" "User Commands"
+.SH Текущий реализованный стек Ubuntu T2 workstation
+.LP
+Дата: 2026-09-21
+.SS
+Платформа
+.IP "\(bu" 3
+MacBook Pro 16\(rq 2019 (\f(CRMacBookPro16,1\fR, Intel/T2).
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Ubuntu 26.04.1 LTS.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+GNOME 50.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Wayland session.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+GDM3.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+rEFInd как основное boot menu.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+T2 kernel: \f(CR7.2.6-1-t2-resolute\fR.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Generic Ubuntu kernel оставлен как fallback.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Secure Boot отключён для T2 Linux.
+.SS
+Файловая система и восстановление
+.LP
+Root работает на Btrfs.
+.PP
+Используемые subvolume:
+.LP
+.EX
+@
+@home
+@root
+@srv
+@cache
+@tmp
+@log
+\&.snapshots
+.EE
+.PP
+Root загружается с:
+.LP
+.EX
+rootflags=subvol=@
+.EE
+.PP
+Структура подготовлена для snapshots и отката системы.
+.SS
+GNOME desktop
+.LP
+Используется максимально штатный Ubuntu/GNOME стек:
+.LP
+.EX
+GDM3
+  ↓
+GNOME Shell + Mutter
+  ↓
+Wayland
+.EE
+.PP
+Работают:
+.IP "\(bu" 3
+Ubuntu Dock;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Quick Settings;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+GNOME Settings;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Nautilus;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+штатные notifications и OSD;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+NetworkManager integration;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Bluetooth integration;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+PipeWire / WirePlumber;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+XWayland для legacy applications.
+.LP
+Сторонняя GNOME extension, оставшаяся после экспериментов:
+.LP
+.EX
+Window Monitor Pro
+.EE
+.PP
+Она остаётся установленной и может быть использована позже для определения активного окна.
+.SS
+T2 hardware
+.LP
+Работают:
+.IP "\(bu" 3
+клавиатура;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+trackpad;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Wi-Fi;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Bluetooth;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+T2 audio;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+microphone;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+camera;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Touch Bar;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+suspend/resume.
+.LP
+T2 hardware обслуживается штатным T2Linux kernel stack.
+.SS
+Графика
+.LP
+MacBookPro16,1 использует:
+.LP
+.EX
+Intel UHD 630      → primary GPU
+AMD Radeon dGPU    → render/offload GPU
+.EE
+.PP
+Intel используется для desktop.
+.PP
+AMD доступна для приложений через GPU offload.
+.PP
+Runtime power-off AMD dGPU в текущей конфигурации не используется.
+.SS
+Suspend
+.LP
+Рабочий режим:
+.LP
+.EX
+deep / S3
+.EE
+.PP
+Suspend/resume протестирован и работает.
+.PP
+ASPM включён:
+.LP
+.EX
+pcie_aspm=force
+pcie_aspm.policy=powersave
+.EE
+.PP
+Дополнительный агрессивный power tuning сейчас не используется.
+.SS
+Touch Bar
+.LP
+После экспериментов с \f(CRreact-drm\fR, \f(CRmac-touchbar-plus\fR и \f(CRtiny-dfr\fR система возвращена к штатному T2 kernel driver:
+.LP
+.EX
+hid_appletb_kbd
+hid_appletb_bl
+.EE
+.PP
+Кастомные Touch Bar renderer/daemon больше не используются.
+.PP
+Текущая конфигурация:
+.LP
+.EX
+обычный режим:
+F1 ... F12
+
+удержание Fn:
+media / brightness controls
+
+отпускание Fn:
+F1 ... F12
+.EE
+.PP
+Автоматическое затемнение и выключение Touch Bar включено.
+.PP
+Текущий конфиг:
+.LP
+.EX
+/etc/modprobe.d/tb.conf
+.EE
+.PP
+с параметрами:
+.LP
+.EX
+options hid_appletb-kbd mode=1 fntoggle=1 autodim=1 dim_timeout=30 idle_timeout=15 double_press_switch_time=300
+.EE
+.PP
+Чтобы параметры применились при загрузке, потребовалось обновить initramfs:
+.LP
+.EX
+sudo update-initramfs -u -k \(dq$(uname -r)\(dq
+.EE
+.PP
+После обновления initramfs и reboot штатный Touch Bar работает корректно.
+.SS
+Изоляция приложений и development
+.LP
+Принята архитектура:
+.LP
+.EX
+Host
+├── kernel / drivers / GNOME / network / audio / virtualization
+│   └── apt
+│
+├── обычные GUI applications
+│   └── Flatpak
+│
+├── development/toolchains
+│   └── Distrobox + Podman
+│
+└── Windows applications
+    └── отдельные Wine environments/prefixes
+.EE
+.PP
+Distrobox/Podman уже использовались на практике для изолированной сборки \f(CRreact-drm\fR.
+.PP
+Host не используется как общий development environment.
+.SS
+Терминальная среда
+.SS
+Ghostty
+.LP
+Ghostty выбран основным лёгким терминалом.
+.PP
+Установлен из Ubuntu 26.04 repository:
+.LP
+.EX
+Ghostty 1.3.0
+GTK4 / libadwaita runtime
+Wayland enabled
+OpenGL renderer
+.EE
+.PP
+Оконное оформление использует нативный GTK/libadwaita стек и корректно интегрируется с GNOME.
+.PP
+Текущий визуальный baseline:
+.LP
+.EX
+theme = Desert
+background-opacity = 0.90
+.EE
+.PP
+Тема \f(CRDesert\fR используется без пользовательской коррекции цветов.
+.PP
+В Ghostty настроены:
+.IP "\(bu" 3
+tabs;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+splits;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+search;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+scrollback;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+clipboard protection;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+URL handling;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+shell integration;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+наследование текущего каталога для новых tabs/splits/windows;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+уведомления о завершении долгих команд в неактивных surfaces;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+физические hotkeys, независимые от текущей раскладки клавиатуры.
+.LP
+Основные конфиги:
+.LP
+.EX
+\(ti/.config/ghostty/config.ghostty
+\(ti/.config/ghostty/behavior.ghostty
+\(ti/.config/ghostty/keybinds.ghostty
+\(ti/.config/ghostty/shell-keys.ghostty
+.EE
+.PP
+Для буквенных hotkeys используются физические клавиши Ghostty (\f(CRKeyC\fR, \f(CRKeyV\fR, \f(CRKeyR\fR и т. п.), поэтому сочетания продолжают работать при переключении English / Українська / Русская раскладки.
+.PP
+\f(CRCtrl+Enter\fR специально переводится Ghostty в terminal sequence \f(CRAlt+Enter\fR для использования в TUI-приложениях, в частности в пользовательском directory browser на \f(CRfzf\fR.
+.SS
+Fish
+.LP
+Основной интерактивный shell:
+.LP
+.EX
+fish 4.9.3
+.EE
+.PP
+Fish установлен из официального stable PPA:
+.LP
+.EX
+ppa:fish-shell/release-4
+.EE
+.PP
+Ubuntu-пакет \f(CRfish-common\fR не используется: в актуальном Fish стандартные функции могут быть встроены в сам binary (\f(CRembedded:functions/...\fR).
+.PP
+Fish предоставляет штатно:
+.IP "\(bu" 3
+syntax highlighting;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+autosuggestions;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+contextual TAB completion;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+history;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Emacs-style line editing;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+prompt integration.
+.LP
+Основные конфиги:
+.LP
+.EX
+\(ti/.config/fish/config.fish
+\(ti/.config/fish/conf.d/eza.fish
+\(ti/.config/fish/conf.d/fzf-options.fish
+\(ti/.config/fish/conf.d/git-prompt.fish
+\(ti/.config/fish/conf.d/user-bin.fish
+\(ti/.config/fish/functions/fish_prompt.fish
+\(ti/.config/fish/functions/fish_right_prompt.fish
+\(ti/.config/fish/functions/fzf_cd_browser.fish
+.EE
+.PP
+Prompt показывает:
+.IP "\(bu" 3
+\f(CRuser@host\fR;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+текущий каталог;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Git branch/state;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+exit status последней неуспешной команды;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+длительность команды справа, если она выполнялась дольше примерно 2 секунд.
+.SS
+fzf
+.LP
+\f(CRfzf\fR используется для интерактивного fuzzy search.
+.PP
+Работают:
+.LP
+.EX
+Ctrl+R     → fuzzy search по истории Fish
+Option+C   → пользовательский directory browser
+.EE
+.PP
+\f(CRCtrl+T\fR от стандартной fzf integration не используется, потому что это сочетание занято Ghostty для нового tab.
+.PP
+Directory browser на \f(CROption+C\fR показывает только каталоги текущего уровня, а не всё рекурсивное дерево.
+.PP
+Его логика:
+.LP
+.EX
+Enter на каталоге     → открыть каталог и остаться в browser
+\&../ + Enter           → перейти на уровень вверх
+\&./ + Enter            → принять текущий каталог и вернуться в shell
+Ctrl+Enter             → принять выбранный каталог и вернуться в shell
+Esc                    → отменить
+.EE
+.SS
+zoxide
+.LP
+\f(CRzoxide\fR используется как быстрый каталоговый jump database.
+.PP
+Основные команды:
+.LP
+.EX
+z NAME    → перейти в наиболее подходящий ранее посещённый каталог
+zi        → интерактивно выбрать каталог из базы zoxide
+.EE
+.PP
+Для Fish >= 4.8 используется compatibility workaround, так как установленная версия zoxide ожидает физический \f(CR/usr/share/fish/functions/cd.fish\fR, а новый Fish может хранить \f(CRcd\fR как embedded function.
+.SS
+eza
+.LP
+\f(CReza\fR используется как улучшенный \f(CRls\fR.
+.PP
+Определены команды:
+.LP
+.EX
+ls    → компактный список
+ll    → long listing + Git status
+la    → long listing + hidden files + Git status
+lt    → tree глубиной 2 уровня
+.EE
+.PP
+Используются icons, hyperlinks и группировка каталогов первыми.
+.PP
+Для установленной версии \f(CReza\fR флаг hyperlink используется как boolean:
+.LP
+.EX
+--hyperlink
+.EE
+.PP
+а не \f(CR--hyperlink=auto\fR.
+.SS
+Wave Terminal
+.LP
+Wave Terminal остаётся установленным как более тяжёлый workspace terminal для сложных рабочих сессий, SSH/workspace задач и блочной организации.
+.PP
+Ghostty используется как основной быстрый ежедневный terminal.
+.SS
+Пользовательские scripts и wrappers
+.LP
+Принято единое место:
+.LP
+.EX
+\(ti/.local/bin
+.EE
+.PP
+Этот каталог добавляется в \f(CRPATH\fR через:
+.LP
+.EX
+\(ti/.config/fish/conf.d/user-bin.fish
+.EE
+.PP
+Правило размещения:
+.LP
+.EX
+\(ti/.local/bin/<tool>             → executable / wrapper
+\(ti/.config/<tool>/...            → пользовательская конфигурация tool
+\(ti/.local/share/<tool>/...       → дополнительные данные большого tool
+.EE
+.PP
+Для переносимости shebang выбирается через \f(CR/usr/bin/env\fR, например:
+.LP
+.EX
+#!/usr/bin/env fish
+#!/usr/bin/env bash
+#!/usr/bin/env python3
+.EE
+.SS
+Git для пользовательских конфигов
+.LP
+Для вручную поддерживаемых dotfiles создан bare Git repository:
+.LP
+.EX
+\(ti/.local/share/dotfiles.git
+.EE
+.PP
+Work tree:
+.LP
+.EX
+$HOME
+.EE
+.PP
+Wrapper:
+.LP
+.EX
+\(ti/.local/bin/dotgit
+.EE
+.PP
+Использование:
+.LP
+.EX
+dotgit status
+dotgit diff
+dotgit add <конкретный-файл>
+dotgit commit -m \(dq...\(dq
+.EE
+.PP
+В repository используется whitelist-подход: добавляются только файлы, которые правятся вручную.
+.PP
+Сейчас отслеживаются:
+.LP
+.EX
+\&.config/fish/conf.d/eza.fish
+\&.config/fish/conf.d/fzf-options.fish
+\&.config/fish/conf.d/git-prompt.fish
+\&.config/fish/conf.d/user-bin.fish
+\&.config/fish/config.fish
+\&.config/fish/functions/fish_prompt.fish
+\&.config/fish/functions/fish_right_prompt.fish
+\&.config/fish/functions/fzf_cd_browser.fish
+\&.config/ghostty/behavior.ghostty
+\&.config/ghostty/config.ghostty
+\&.config/ghostty/keybinds.ghostty
+\&.config/ghostty/shell-keys.ghostty
+\&.local/bin/dotgit
+.EE
+.PP
+Git настроен так, чтобы не показывать весь \f(CR$HOME\fR как untracked:
+.LP
+.EX
+status.showUntrackedFiles = no
+.EE
+.PP
+Первый commit создан в branch:
+.LP
+.EX
+main
+.EE
+.PP
+В dotfiles repository сознательно не добавляются автоматически генерируемые и чувствительные данные, например:
+.LP
+.EX
+\(ti/.config/fish/fish_variables
+\(ti/.local/share/fish/fish_history
+SSH private keys
+API tokens
+passwords
+browser profiles
+credentials
+.EE
+.PP
+Не используется \f(CRdotgit add .\fR из \f(CR$HOME\fR; новые конфиги и wrappers добавляются явно.
+.PP
+Remote repository пока не является обязательной частью baseline.
+.SS
+Что сознательно не используется
+.LP
+Сейчас не используются:
+.IP "\(bu" 3
+\f(CRreact-drm\fR;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+\f(CRmac-touchbar-plus\fR;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+\f(CRtiny-dfr\fR;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+отдельный Touch Bar userspace renderer;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+\f(CRpowertop --auto-tune\fR;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+TLP;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+auto-cpufreq;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+агрессивный USB runtime PM для Touch Bar;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+кастомный GNOME Shell CSS;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+замена штатного GNOME наборами отдельных panel/OSD/notification компонентов;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Kitty как основной terminal;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+XWayland workaround для terminal window decorations;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Starship;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Oh My Fish;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Fisher как обязательный framework;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Neovim как часть terminal setup.
+.SS
+Текущее базовое состояние
+.LP
+.EX
+Ubuntu 26.04.1 LTS
+└── GNOME 50 / Wayland
+    ├── T2 kernel 7.2.6-1-t2-resolute
+    ├── Intel primary + AMD offload
+    ├── Wi-Fi / Bluetooth
+    ├── PipeWire audio
+    ├── Camera
+    ├── deep/S3 suspend
+    ├── Btrfs + snapshots architecture
+    ├── штатный Touch Bar
+    │   ├── F1–F12
+    │   ├── Fn → media controls
+    │   └── autodim / auto-off
+    └── terminal environment
+        ├── Ghostty 1.3.0
+        │   ├── Desert
+        │   ├── opacity 0.90
+        │   ├── tabs / splits / search / scrollback
+        │   └── layout-independent physical hotkeys
+        ├── Fish 4.9.3
+        │   ├── syntax highlighting
+        │   ├── autosuggestions
+        │   ├── completion
+        │   └── Git-aware prompt
+        ├── fzf
+        ├── zoxide
+        ├── eza
+        ├── \(ti/.local/bin user tools
+        └── bare dotfiles Git repository
+.EE
+.LP
+Это состояние считаем текущим рабочим baseline для дальнейшего развития workstation.

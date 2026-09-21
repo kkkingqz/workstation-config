@@ -4,27 +4,34 @@ date: 2026-09-21
 source: Workstation
 volume: User Commands
 
-# Текущий реализованный стек Ubuntu T2 workstation
+# UBUNTU T2 WORKSTATION — CURRENT BASELINE
 
-Дата: 2026-09-21
+**Дата:** 2026-09-21  
+**Платформа:** MacBook Pro 16" 2019 (`MacBookPro16,1`, Intel/T2)
 
-## Платформа
+> Этот документ описывает текущее рабочее состояние workstation.
+> Практический справочник по терминалу открывается командой `helpws`.
 
-- MacBook Pro 16" 2019 (`MacBookPro16,1`, Intel/T2).
-- Ubuntu 26.04.1 LTS.
-- GNOME 50.
-- Wayland session.
-- GDM3.
-- rEFInd как основное boot menu.
-- T2 kernel: `7.2.6-1-t2-resolute`.
-- Generic Ubuntu kernel оставлен как fallback.
-- Secure Boot отключён для T2 Linux.
+---
 
-## Файловая система и восстановление
+# PLATFORM
 
-Root работает на Btrfs.
+- **Ubuntu 26.04.1 LTS**
+- **GNOME 50**
+- **Wayland**
+- **GDM3**
+- **rEFInd** как основное boot menu
+- T2 kernel: `7.2.6-1-t2-resolute`
+- Generic Ubuntu kernel оставлен как fallback
+- Secure Boot отключён для T2 Linux
 
-Используемые subvolume:
+---
+
+# FILESYSTEM / RECOVERY
+
+Root работает на **Btrfs**.
+
+## Subvolumes
 
 ```text
 @
@@ -37,7 +44,7 @@ Root работает на Btrfs.
 .snapshots
 ```
 
-Root загружается с:
+## Root boot
 
 ```text
 rootflags=subvol=@
@@ -45,9 +52,11 @@ rootflags=subvol=@
 
 Структура подготовлена для snapshots и отката системы.
 
-## GNOME desktop
+---
 
-Используется максимально штатный Ubuntu/GNOME стек:
+# GNOME DESKTOP
+
+Используется максимально штатный Ubuntu/GNOME stack:
 
 ```text
 GDM3
@@ -63,13 +72,13 @@ Wayland
 - Quick Settings;
 - GNOME Settings;
 - Nautilus;
-- штатные notifications и OSD;
+- notifications и OSD;
 - NetworkManager integration;
 - Bluetooth integration;
 - PipeWire / WirePlumber;
 - XWayland для legacy applications.
 
-Сторонняя GNOME extension, оставшаяся после экспериментов:
+Сторонняя extension, оставшаяся после экспериментов:
 
 ```text
 Window Monitor Pro
@@ -77,13 +86,15 @@ Window Monitor Pro
 
 Она остаётся установленной и может быть использована позже для определения активного окна.
 
-## T2 hardware
+---
+
+# T2 HARDWARE
 
 Работают:
 
-- клавиатура;
+- keyboard;
 - trackpad;
-- Wi-Fi;
+- Wi‑Fi;
 - Bluetooth;
 - T2 audio;
 - microphone;
@@ -91,24 +102,24 @@ Window Monitor Pro
 - Touch Bar;
 - suspend/resume.
 
-T2 hardware обслуживается штатным T2Linux kernel stack.
+T2 hardware обслуживается T2Linux kernel stack.
 
-## Графика
+---
 
-MacBookPro16,1 использует:
+# GRAPHICS
 
 ```text
 Intel UHD 630      → primary GPU
 AMD Radeon dGPU    → render/offload GPU
 ```
 
-Intel используется для desktop.
-
-AMD доступна для приложений через GPU offload.
+Intel используется для desktop. AMD доступна приложениям через GPU offload.
 
 Runtime power-off AMD dGPU в текущей конфигурации не используется.
 
-## Suspend
+---
+
+# SUSPEND / POWER
 
 Рабочий режим:
 
@@ -118,7 +129,7 @@ deep / S3
 
 Suspend/resume протестирован и работает.
 
-ASPM включён:
+ASPM:
 
 ```text
 pcie_aspm=force
@@ -127,18 +138,20 @@ pcie_aspm.policy=powersave
 
 Дополнительный агрессивный power tuning сейчас не используется.
 
-## Touch Bar
+---
 
-После экспериментов с `react-drm`, `mac-touchbar-plus` и `tiny-dfr` система возвращена к штатному T2 kernel driver:
+# TOUCH BAR
+
+После экспериментов система возвращена к штатному T2 kernel driver:
 
 ```text
 hid_appletb_kbd
 hid_appletb_bl
 ```
 
-Кастомные Touch Bar renderer/daemon больше не используются.
+Не используются `react-drm`, `mac-touchbar-plus`, `tiny-dfr` и отдельный userspace renderer.
 
-Текущая конфигурация:
+## Текущий режим
 
 ```text
 обычный режим:
@@ -151,78 +164,70 @@ media / brightness controls
 F1 ... F12
 ```
 
-Автоматическое затемнение и выключение Touch Bar включено.
+Включены autodim и auto-off.
 
-Текущий конфиг:
+Конфигурация:
 
 ```text
 /etc/modprobe.d/tb.conf
 ```
 
-с параметрами:
+Параметры:
 
 ```text
 options hid_appletb-kbd mode=1 fntoggle=1 autodim=1 dim_timeout=30 idle_timeout=15 double_press_switch_time=300
 ```
 
-Чтобы параметры применились при загрузке, потребовалось обновить initramfs:
+Применение после изменения:
 
-```bash
+```sh
 sudo update-initramfs -u -k "$(uname -r)"
 ```
 
-После обновления initramfs и reboot штатный Touch Bar работает корректно.
+---
 
-## Изоляция приложений и development
-
-Принята архитектура:
+# APPLICATION ARCHITECTURE
 
 ```text
 Host
 ├── kernel / drivers / GNOME / network / audio / virtualization
 │   └── apt
 │
-├── обычные GUI applications
+├── ordinary GUI applications
 │   └── Flatpak
 │
-├── development/toolchains
+├── development / toolchains
 │   └── Distrobox + Podman
 │
 └── Windows applications
-    └── отдельные Wine environments/prefixes
+    └── separate Wine environments / prefixes
 ```
 
-Distrobox/Podman уже использовались на практике для изолированной сборки `react-drm`.
+Host сознательно не используется как общий development environment.
 
-Host не используется как общий development environment.
+---
 
-## Терминальная среда
+# TERMINAL ENVIRONMENT
 
-### Ghostty
+## Ghostty
 
-Ghostty выбран основным лёгким терминалом.
-
-Установлен из Ubuntu 26.04 repository:
+Основной лёгкий terminal:
 
 ```text
 Ghostty 1.3.0
-GTK4 / libadwaita runtime
-Wayland enabled
+GTK4 / libadwaita
+Wayland
 OpenGL renderer
 ```
 
-Оконное оформление использует нативный GTK/libadwaita стек и корректно интегрируется с GNOME.
+Визуальный baseline:
 
-Текущий визуальный baseline:
-
-```text
+```ini
 theme = Desert
 background-opacity = 0.90
 ```
 
-Тема `Desert` используется без пользовательской коррекции цветов.
-
-В Ghostty настроены:
+Работают:
 
 - tabs;
 - splits;
@@ -231,11 +236,11 @@ background-opacity = 0.90
 - clipboard protection;
 - URL handling;
 - shell integration;
-- наследование текущего каталога для новых tabs/splits/windows;
-- уведомления о завершении долгих команд в неактивных surfaces;
-- физические hotkeys, независимые от текущей раскладки клавиатуры.
+- cwd inheritance для tabs/splits/windows;
+- notifications после долгих команд в unfocused surfaces;
+- physical layout-independent hotkeys.
 
-Основные конфиги:
+Конфиги:
 
 ```text
 ~/.config/ghostty/config.ghostty
@@ -244,34 +249,28 @@ background-opacity = 0.90
 ~/.config/ghostty/shell-keys.ghostty
 ```
 
-Для буквенных hotkeys используются физические клавиши Ghostty (`KeyC`, `KeyV`, `KeyR` и т. п.), поэтому сочетания продолжают работать при переключении English / Українська / Русская раскладки.
+## Fish
 
-`Ctrl+Enter` специально переводится Ghostty в terminal sequence `Alt+Enter` для использования в TUI-приложениях, в частности в пользовательском directory browser на `fzf`.
-
-### Fish
-
-Основной интерактивный shell:
+Основной interactive shell:
 
 ```text
 fish 4.9.3
 ```
 
-Fish установлен из официального stable PPA:
+Установлен из stable PPA:
 
 ```text
 ppa:fish-shell/release-4
 ```
 
-Ubuntu-пакет `fish-common` не используется: в актуальном Fish стандартные функции могут быть встроены в сам binary (`embedded:functions/...`).
-
-Fish предоставляет штатно:
+Работают:
 
 - syntax highlighting;
 - autosuggestions;
-- contextual TAB completion;
+- contextual completion;
 - history;
 - Emacs-style line editing;
-- prompt integration.
+- Git-aware prompt.
 
 Основные конфиги:
 
@@ -284,126 +283,189 @@ Fish предоставляет штатно:
 ~/.config/fish/functions/fish_prompt.fish
 ~/.config/fish/functions/fish_right_prompt.fish
 ~/.config/fish/functions/fzf_cd_browser.fish
+~/.config/fish/completions/helpws.fish
 ```
 
-Prompt показывает:
-
-- `user@host`;
-- текущий каталог;
-- Git branch/state;
-- exit status последней неуспешной команды;
-- длительность команды справа, если она выполнялась дольше примерно 2 секунд.
-
-### fzf
-
-`fzf` используется для интерактивного fuzzy search.
-
-Работают:
+## fzf
 
 ```text
-Ctrl+R     → fuzzy search по истории Fish
-Option+C   → пользовательский directory browser
+Ctrl+R     → fuzzy history
+Option+C   → directory browser
 ```
 
-`Ctrl+T` от стандартной fzf integration не используется, потому что это сочетание занято Ghostty для нового tab.
+`Ctrl+T` от fzf отключён, потому что `Ctrl+T` занят Ghostty.
 
-Directory browser на `Option+C` показывает только каталоги текущего уровня, а не всё рекурсивное дерево.
-
-Его логика:
+Directory browser:
 
 ```text
-Enter на каталоге     → открыть каталог и остаться в browser
-../ + Enter           → перейти на уровень вверх
-./ + Enter            → принять текущий каталог и вернуться в shell
-Ctrl+Enter             → принять выбранный каталог и вернуться в shell
-Esc                    → отменить
+Enter на каталоге     → открыть и остаться в browser
+../ + Enter           → уровень вверх
+./ + Enter            → принять current directory и выйти
+Ctrl+Enter            → принять выбранный directory и выйти
+Esc                   → cancel
 ```
 
-### zoxide
+## zoxide
 
-`zoxide` используется как быстрый каталоговый jump database.
+```console
+z NAME
+zi
+```
 
-Основные команды:
+Для Fish >= 4.8 используется compatibility workaround из-за embedded `cd` function.
+
+## eza
+
+```console
+ls
+ll
+la
+lt
+```
+
+Используются icons, hyperlinks, directories first и Git metadata для long modes.
+
+## Wave Terminal
+
+Wave Terminal остаётся отдельным тяжёлым workspace terminal. Ghostty используется как быстрый ежедневный terminal.
+
+---
+
+# HELP SYSTEM
+
+## helpws
+
+Пользовательский terminal help viewer:
+
+```console
+helpws
+helpws terminal
+helpws ghostty
+helpws fish
+helpws keys
+helpws workstation
+helpws man ws-terminal
+helpws man ws-workstation
+```
+
+Fish completion работает для topics, например:
+
+```console
+helpws wo<Tab>
+```
+
+дополняется до:
 
 ```text
-z NAME    → перейти в наиболее подходящий ранее посещённый каталог
-zi        → интерактивно выбрать каталог из базы zoxide
+helpws workstation
 ```
 
-Для Fish >= 4.8 используется compatibility workaround, так как установленная версия zoxide ожидает физический `/usr/share/fish/functions/cd.fish`, а новый Fish может хранить `cd` как embedded function.
+Viewer — **Micro в read-only режиме** с отдельной конфигурацией.
 
-### eza
-
-`eza` используется как улучшенный `ls`.
-
-Определены команды:
+Управление:
 
 ```text
-ls    → компактный список
-ll    → long listing + Git status
-la    → long listing + hidden files + Git status
-lt    → tree глубиной 2 уровня
+стрелки / PgUp / PgDn   navigation
+mouse / wheel           scroll
+Ctrl+F                  search
+Ctrl+C                  copy
+Esc                     exit
+Ctrl+Q                  exit
 ```
 
-Используются icons, hyperlinks и группировка каталогов первыми.
+Micro help-viewer использует true-color scheme и Markdown syntax highlighting.
 
-Для установленной версии `eza` флаг hyperlink используется как boolean:
+## Documentation source
 
 ```text
---hyperlink
+~/.local/share/workstation-config/docs/terminal.md
+~/.local/share/workstation-config/docs/workstation.md
 ```
 
-а не `--hyperlink=auto`.
+## Man generation
 
-### Wave Terminal
+```console
+ws-doc-build
+```
 
-Wave Terminal остаётся установленным как более тяжёлый workspace terminal для сложных рабочих сессий, SSH/workspace задач и блочной организации.
+Генерирует:
 
-Ghostty используется как основной быстрый ежедневный terminal.
+```text
+man/man1/ws-terminal.1
+man/man1/ws-workstation.1
+```
 
-## Пользовательские scripts и wrappers
+Просмотр:
 
-Принято единое место:
+```console
+man ws-terminal
+man ws-workstation
+```
+
+---
+
+# USER SCRIPTS / WRAPPERS
+
+Единое место runtime symlink'ов:
 
 ```text
 ~/.local/bin
 ```
 
-Этот каталог добавляется в `PATH` через:
+Исходники собственных wrapper'ов хранятся в Git repository:
 
 ```text
-~/.config/fish/conf.d/user-bin.fish
+~/.local/share/workstation-config/bin
 ```
 
-Правило размещения:
+Правило:
 
 ```text
-~/.local/bin/<tool>             → executable / wrapper
-~/.config/<tool>/...            → пользовательская конфигурация tool
-~/.local/share/<tool>/...       → дополнительные данные большого tool
+executable source   workstation-config/bin/<tool>
+runtime link        ~/.local/bin/<tool>
+config source       workstation-config/config/<tool>/...
+data                  ~/.local/share/<tool>/...
 ```
 
-Для переносимости shebang выбирается через `/usr/bin/env`, например:
+Shebang:
 
-```text
+```sh
 #!/usr/bin/env fish
 #!/usr/bin/env bash
 #!/usr/bin/env python3
 ```
 
-## Git для пользовательских конфигов
+---
 
-Для вручную поддерживаемых dotfiles создан bare Git repository:
+# WORKSTATION CONFIG REPOSITORY
 
-```text
-~/.local/share/dotfiles.git
-```
-
-Work tree:
+Единый обычный Git repository:
 
 ```text
-$HOME
+~/.local/share/workstation-config
 ```
+
+Структура:
+
+```text
+workstation-config/
+├── bin/
+│   ├── dotgit
+│   ├── helpws
+│   └── ws-doc-build
+├── config/
+│   ├── fish/
+│   ├── ghostty/
+│   └── micro-help/
+├── docs/
+│   ├── terminal.md
+│   └── workstation.md
+└── man/man1/
+    ├── ws-terminal.1
+    └── ws-workstation.1
+```
+
+Рабочие пути `~/.config/...`, `~/.local/bin/...` и `~/.local/share/man/...` используют symlink'и на repository.
 
 Wrapper:
 
@@ -411,66 +473,28 @@ Wrapper:
 ~/.local/bin/dotgit
 ```
 
-Использование:
+`dotgit` выполняет Git непосредственно в repository:
 
-```text
+```console
+git -C ~/.local/share/workstation-config ...
+```
+
+Примеры:
+
+```console
 dotgit status
 dotgit diff
-dotgit add <конкретный-файл>
-dotgit commit -m "..."
+dotgit add config/fish/completions/helpws.fish
+dotgit commit -m "Update terminal help"
 ```
 
-В repository используется whitelist-подход: добавляются только файлы, которые правятся вручную.
+Старый bare repository `~/.local/share/dotfiles.git` больше не является текущей архитектурой; до окончательной проверки новой схемы его можно сохранять как резервную копию.
 
-Сейчас отслеживаются:
+---
 
-```text
-.config/fish/conf.d/eza.fish
-.config/fish/conf.d/fzf-options.fish
-.config/fish/conf.d/git-prompt.fish
-.config/fish/conf.d/user-bin.fish
-.config/fish/config.fish
-.config/fish/functions/fish_prompt.fish
-.config/fish/functions/fish_right_prompt.fish
-.config/fish/functions/fzf_cd_browser.fish
-.config/ghostty/behavior.ghostty
-.config/ghostty/config.ghostty
-.config/ghostty/keybinds.ghostty
-.config/ghostty/shell-keys.ghostty
-.local/bin/dotgit
-```
+# НЕ ИСПОЛЬЗУЕТСЯ
 
-Git настроен так, чтобы не показывать весь `$HOME` как untracked:
-
-```text
-status.showUntrackedFiles = no
-```
-
-Первый commit создан в branch:
-
-```text
-main
-```
-
-В dotfiles repository сознательно не добавляются автоматически генерируемые и чувствительные данные, например:
-
-```text
-~/.config/fish/fish_variables
-~/.local/share/fish/fish_history
-SSH private keys
-API tokens
-passwords
-browser profiles
-credentials
-```
-
-Не используется `dotgit add .` из `$HOME`; новые конфиги и wrappers добавляются явно.
-
-Remote repository пока не является обязательной частью baseline.
-
-## Что сознательно не используется
-
-Сейчас не используются:
+Сейчас сознательно не используются:
 
 - `react-drm`;
 - `mac-touchbar-plus`;
@@ -480,16 +504,18 @@ Remote repository пока не является обязательной час
 - TLP;
 - auto-cpufreq;
 - агрессивный USB runtime PM для Touch Bar;
-- кастомный GNOME Shell CSS;
-- замена штатного GNOME наборами отдельных panel/OSD/notification компонентов;
+- custom GNOME Shell CSS;
+- replacement GNOME panel/OSD/notifications stack;
 - Kitty как основной terminal;
-- XWayland workaround для terminal window decorations;
+- XWayland workaround для terminal decorations;
 - Starship;
 - Oh My Fish;
 - Fisher как обязательный framework;
 - Neovim как часть terminal setup.
 
-## Текущее базовое состояние
+---
+
+# CURRENT BASELINE
 
 ```text
 Ubuntu 26.04.1 LTS
@@ -499,28 +525,13 @@ Ubuntu 26.04.1 LTS
     ├── Wi-Fi / Bluetooth
     ├── PipeWire audio
     ├── Camera
-    ├── deep/S3 suspend
+    ├── deep / S3 suspend
     ├── Btrfs + snapshots architecture
-    ├── штатный Touch Bar
-    │   ├── F1–F12
-    │   ├── Fn → media controls
-    │   └── autodim / auto-off
+    ├── stock T2 Touch Bar
     └── terminal environment
-        ├── Ghostty 1.3.0
-        │   ├── Desert
-        │   ├── opacity 0.90
-        │   ├── tabs / splits / search / scrollback
-        │   └── layout-independent physical hotkeys
+        ├── Ghostty 1.3.0 / Desert / opacity 0.90
         ├── Fish 4.9.3
-        │   ├── syntax highlighting
-        │   ├── autosuggestions
-        │   ├── completion
-        │   └── Git-aware prompt
-        ├── fzf
-        ├── zoxide
-        ├── eza
-        ├── ~/.local/bin user tools
-        └── bare dotfiles Git repository
+        ├── fzf / zoxide / eza
+        ├── helpws + Micro
+        └── workstation-config Git repository
 ```
-
-Это состояние считаем текущим рабочим baseline для дальнейшего развития workstation.

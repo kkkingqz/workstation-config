@@ -4,38 +4,54 @@ date: 2026-09-21
 source: Workstation
 volume: User Commands
 
-# Ghostty + Fish — краткий справочник текущей конфигурации
+# TERMINAL WORKSTATION
 
-Дата: 2026-09-21
+**Ghostty + Fish — рабочий справочник**  
+**Baseline:** 2026-09-21
 
-Этот файл описывает функциональность, которая должна работать в текущей конфигурации Ubuntu workstation.
+> Этот документ — краткая практическая справка по текущей терминальной среде.
+> Для полного состояния workstation используй `helpws workstation`.
 
-## 1. Общая схема
+---
 
-```text
-Ghostty
-├── Desert theme
-├── 0.90 background opacity
-├── tabs / splits / scrollback / search
-├── physical layout-independent hotkeys
-└── shell integration
-     ↓
-Fish 4.9.3
-├── syntax highlighting
-├── autosuggestions
-├── contextual completion
-├── history
-├── fzf
-├── zoxide
-├── eza
-└── custom prompt / directory browser
+## БЫСТРЫЙ СТАРТ
+
+### Основные команды
+
+```console
+helpws                 # этот справочник
+helpws workstation     # полный baseline workstation
+helpws man ws-terminal
+helpws man ws-workstation
 ```
 
-Wave Terminal остаётся отдельным более тяжёлым workspace terminal.
+### Главные сочетания
 
-## 2. Ghostty — базовое управление
+```text
+Ctrl+T                  новый tab Ghostty
+Ctrl+Shift+C / V        copy / paste
+Ctrl+R                  fuzzy history Fish
+Option+C                directory browser
+Ctrl+Shift+F            поиск в scrollback
+Esc                     выход из helpws / Micro
+```
 
-### Tabs
+---
+
+# GHOSTTY
+
+## Визуальный baseline
+
+```ini
+theme = Desert
+background-opacity = 0.90
+```
+
+- Тема **Desert** используется без ручной коррекции палитры.
+- Оконное оформление — нативное GTK4/libadwaita под GNOME.
+- Буквенные hotkeys привязаны к **physical keys**, поэтому не зависят от текущей раскладки.
+
+## Tabs
 
 ```text
 Ctrl+T                  новый tab
@@ -48,9 +64,7 @@ Option+1 ... Option+9   перейти к tab 1 ... 9
 Option+0                перейти к tab 10
 ```
 
-На Mac-клавиатуре `Option` используется как `Alt`.
-
-### Windows / surfaces
+## Windows / surfaces
 
 ```text
 Ctrl+Shift+N            новое окно
@@ -58,29 +72,29 @@ Ctrl+Shift+X            закрыть текущую surface
 Ctrl+Shift+Q            закрыть окно
 ```
 
-### Splits
+## Splits
 
 ```text
 Option+-                split вниз
 Option+\                split вправо
 
-Option+H                перейти в split слева
-Option+J                перейти в split снизу
-Option+K                перейти в split сверху
-Option+L                перейти в split справа
+Option+H                split слева
+Option+J                split снизу
+Option+K                split сверху
+Option+L                split справа
 
-Ctrl+Shift+←/↓/↑/→      альтернативная навигация по splits
+Ctrl+Shift+←/↓/↑/→      альтернативная навигация
 
-Ctrl+Shift+Option+←     изменить размер split влево
-Ctrl+Shift+Option+→     изменить размер split вправо
-Ctrl+Shift+Option+↑     изменить размер split вверх
-Ctrl+Shift+Option+↓     изменить размер split вниз
+Ctrl+Shift+Option+←     resize влево
+Ctrl+Shift+Option+→     resize вправо
+Ctrl+Shift+Option+↑     resize вверх
+Ctrl+Shift+Option+↓     resize вниз
 
-Ctrl+Shift+Option+Space zoom/unzoom текущего split
-Ctrl+Shift+Option+E     выровнять размеры splits
+Ctrl+Shift+Option+Space zoom / unzoom split
+Ctrl+Shift+Option+E     выровнять splits
 ```
 
-### Clipboard
+## Clipboard
 
 ```text
 Ctrl+Shift+C            copy
@@ -88,42 +102,38 @@ Ctrl+Shift+V            paste
 Shift+Insert            paste
 ```
 
-Буквенные shortcuts привязаны к физическим клавишам, поэтому работают независимо от текущей раскладки.
+Ghostty настроен так, что буквенные shortcuts используют физические клавиши. Поэтому `Ctrl+Shift+C/V` работают одинаково в English / Українська / Русская раскладках.
 
-Clipboard для приложений внутри terminal защищён настройками Ghostty:
+### Clipboard security
 
-- чтение clipboard через terminal protocol требует подтверждения;
+- чтение clipboard через terminal protocol — с подтверждением;
 - запись разрешена;
-- paste protection включена.
+- paste protection включена;
+- `copy-on-select` включён.
 
-### Search и scrollback
+## Search и scrollback
 
 ```text
-Ctrl+Shift+F            поиск в terminal scrollback
-
+Ctrl+Shift+F            поиск в scrollback
 Shift+PageUp            страница вверх
 Shift+PageDown          страница вниз
 Option+PageUp           небольшой шаг вверх
 Option+PageDown         небольшой шаг вниз
-
 Ctrl+Shift+Home         начало scrollback
 Ctrl+Shift+End          конец scrollback
-
 Ctrl+Option+Home        предыдущий shell prompt
 Ctrl+Option+End         следующий shell prompt
 ```
 
-Ghostty shell integration и Fish prompt marking используются для перехода между prompt'ами.
-
-### Font size
+## Font size
 
 ```text
-Ctrl+=                  увеличить font
-Ctrl+-                  уменьшить font
-Ctrl+0                  reset font size
+Ctrl+=                  увеличить
+Ctrl+-                  уменьшить
+Ctrl+0                  reset
 ```
 
-### Ghostty service keys
+## Service keys
 
 ```text
 Ctrl+Shift+P            command palette
@@ -132,29 +142,15 @@ Ctrl+Option+R           reload Ghostty config
 Ctrl+Shift+Option+,     открыть Ghostty config
 ```
 
-### URL
+## URL
 
-Ghostty распознаёт URL и OSC8 links.
+Ghostty распознаёт обычные URL и OSC8 links. Для OSC8 включён preview реального адреса.
 
-URL можно открывать стандартным modifier-click для платформы.
+---
 
-Для OSC8 link включён preview адреса.
+# PHYSICAL HOTKEYS
 
-## 3. Независимость shortcuts от раскладки
-
-В Ghostty используются physical key bindings (`KeyA`, `KeyC`, `KeyR` и т. п.).
-
-Это значит, что сочетания продолжают работать одинаково при:
-
-```text
-English
-Українська
-Русская
-```
-
-Для shell-level сочетаний Ghostty преобразует физическую клавишу в стандартную terminal sequence.
-
-Примеры:
+Ghostty преобразует physical key в стандартную terminal sequence. Это делает shell hotkeys независимыми от раскладки.
 
 ```text
 Ctrl+R      → ASCII Ctrl-R
@@ -163,33 +159,25 @@ Ctrl+A      → ASCII Ctrl-A
 Ctrl+E      → ASCII Ctrl-E
 Option+B    → Alt-B
 Option+F    → Alt-F
+Ctrl+Enter  → Alt+Enter
 ```
 
-Отдельное правило:
+`Ctrl+Enter → Alt+Enter` используется directory browser на `fzf`.
 
-```text
-Ctrl+Enter  → Alt+Enter terminal sequence
-```
+---
 
-Оно используется пользовательским directory browser.
+# FISH 4.9.3
 
-## 4. Fish — базовый функционал
+## Что работает штатно
 
-Версия:
+- syntax highlighting;
+- autosuggestions;
+- contextual `Tab` completion;
+- command history;
+- Emacs-style line editing;
+- shell integration с Ghostty.
 
-```text
-fish 4.9.3
-```
-
-### Syntax highlighting
-
-Fish подсвечивает вводимую command line ещё до запуска.
-
-Существующая команда и несуществующая команда визуально отличаются.
-
-### Autosuggestions
-
-Fish предлагает серым текстом продолжение команды из history и других источников.
+## Autosuggestions
 
 Пример:
 
@@ -201,7 +189,7 @@ doc
 docker compose up -d ...
 ```
 
-Полностью принять autosuggestion:
+Принять всё:
 
 ```text
 →
@@ -210,72 +198,58 @@ Ctrl+E
 End
 ```
 
-Принять следующий token:
+Принять следующий shell token:
 
 ```text
 Ctrl+→
 ```
 
-### Completion
+## Completion
 
-Обычный `Tab` использует contextual completion Fish.
-
-Примеры:
-
-```text
+```console
 git <Tab>
 systemctl <Tab>
 ssh <Tab>
 cd ~/Do<Tab>
+helpws wo<Tab>
 ```
 
-Fish понимает options, subcommands, paths и completions для многих стандартных CLI tools.
+`helpws wo<Tab>` должен дополниться до `helpws workstation`.
 
-### Редактирование command line
+## Редактирование command line
 
 ```text
 Ctrl+A                  начало строки
 Ctrl+E                  конец строки
 Ctrl+B / Ctrl+F         символ назад / вперёд
 Option+B / Option+F     слово назад / вперёд
-Ctrl+← / Ctrl+→         перемещение по shell token'ам
-
+Ctrl+← / Ctrl+→         переход по shell token'ам
 Ctrl+U                  удалить к началу строки
 Ctrl+K                  удалить до конца строки
 Ctrl+W                  удалить предыдущий компонент
 Option+Backspace        удалить предыдущее слово
 ```
 
-Часть поведения зависит от текущих стандартных Fish Emacs-style bindings.
+---
 
-## 5. История — Ctrl+R
+# HISTORY — CTRL+R
 
-```text
-Ctrl+R
-```
-
-открывает fuzzy search по history через `fzf`.
-
-Внутри:
+`Ctrl+R` открывает fuzzy history через `fzf`.
 
 ```text
-печать текста     → фильтрация истории
-↑ / ↓             → выбрать запись
-Enter             → принять запись
-Esc               → отменить
+печатать                фильтровать
+↑ / ↓                   выбрать
+Enter                   принять запись
+Esc                     отменить
 ```
 
-Стандартный `fzf Ctrl+T` отключён, так как `Ctrl+T` используется Ghostty для нового tab.
+Стандартный `fzf Ctrl+T` отключён, потому что `Ctrl+T` занят Ghostty новым tab.
 
-## 6. Directory browser — Option+C
+---
 
-```text
-Option+C
-```
+# DIRECTORY BROWSER — OPTION+C
 
-открывает пользовательский `fzf` browser каталогов.
-
-Он показывает только каталоги текущего уровня.
+`Option+C` открывает браузер **только текущего уровня**, а не всё рекурсивное дерево.
 
 Пример:
 
@@ -293,11 +267,11 @@ Downloads/
 Управление:
 
 ```text
-Enter на каталоге       открыть его и остаться в browser
-../ + Enter             перейти на уровень вверх
-./ + Enter              выбрать текущий отображаемый каталог и выйти
-Ctrl+Enter              выбрать highlighted каталог и выйти
-Esc                     отменить и вернуться в shell
+Enter на каталоге       войти и остаться в browser
+../ + Enter             уровень вверх
+./ + Enter              принять текущий каталог и выйти
+Ctrl+Enter              принять выделенный каталог и выйти
+Esc                     отменить
 ```
 
 Пример:
@@ -309,71 +283,47 @@ project/ + Enter
 ./ + Enter
 ```
 
-результат:
+Результат:
 
 ```text
 cwd = ~/Downloads/project
 ```
 
-Или:
+---
 
-```text
-Option+C
-Downloads/ + Ctrl+Enter
-```
+# ZOXIDE
 
-сразу возвращает shell в `~/Downloads`.
+## Быстрый jump
 
-## 7. zoxide
-
-`zoxide` запоминает часто посещаемые каталоги.
-
-### Быстрый jump
-
-```text
-z NAME
-```
-
-Примеры:
-
-```text
+```console
 z down
 z project
 z docker
 ```
 
-### Интерактивный выбор
+## Интерактивный выбор
 
-```text
+```console
 zi
 ```
 
-После открытия:
+Разделение ролей:
 
 ```text
-печатать текст          фильтровать базу zoxide
-↑ / ↓                   выбрать
-Enter                   перейти
-Esc                     отменить
-```
-
-Разница:
-
-```text
-Option+C    браузер реального текущего дерева каталогов
+Option+C    browser текущего дерева
 z NAME      быстрый jump по ранее посещённым каталогам
-zi          интерактивный поиск по базе zoxide
+zi          fuzzy search по базе zoxide
 ```
 
-## 8. eza
+---
 
-`eza` заменяет основной пользовательский workflow `ls`.
+# EZA
 
-```text
-ls    компактный список
-ll    long listing + Git status
-la    long listing + hidden files + Git status
-lt    tree depth=2
+```console
+ls      # компактный список
+ll      # long + Git
+la      # hidden + long + Git
+lt      # tree depth=2
 ```
 
 Используются:
@@ -381,52 +331,69 @@ lt    tree depth=2
 - icons;
 - hyperlinks;
 - directories first;
-- Git metadata в `ll` / `la`.
+- Git metadata для `ll` / `la`.
 
-Если terminal font не содержит нужный icon glyph, вместо иконки может отображаться пустой квадрат.
+---
 
-## 9. Prompt
+# PROMPT
 
-Prompt имеет примерно такой вид:
+Пример:
 
 ```text
 king@MacBookPro-k ~/project (main *) ❯
 ```
 
-Показывается:
+Prompt показывает:
 
-- user;
-- host;
+- user / host;
 - cwd;
 - Git branch/state;
-- код ошибки предыдущей команды, если он ненулевой.
+- ненулевой exit status.
 
-Например:
-
-```text
-king@MacBookPro-k ~/project [127] ❯
-```
-
-Если команда выполнялась дольше примерно 2 секунд, справа отображается duration:
+После долгой команды справа показывается duration:
 
 ```text
 12.7s
 ```
 
-## 10. Пользовательские scripts и wrappers
+---
 
-Единое место:
+# HELPWS
+
+`helpws` открывает Markdown в **Micro read-only**.
+
+```console
+helpws
+helpws terminal
+helpws ghostty
+helpws fish
+helpws keys
+helpws workstation
+helpws man ws-terminal
+helpws man ws-workstation
+```
+
+### Навигация в helpws
+
+```text
+стрелки / PgUp / PgDn   навигация
+мышь / wheel            прокрутка
+Ctrl+F                  поиск
+Ctrl+C                  copy
+Esc                     выход
+Ctrl+Q                  альтернативный выход
+```
+
+Micro для `helpws` использует отдельную конфигурацию и не меняет настройки обычного Micro.
+
+---
+
+# USER SCRIPTS / WRAPPERS
+
+Единое место пользовательских executable:
 
 ```text
 ~/.local/bin
-```
-
-Примеры будущих tools:
-
-```text
-~/.local/bin/uectl
-~/.local/bin/app-install
-~/.local/bin/backup-now
 ```
 
 Правило:
@@ -434,60 +401,93 @@ king@MacBookPro-k ~/project [127] ❯
 ```text
 executable       ~/.local/bin/<tool>
 config           ~/.config/<tool>/...
-additional data  ~/.local/share/<tool>/...
+data             ~/.local/share/<tool>/...
 ```
 
 Предпочтительные shebang:
 
-```text
+```sh
 #!/usr/bin/env fish
 #!/usr/bin/env bash
 #!/usr/bin/env python3
 ```
 
-## 11. dotgit
+---
 
-Конфигурационные файлы, которые правятся вручную, хранятся в bare Git repository:
+# WORKSTATION CONFIG GIT
+
+Единый обычный Git repository:
 
 ```text
-Git dir:   ~/.local/share/dotfiles.git
-Work tree: $HOME
-Wrapper:   ~/.local/bin/dotgit
+~/.local/share/workstation-config
 ```
 
-Основные команды:
+Структура:
 
 ```text
+workstation-config/
+├── bin/
+│   ├── dotgit
+│   ├── helpws
+│   └── ws-doc-build
+├── config/
+│   ├── fish/
+│   ├── ghostty/
+│   └── micro-help/
+├── docs/
+│   ├── terminal.md
+│   └── workstation.md
+└── man/man1/
+    ├── ws-terminal.1
+    └── ws-workstation.1
+```
+
+Реальные пути в `$HOME` используют symlink'и на repository.
+
+```console
 dotgit status
 dotgit diff
-dotgit diff --cached
 dotgit add <file>
 dotgit commit -m "message"
 ```
 
-Branch:
+`dotgit` — wrapper вокруг:
 
-```text
-main
+```console
+git -C ~/.local/share/workstation-config
 ```
 
-В repository применяется whitelist-подход.
+---
 
-Не использовать:
+# ДОКУМЕНТАЦИЯ
+
+Markdown — источник истины:
 
 ```text
-dotgit add .
+docs/terminal.md
+docs/workstation.md
 ```
 
-из `$HOME`.
+Man pages генерируются:
 
-Добавлять только конкретные вручную поддерживаемые файлы.
+```console
+ws-doc-build
+```
 
-Текущий tracked set включает Fish, Ghostty и `dotgit` wrapper.
+Просмотр:
 
-## 12. Основные пути конфигурации
+```console
+helpws
+helpws workstation
+man ws-terminal
+man ws-workstation
+```
 
-### Ghostty
+---
+
+# ОСНОВНЫЕ ПУТИ
+
+## Ghostty
 
 ```text
 ~/.config/ghostty/config.ghostty
@@ -496,7 +496,7 @@ dotgit add .
 ~/.config/ghostty/shell-keys.ghostty
 ```
 
-### Fish
+## Fish
 
 ```text
 ~/.config/fish/config.fish
@@ -507,68 +507,11 @@ dotgit add .
 ~/.config/fish/functions/fish_prompt.fish
 ~/.config/fish/functions/fish_right_prompt.fish
 ~/.config/fish/functions/fzf_cd_browser.fish
+~/.config/fish/completions/helpws.fish
 ```
 
-### User tools
+## Help viewer
 
 ```text
-~/.local/bin
+~/.local/share/workstation-config/config/micro-help/
 ```
-
-### Dotfiles Git
-
-```text
-~/.local/share/dotfiles.git
-```
-
-## 13. Быстрая диагностика
-
-### Fish config syntax
-
-```fish
-fish -n ~/.config/fish/config.fish
-
-for f in ~/.config/fish/conf.d/*.fish
-    fish -n $f
-end
-
-for f in ~/.config/fish/functions/*.fish
-    fish -n $f
-end
-```
-
-### Ghostty config
-
-```fish
-ghostty +show-config >/tmp/ghostty-effective.conf
-```
-
-### Проверка клавиши
-
-```fish
-fish_key_reader
-```
-
-Полезно для проверки того, что физические hotkeys правильно преобразуются независимо от раскладки.
-
-### Versions
-
-```fish
-fish --version
-ghostty --version
-fzf --version
-zoxide --version
-eza --version
-```
-
-## 14. Что намеренно не добавлено в terminal stack
-
-- Starship;
-- Oh My Fish;
-- Fisher как обязательный plugin manager;
-- Neovim;
-- Kitty;
-- XWayland workaround для window decorations;
-- отдельный shell framework поверх Fish.
-
-Цель текущего setup — быстрый, максимально нативный и небольшой стек, где Ghostty отвечает за terminal/window layer, Fish — за interactive shell, а `fzf`, `zoxide` и `eza` добавляют только конкретные функции.

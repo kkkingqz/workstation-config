@@ -1,0 +1,645 @@
+.\" -*- mode: troff; coding: utf-8 -*-
+.TH "ws-terminal" "1" "2026-09-21" "Workstation" "User Commands"
+.SH Ghostty + Fish — краткий справочник текущей конфигурации
+.LP
+Дата: 2026-09-21
+.PP
+Этот файл описывает функциональность, которая должна работать в текущей конфигурации Ubuntu workstation.
+.SS
+1. Общая схема
+.LP
+.EX
+Ghostty
+├── Desert theme
+├── 0.90 background opacity
+├── tabs / splits / scrollback / search
+├── physical layout-independent hotkeys
+└── shell integration
+     ↓
+Fish 4.9.3
+├── syntax highlighting
+├── autosuggestions
+├── contextual completion
+├── history
+├── fzf
+├── zoxide
+├── eza
+└── custom prompt / directory browser
+.EE
+.LP
+Wave Terminal остаётся отдельным более тяжёлым workspace terminal.
+.SS
+2. Ghostty — базовое управление
+.SS
+Tabs
+.LP
+.EX
+Ctrl+T                  новый tab
+Ctrl+Shift+W            закрыть tab
+Ctrl+Tab                следующий tab
+Ctrl+Shift+Tab          предыдущий tab
+Ctrl+Shift+PageUp       переместить tab влево
+Ctrl+Shift+PageDown     переместить tab вправо
+Option+1 ... Option+9   перейти к tab 1 ... 9
+Option+0                перейти к tab 10
+.EE
+.LP
+На Mac-клавиатуре \f(CROption\fR используется как \f(CRAlt\fR.
+.SS
+Windows / surfaces
+.LP
+.EX
+Ctrl+Shift+N            новое окно
+Ctrl+Shift+X            закрыть текущую surface
+Ctrl+Shift+Q            закрыть окно
+.EE
+.SS
+Splits
+.LP
+.EX
+Option+-                split вниз
+Option+\e                split вправо
+
+Option+H                перейти в split слева
+Option+J                перейти в split снизу
+Option+K                перейти в split сверху
+Option+L                перейти в split справа
+
+Ctrl+Shift+←/↓/↑/→      альтернативная навигация по splits
+
+Ctrl+Shift+Option+←     изменить размер split влево
+Ctrl+Shift+Option+→     изменить размер split вправо
+Ctrl+Shift+Option+↑     изменить размер split вверх
+Ctrl+Shift+Option+↓     изменить размер split вниз
+
+Ctrl+Shift+Option+Space zoom/unzoom текущего split
+Ctrl+Shift+Option+E     выровнять размеры splits
+.EE
+.SS
+Clipboard
+.LP
+.EX
+Ctrl+Shift+C            copy
+Ctrl+Shift+V            paste
+Shift+Insert            paste
+.EE
+.LP
+Буквенные shortcuts привязаны к физическим клавишам, поэтому работают независимо от текущей раскладки.
+.PP
+Clipboard для приложений внутри terminal защищён настройками Ghostty:
+.IP "\(bu" 3
+чтение clipboard через terminal protocol требует подтверждения;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+запись разрешена;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+paste protection включена.
+.SS
+Search и scrollback
+.LP
+.EX
+Ctrl+Shift+F            поиск в terminal scrollback
+
+Shift+PageUp            страница вверх
+Shift+PageDown          страница вниз
+Option+PageUp           небольшой шаг вверх
+Option+PageDown         небольшой шаг вниз
+
+Ctrl+Shift+Home         начало scrollback
+Ctrl+Shift+End          конец scrollback
+
+Ctrl+Option+Home        предыдущий shell prompt
+Ctrl+Option+End         следующий shell prompt
+.EE
+.LP
+Ghostty shell integration и Fish prompt marking используются для перехода между prompt\(cqами.
+.SS
+Font size
+.LP
+.EX
+Ctrl+=                  увеличить font
+Ctrl+-                  уменьшить font
+Ctrl+0                  reset font size
+.EE
+.SS
+Ghostty service keys
+.LP
+.EX
+Ctrl+Shift+P            command palette
+Ctrl+Shift+Delete       clear screen
+Ctrl+Option+R           reload Ghostty config
+Ctrl+Shift+Option+,     открыть Ghostty config
+.EE
+.SS
+URL
+.LP
+Ghostty распознаёт URL и OSC8 links.
+.PP
+URL можно открывать стандартным modifier-click для платформы.
+.PP
+Для OSC8 link включён preview адреса.
+.SS
+3. Независимость shortcuts от раскладки
+.LP
+В Ghostty используются physical key bindings (\f(CRKeyA\fR, \f(CRKeyC\fR, \f(CRKeyR\fR и т. п.).
+.PP
+Это значит, что сочетания продолжают работать одинаково при:
+.LP
+.EX
+English
+Українська
+Русская
+.EE
+.PP
+Для shell-level сочетаний Ghostty преобразует физическую клавишу в стандартную terminal sequence.
+.PP
+Примеры:
+.LP
+.EX
+Ctrl+R      → ASCII Ctrl-R
+Option+C    → ESC c / Alt-C
+Ctrl+A      → ASCII Ctrl-A
+Ctrl+E      → ASCII Ctrl-E
+Option+B    → Alt-B
+Option+F    → Alt-F
+.EE
+.PP
+Отдельное правило:
+.LP
+.EX
+Ctrl+Enter  → Alt+Enter terminal sequence
+.EE
+.PP
+Оно используется пользовательским directory browser.
+.SS
+4. Fish — базовый функционал
+.LP
+Версия:
+.LP
+.EX
+fish 4.9.3
+.EE
+.SS
+Syntax highlighting
+.LP
+Fish подсвечивает вводимую command line ещё до запуска.
+.PP
+Существующая команда и несуществующая команда визуально отличаются.
+.SS
+Autosuggestions
+.LP
+Fish предлагает серым текстом продолжение команды из history и других источников.
+.PP
+Пример:
+.LP
+.EX
+ввод:
+doc
+
+предложение:
+docker compose up -d ...
+.EE
+.PP
+Полностью принять autosuggestion:
+.LP
+.EX
+→
+Ctrl+F
+Ctrl+E
+End
+.EE
+.PP
+Принять следующий token:
+.LP
+.EX
+Ctrl+→
+.EE
+.SS
+Completion
+.LP
+Обычный \f(CRTab\fR использует contextual completion Fish.
+.PP
+Примеры:
+.LP
+.EX
+git <Tab>
+systemctl <Tab>
+ssh <Tab>
+cd \(ti/Do<Tab>
+.EE
+.PP
+Fish понимает options, subcommands, paths и completions для многих стандартных CLI tools.
+.SS
+Редактирование command line
+.LP
+.EX
+Ctrl+A                  начало строки
+Ctrl+E                  конец строки
+Ctrl+B / Ctrl+F         символ назад / вперёд
+Option+B / Option+F     слово назад / вперёд
+Ctrl+← / Ctrl+→         перемещение по shell token'ам
+
+Ctrl+U                  удалить к началу строки
+Ctrl+K                  удалить до конца строки
+Ctrl+W                  удалить предыдущий компонент
+Option+Backspace        удалить предыдущее слово
+.EE
+.LP
+Часть поведения зависит от текущих стандартных Fish Emacs-style bindings.
+.SS
+5. История — Ctrl+R
+.LP
+.EX
+Ctrl+R
+.EE
+.LP
+открывает fuzzy search по history через \f(CRfzf\fR.
+.PP
+Внутри:
+.LP
+.EX
+печать текста     → фильтрация истории
+↑ / ↓             → выбрать запись
+Enter             → принять запись
+Esc               → отменить
+.EE
+.PP
+Стандартный \f(CRfzf Ctrl+T\fR отключён, так как \f(CRCtrl+T\fR используется Ghostty для нового tab.
+.SS
+6. Directory browser — Option+C
+.LP
+.EX
+Option+C
+.EE
+.LP
+открывает пользовательский \f(CRfzf\fR browser каталогов.
+.PP
+Он показывает только каталоги текущего уровня.
+.PP
+Пример:
+.LP
+.EX
+\&./
+\&../
+\&.config/
+\&.local/
+Desktop/
+Documents/
+Downloads/
+\&...
+.EE
+.PP
+Управление:
+.LP
+.EX
+Enter на каталоге       открыть его и остаться в browser
+\&../ + Enter             перейти на уровень вверх
+\&./ + Enter              выбрать текущий отображаемый каталог и выйти
+Ctrl+Enter              выбрать highlighted каталог и выйти
+Esc                     отменить и вернуться в shell
+.EE
+.PP
+Пример:
+.LP
+.EX
+Option+C
+Downloads/ + Enter
+project/ + Enter
+\&./ + Enter
+.EE
+.PP
+результат:
+.LP
+.EX
+cwd = \(ti/Downloads/project
+.EE
+.PP
+Или:
+.LP
+.EX
+Option+C
+Downloads/ + Ctrl+Enter
+.EE
+.PP
+сразу возвращает shell в \f(CR\(ti/Downloads\fR.
+.SS
+7. zoxide
+.LP
+\f(CRzoxide\fR запоминает часто посещаемые каталоги.
+.SS
+Быстрый jump
+.LP
+.EX
+z NAME
+.EE
+.LP
+Примеры:
+.LP
+.EX
+z down
+z project
+z docker
+.EE
+.SS
+Интерактивный выбор
+.LP
+.EX
+zi
+.EE
+.LP
+После открытия:
+.LP
+.EX
+печатать текст          фильтровать базу zoxide
+↑ / ↓                   выбрать
+Enter                   перейти
+Esc                     отменить
+.EE
+.PP
+Разница:
+.LP
+.EX
+Option+C    браузер реального текущего дерева каталогов
+z NAME      быстрый jump по ранее посещённым каталогам
+zi          интерактивный поиск по базе zoxide
+.EE
+.SS
+8. eza
+.LP
+\f(CReza\fR заменяет основной пользовательский workflow \f(CRls\fR.
+.LP
+.EX
+ls    компактный список
+ll    long listing + Git status
+la    long listing + hidden files + Git status
+lt    tree depth=2
+.EE
+.PP
+Используются:
+.IP "\(bu" 3
+icons;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+hyperlinks;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+directories first;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Git metadata в \f(CRll\fR / \f(CRla\fR.
+.LP
+Если terminal font не содержит нужный icon glyph, вместо иконки может отображаться пустой квадрат.
+.SS
+9. Prompt
+.LP
+Prompt имеет примерно такой вид:
+.LP
+.EX
+king@MacBookPro-k \(ti/project (main *) ❯
+.EE
+.PP
+Показывается:
+.IP "\(bu" 3
+user;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+host;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+cwd;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Git branch/state;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+код ошибки предыдущей команды, если он ненулевой.
+.LP
+Например:
+.LP
+.EX
+king@MacBookPro-k \(ti/project [127] ❯
+.EE
+.PP
+Если команда выполнялась дольше примерно 2 секунд, справа отображается duration:
+.LP
+.EX
+12.7s
+.EE
+.SS
+10. Пользовательские scripts и wrappers
+.LP
+Единое место:
+.LP
+.EX
+\(ti/.local/bin
+.EE
+.PP
+Примеры будущих tools:
+.LP
+.EX
+\(ti/.local/bin/uectl
+\(ti/.local/bin/app-install
+\(ti/.local/bin/backup-now
+.EE
+.PP
+Правило:
+.LP
+.EX
+executable       \(ti/.local/bin/<tool>
+config           \(ti/.config/<tool>/...
+additional data  \(ti/.local/share/<tool>/...
+.EE
+.PP
+Предпочтительные shebang:
+.LP
+.EX
+#!/usr/bin/env fish
+#!/usr/bin/env bash
+#!/usr/bin/env python3
+.EE
+.SS
+11. dotgit
+.LP
+Конфигурационные файлы, которые правятся вручную, хранятся в bare Git repository:
+.LP
+.EX
+Git dir:   \(ti/.local/share/dotfiles.git
+Work tree: $HOME
+Wrapper:   \(ti/.local/bin/dotgit
+.EE
+.PP
+Основные команды:
+.LP
+.EX
+dotgit status
+dotgit diff
+dotgit diff --cached
+dotgit add <file>
+dotgit commit -m \(dqmessage\(dq
+.EE
+.PP
+Branch:
+.LP
+.EX
+main
+.EE
+.PP
+В repository применяется whitelist-подход.
+.PP
+Не использовать:
+.LP
+.EX
+dotgit add .
+.EE
+.PP
+из \f(CR$HOME\fR.
+.PP
+Добавлять только конкретные вручную поддерживаемые файлы.
+.PP
+Текущий tracked set включает Fish, Ghostty и \f(CRdotgit\fR wrapper.
+.SS
+12. Основные пути конфигурации
+.SS
+Ghostty
+.LP
+.EX
+\(ti/.config/ghostty/config.ghostty
+\(ti/.config/ghostty/behavior.ghostty
+\(ti/.config/ghostty/keybinds.ghostty
+\(ti/.config/ghostty/shell-keys.ghostty
+.EE
+.SS
+Fish
+.LP
+.EX
+\(ti/.config/fish/config.fish
+\(ti/.config/fish/conf.d/eza.fish
+\(ti/.config/fish/conf.d/fzf-options.fish
+\(ti/.config/fish/conf.d/git-prompt.fish
+\(ti/.config/fish/conf.d/user-bin.fish
+\(ti/.config/fish/functions/fish_prompt.fish
+\(ti/.config/fish/functions/fish_right_prompt.fish
+\(ti/.config/fish/functions/fzf_cd_browser.fish
+.EE
+.SS
+User tools
+.LP
+.EX
+\(ti/.local/bin
+.EE
+.SS
+Dotfiles Git
+.LP
+.EX
+\(ti/.local/share/dotfiles.git
+.EE
+.SS
+13. Быстрая диагностика
+.SS
+Fish config syntax
+.LP
+.EX
+fish -n \(ti/.config/fish/config.fish
+
+for f in \(ti/.config/fish/conf.d/*.fish
+    fish -n $f
+end
+
+for f in \(ti/.config/fish/functions/*.fish
+    fish -n $f
+end
+.EE
+.SS
+Ghostty config
+.LP
+.EX
+ghostty +show-config >/tmp/ghostty-effective.conf
+.EE
+.SS
+Проверка клавиши
+.LP
+.EX
+fish_key_reader
+.EE
+.LP
+Полезно для проверки того, что физические hotkeys правильно преобразуются независимо от раскладки.
+.SS
+Versions
+.LP
+.EX
+fish --version
+ghostty --version
+fzf --version
+zoxide --version
+eza --version
+.EE
+.SS
+14. Что намеренно не добавлено в terminal stack
+.IP "\(bu" 3
+Starship;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Oh My Fish;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Fisher как обязательный plugin manager;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Neovim;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Kitty;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+XWayland workaround для window decorations;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+отдельный shell framework поверх Fish.
+.LP
+Цель текущего setup — быстрый, максимально нативный и небольшой стек, где Ghostty отвечает за terminal/window layer, Fish — за interactive shell, а \f(CRfzf\fR, \f(CRzoxide\fR и \f(CReza\fR добавляют только конкретные функции.
