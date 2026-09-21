@@ -1,0 +1,274 @@
+.\" -*- mode: troff; coding: utf-8 -*-
+.TH "ws-plan-flatpak" "1" "2026-09-21" "Workstation" "User Commands"
+.SH PLAN — FLATPAK DESKTOP APPS
+.SS
+Цель
+.LP
+Сделать Flatpak стандартным способом установки обычных сторонних GUI-приложений, сохраняя host чистым.
+.SH 1. Базовая инфраструктура
+.LP
+Проверить/установить:
+.LP
+.EX
+sudo apt install flatpak flatseal
+.EE
+.PP
+Добавить Flathub для пользователя:
+.LP
+.EX
+flatpak remote-add --user --if-not-exists \e
+  flathub https://flathub.org/repo/flathub.flatpakrepo
+.EE
+.PP
+Проверить:
+.LP
+.EX
+flatpak remotes --user
+.EE
+.LP
+\l'2i'
+.SH 2. Правило размещения
+.LP
+.EX
+kernel / driver / GNOME / service → apt host
+обычный GUI app                   → Flatpak
+Ubuntu system app                 → deb/Snap как поставляет Ubuntu
+development / SDK                 → Distrobox
+Windows app                       → отдельный Wine environment
+.EE
+.LP
+Не переносить системные компоненты GNOME в Flatpak.
+.LP
+\l'2i'
+.SH 3. Начальный набор GUI
+.LP
+Устанавливать приложения по одному, а не огромным batch.
+.PP
+Типичные категории:
+.IP "\(bu" 3
+browser;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+graphics;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+communications;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+utilities;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+media.
+.LP
+Для каждого приложения проверить:
+.IP "\(bu" 3
+Wayland;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+HiDPI;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+file chooser;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+clipboard;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+drag-and-drop;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+notifications;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+audio/video;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+hardware access, если нужен.
+.LP
+\l'2i'
+.SH 4. Permissions
+.LP
+Использовать Flatseal как GUI для просмотра permissions.
+.PP
+Принцип:
+.IP "\(bu" 3
+не выдавать \f(CRfilesystem=host\fR по умолчанию;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+давать доступ только к нужным каталогам;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Projects/media folders добавлять точечно.
+.LP
+Пример:
+.LP
+.EX
+flatpak override --user \e
+  --filesystem=\(dq$HOME/Projects/Graphics\(dq \e
+  org.gimp.GIMP
+.EE
+.LP
+\l'2i'
+.SH 5. Portals
+.LP
+Обязательно проверить с реальными Flatpak apps:
+.IP "\(bu" 3
+open/save dialog;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+screenshots;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+screen sharing;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+notifications;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+URI links;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+default app handling.
+.LP
+При проблеме сначала проверять portals/runtimes, а не расширять filesystem permissions вслепую.
+.LP
+\l'2i'
+.SH 6. File associations / links
+.LP
+После установки основных apps проверить:
+.LP
+.EX
+xdg-mime query default <mime-type>
+.EE
+.PP
+и реальные сценарии:
+.IP "\(bu" 3
+HTTP/HTTPS;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+mailto;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+magnet/torrent при необходимости;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+изображения;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+PDF;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+видео.
+.LP
+Цель — чтобы Flatpak не ломал обычный desktop workflow.
+.LP
+\l'2i'
+.SH 7. Maintenance
+.LP
+Регулярно:
+.LP
+.EX
+flatpak update --user
+flatpak uninstall --user --unused
+flatpak list --app
+.EE
+.PP
+Не использовать несколько независимых способов установки одной и той же GUI-программы без причины.
+.LP
+\l'2i'
+.SH DONE WHEN
+.IP "\(bu" 3
+основные сторонние GUI apps работают через Flatpak;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+permissions минимальны и понятны;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+portals корректны;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+file associations работают;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+host не обрастает сторонними GUI repositories.

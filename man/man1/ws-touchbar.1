@@ -1,0 +1,569 @@
+.\" -*- mode: troff; coding: utf-8 -*-
+.TH "ws-touchbar" "1" "2026-09-21" "Workstation" "User Commands"
+.SH UBUNTU T2 TOUCH BAR — IMPLEMENTATION NOTES
+.SS
+Цель этого файла
+.LP
+Этот файл нужен как точка продолжения работы с Touch Bar на MacBook Pro 16\(rq 2019 (T2), чтобы при возврате к теме не повторять уже пройденные эксперименты и диагностику.
+.LP
+\l'2i'
+.SS
+Система
+.IP "\(bu" 3
+MacBook Pro 16\(rq 2019 / MacBookPro16,1.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Ubuntu 26.04.1 LTS.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+T2 kernel: \f(CR7.2.6-1-t2-resolute\fR.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+GNOME Wayland.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Базовый T2 стек Touch Bar:
+.RS
+.IP "\(bu" 3
+\f(CRhid-appletb-kbd\fR
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+\f(CRhid-appletb-bl\fR
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+\f(CRappletbdrm\fR
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+\f(CRapple-bce\fR / \f(CRt2bce\fR
+.RE
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Touch Bar в штатном keyboard/firmware режиме использует USB устройство Apple \f(CR05ac:8302\fR.
+.SS
+Важное: GNOME extension
+.LP
+\fBGNOME extension \f(CBWindow Monitor Pro\fB остался установленным.\fR
+.PP
+Он ставился для определения активного окна в GNOME Wayland при экспериментах с \f(CRreact-drm\fR.
+.PP
+При возврате к теме учитывать, что extension уже присутствует в системе. Не ставить второй экземпляр и не считать, что active-window backend нужно настраивать с нуля.
+.LP
+\l'2i'
+.SH 1. Эксперимент с react-drm
+.LP
+Использовался репозиторий:
+.PP
+\f(CRdev-muhammad-adel/react-drm-for-touchbar\fR
+.PP
+Зафиксированная версия:
+.LP
+.EX
+commit 547be168c19b21702ca6671257e69072ad686263
+short  547be16
+date   2026-09-12
+msg    fix arrow overflow
+.EE
+.SS
+Сборка
+.LP
+Сборка выполнялась \fBне на host\fR, а в отдельном Distrobox:
+.LP
+.EX
+react-drm-build
+Ubuntu 26.04
+.EE
+.PP
+Node:
+.LP
+.EX
+v22.22.1
+npm 11.14.1
+.EE
+.PP
+Native addon успешно собирался:
+.LP
+.EX
+build/Release/drm_backend.node
+.EE
+.PP
+Config GUI тоже был успешно собран.
+.SS
+Наш пакет
+.LP
+Был создан собственный Debian package:
+.LP
+.EX
+react-drm-touchbar
+.EE
+.PP
+Последняя рабочая схема пакета:
+.IP "\(bu" 3
+\f(CR/opt/react-drm\fR — immutable application tree.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+private Node runtime в \f(CR/opt/react-drm/runtime/bin/node\fR.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+user data: \f(CR\(ti/.local/share/react-drm/linux-touchbar-control-center/\fR.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+systemd user service: \f(CRreact-drm.service\fR.
+.LP
+Для T2 использовался hardware profile:
+.LP
+.EX
+REACT_DRM_TB_BACKLIGHT_NAMES=appletb_backlight,display-pipe
+REACT_DRM_DISP_BACKLIGHT_NAMES=apple-panel-bl,gmux_backlight,intel_backlight,acpi_video0
+REACT_DRM_DRM_DRIVER=appletbdrm
+REACT_DRM_USB_VENDOR=05ac
+REACT_DRM_USB_PRODUCT=8302
+REACT_DRM_USB_BRIDGE=apple-bce,bce-vhci
+.EE
+.SS
+Найденный bug с public/logo.png
+.LP
+Pinned версия \f(CRreact-drm\fR ожидала:
+.LP
+.EX
+public/logo.png
+.EE
+.PP
+относительно current working directory.
+.PP
+Из-за этого первый запуск выдавал:
+.LP
+.EX
+ENOENT: no such file or directory, open 'public/logo.png'
+.EE
+.PP
+Исправление:
+.LP
+.EX
+\(ti/.local/share/react-drm/linux-touchbar-control-center/public
+    -> /opt/react-drm/linux-touchbar-control-center/public
+.EE
+.PP
+После этого runtime запускался нормально.
+.SS
+Успешный запуск react-drm
+.LP
+Рабочий запуск подтверждал:
+.LP
+.EX
+DRM display ready: 2008×60 on /dev/dri/card0
+renderer touch device ready
+custom-layer bridge listening
+logind sleep watcher active
+.EE
+.PP
+USB Touch Bar при этом переходил в configuration 2.
+.SS
+Почему от react-drm отказались
+.LP
+Главная причина — \fBнестабильная работа touch drag / slider UI\fR:
+.IP "\(bu" 3
+video seek/progress bar реагировал один раз, после чего нормально не работал;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+brightness slider тоже работал некорректно;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+для планируемого интерфейса надёжнее использовать обычные кнопки, а не draggable sliders.
+.LP
+Поэтому дальнейшую доработку \f(CRreact-drm\fR остановили.
+.LP
+\l'2i'
+.SH 2. mac-touchbar-plus / tiny-dfr
+.LP
+Ранее также исследовался \f(CRmac-touchbar-plus\fR.
+.PP
+Важно:
+.IP "\(bu" 3
+это был не просто штатный \f(CRtiny-dfr\fR;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+использовался userspace helper для определения активного окна;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+рабочая идея была app-specific panels.
+.LP
+После решения вернуться к базовому состоянию Ubuntu T2 было принято удалить экспериментальные компоненты:
+.LP
+.EX
+mac-touchbar-plus
+tiny-dfr
+react-drm
+.EE
+.PP
+и не трогать штатные kernel/T2 компоненты.
+.PP
+Если при следующем возврате к теме понадобится app-aware интерфейс, не начинать с предположения, что штатный \f(CRhid-appletb-kbd\fR умеет app profiles — он их не умеет.
+.LP
+\l'2i'
+.SH 3. Безопасность Touch Bar / runtime PM
+.LP
+Во время ранних экспериментов обнаружена важная проблема.
+.PP
+Нельзя без необходимости включать USB runtime autosuspend для Touch Bar Display / Backlight:
+.IP "\(bu" 3
+Touch Bar Display: \f(CR05ac:8302\fR
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+\f(CRhid-appletb-kbd\fR
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+\f(CRhid-appletb-bl\fR
+.LP
+При \f(CRpower/control=auto\fR устройство уже зависало в состоянии:
+.LP
+.EX
+suspending
+.EE
+.PP
+а восстановление блокировалось в D-state.
+.PP
+Поэтому:
+.IP "\(bu" 3
+\fBне запускать \f(CBpowertop --auto-tune\fB;\fR
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+не экспериментировать с runtime PM Touch Bar без необходимости;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+не запускать одновременно два Touch Bar renderer/daemon.
+.LP
+\l'2i'
+.SH 4. Штатный hid-appletb-kbd
+.LP
+После удаления кастомных renderer\(cqов решили использовать штатный \f(CRhid-appletb-kbd\fR.
+.PP
+Он работает в firmware keyboard mode и не требует DRM-renderer.
+.SS
+Поддерживаемые режимы
+.LP
+Sysfs \f(CRmode\fR:
+.LP
+.EX
+0 = Escape only
+1 = Function keys
+2 = Media / brightness keys
+3 = None
+.EE
+.SS
+Встроенный media keymap
+.LP
+В media-режиме слоты соответствуют примерно:
+.LP
+.EX
+F1  -> Brightness Down
+F2  -> Brightness Up
+F3  -> Reserved
+F4  -> Reserved
+F5  -> Keyboard Backlight Down
+F6  -> Keyboard Backlight Up
+F7  -> Previous Song
+F8  -> Play/Pause
+F9  -> Next Song
+F10 -> Mute
+F11 -> Volume Down
+F12 -> Volume Up
+.EE
+.SS
+Поддерживаемые параметры модуля
+.LP
+Ожидаемый набор параметров:
+.LP
+.EX
+mode
+fntoggle
+autodim
+dim_timeout
+idle_timeout
+double_press_switch_time
+.EE
+.PP
+Точный список текущего установленного модуля всегда лучше проверить:
+.LP
+.EX
+modinfo hid_appletb_kbd | grep '\(haparm:'
+.EE
+.SS
+Значение параметров
+.LP
+.EX
+mode=1
+.EE
+.LP
+Основной слой F1..F12.
+.LP
+.EX
+fntoggle=1
+.EE
+.PP
+При удержании Fn временно переключаться на media layer.
+.LP
+.EX
+autodim=1
+.EE
+.PP
+Автоматически приглушать и выключать Touch Bar по idle timeout.
+.LP
+.EX
+dim_timeout=N
+.EE
+.PP
+Через N секунд без активности уменьшить яркость.
+.LP
+.EX
+idle_timeout=N
+.EE
+.PP
+Через N секунд после dim полностью погасить Touch Bar.
+.LP
+.EX
+double_press_switch_time=N
+.EE
+.PP
+T2Linux patch: двойной Fn в пределах N миллисекунд фиксирует другой основной слой.
+.LP
+.EX
+double_press_switch_time=0
+.EE
+.PP
+отключает эту функцию.
+.LP
+\l'2i'
+.SH 5. Текущая желаемая штатная конфигурация
+.LP
+Пользователь решил оставить простой штатный режим:
+.LP
+.EX
+обычно:
+F1 ... F12
+
+удержание Fn:
+media / brightness
+
+отпускание Fn:
+F1 ... F12
+.EE
+.PP
+Плюс быстрое выключение Touch Bar при бездействии.
+.PP
+Последний показанный \f(CR/etc/modprobe.d/tb.conf\fR:
+.LP
+.EX
+options hid-appletb-kbd mode=1 fntoggle=1 autodim=1 dim_timeout=30 idle_timeout=15 double_press_switch_time=300
+.EE
+.PP
+То есть на тот момент:
+.IP "\(bu" 3
+основной слой должен быть F1..F12;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Fn — временный media layer;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+dim через 30 секунд;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+off ещё через 15 секунд;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+двойной Fn за 300 ms может фиксировать слой.
+.LP
+Если нужен \fBстрого временный media layer только пока удерживается Fn\fR, изменить:
+.LP
+.EX
+double_press_switch_time=0
+.EE
+.LP
+\l'2i'
+.SH 6. INITRAMFS / BOOT PARAMETERS
+.LP
+\f(CRhid_appletb_kbd\fR загружается достаточно рано, поэтому параметры из \f(CR/etc/modprobe.d/tb.conf\fR должны попадать в initramfs.
+.PP
+После выполнения:
+.LP
+.EX
+sudo update-initramfs -u -k \(dq$(uname -r)\(dq
+sudo reboot
+.EE
+.PP
+штатный Touch Bar начал работать с текущей конфигурацией.
+.PP
+Следующий диагностический шаг при возврате к теме:
+.LP
+.EX
+for p in mode fntoggle autodim dim_timeout idle_timeout double_press_switch_time; do
+    printf '%-28s = ' \(dq$p\(dq
+    cat \(dq/sys/module/hid_appletb_kbd/parameters/$p\(dq 2>/dev/null || echo \(dqN/A\(dq
+done
+.EE
+.PP
+Это покажет \fBреальные параметры уже загруженного kernel module\fR, а не содержимое конфигурационного файла.
+.PP
+Если runtime значения не соответствуют \f(CR/etc/modprobe.d/tb.conf\fR, следующий шаг:
+.LP
+.EX
+sudo update-initramfs -u -k \(dq$(uname -r)\(dq
+.EE
+.PP
+и проверить присутствие файла:
+.LP
+.EX
+lsinitramfs \(dq/boot/initrd.img-$(uname -r)\(dq | grep 'modprobe.d/tb.conf'
+.EE
+.PP
+после чего reboot.
+.PP
+Текущий baseline после \f(CRupdate-initramfs\fR подтверждён рабочим. При будущих изменениях параметров снова обновлять initramfs.
+.LP
+\l'2i'
+.SH 7. Идея отдельного будущего проекта
+.LP
+Обсуждалась возможность форкнуть/патчить \f(CRhid-appletb-kbd\fR и сделать три слоя:
+.LP
+.EX
+F1..F12
+Media
+Custom 12 buttons
+.EE
+.PP
+с переключением Fn.
+.PP
+В custom layer можно было бы использовать F13..F24 как отдельные события, а userspace daemon назначал бы им действия в зависимости от активного приложения.
+.PP
+\fBЭту идею сознательно отложили как отдельный проект.\fR
+.PP
+Не смешивать её с текущей задачей настройки штатного \f(CRhid-appletb-kbd\fR.
+.LP
+\l'2i'
+.SH 8. Что не нужно повторять при следующем разговоре
+.LP
+Уже установлено/исследовано ранее:
+.IP "\(bu" 3
+T2 kernel и Touch Bar kernel modules работают.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+\f(CRreact-drm\fR удалось собрать и запустить.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+native DRM renderer работал на \f(CR2008×60\fR.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+проблема \f(CRpublic/logo.png\fR была найдена и исправлена.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+sliders/drag в react-drm для нашей задачи оказались ненадёжными.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+штатный \f(CRhid-appletb-kbd\fR не поддерживает произвольные app-specific панели.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+\f(CRhid-appletb-kbd\fR не позволяет userspace-конфигом добавлять/удалять произвольные клавиши.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+\fBGNOME extension \f(CBWindow Monitor Pro\fB уже установлен и оставлен в системе.\fR
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+custom three-layer \f(CRhid-appletb-kbd\fR — отдельный будущий проект.
+.LP
+Текущая точка продолжения:
+.RS
+.PP
+Штатный Touch Bar считается рабочим baseline. App-aware/custom layers — отдельный будущий проект.
+.RE

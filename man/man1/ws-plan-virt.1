@@ -1,0 +1,259 @@
+.\" -*- mode: troff; coding: utf-8 -*-
+.TH "ws-plan-virt" "1" "2026-09-21" "Workstation" "User Commands"
+.SH PLAN — KVM / LIBVIRT / UNREAL ENGINE
+.SS
+Часть A — KVM/QEMU/libvirt
+.SS
+Цель
+.LP
+Получить штатную host-level virtualization. В отличие от development SDK, KVM/libvirt остаются на host, потому что тесно связаны с kernel, devices и networking.
+.SS
+1. Установка
+.LP
+.EX
+sudo apt install \e
+  qemu-system-x86 qemu-utils \e
+  libvirt-daemon-system libvirt-clients \e
+  virt-manager virt-viewer ovmf swtpm
+.EE
+.LP
+Добавить пользователя:
+.LP
+.EX
+sudo usermod -aG libvirt,kvm \(dq$USER\(dq
+.EE
+.PP
+После logout/login:
+.LP
+.EX
+ls -l /dev/kvm
+sudo virt-host-validate
+virsh -c qemu:///system list --all
+.EE
+.SS
+2. Storage
+.LP
+Базовый каталог пользовательских VM:
+.LP
+.EX
+\(ti/VMs
+.EE
+.PP
+Перед созданием больших images определить:
+.IP "\(bu" 3
+snapshot policy;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+backup policy;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+исключаются ли VM images из обычных root snapshots.
+.SS
+3. Firmware/security
+.LP
+Проверить:
+.IP "\(bu" 3
+UEFI/OVMF;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+TPM через \f(CRswtpm\fR, если нужен Windows 11;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+NAT network;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+bridge — только если реально нужен L2 доступ.
+.SS
+4. GUI
+.LP
+Основной GUI:
+.LP
+.EX
+virt-manager
+.EE
+.PP
+Проверить:
+.IP "\(bu" 3
+create/start/stop VM;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+console;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+snapshots;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+USB passthrough;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+shared folders/network access по необходимости.
+.SS
+DONE WHEN
+.IP "\(bu" 3
+\f(CRvirt-host-validate\fR без критических проблем;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+\f(CRvirt-manager\fR подключается к \f(CRqemu:///system\fR;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+тестовая UEFI VM загружается;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+понятно, где хранятся и как backup\(cqятся VM.
+.LP
+\l'2i'
+.SS
+Часть B — Unreal Engine
+.SS
+Принцип
+.LP
+Unreal Engine оставляем \fBuser-managed native\fR, потому что ему нужны тесные GPU/filesystem/toolchain integration.
+.PP
+Планируемые каталоги:
+.LP
+.EX
+\(ti/Applications/UnrealEngine-5.x
+\(ti/Projects/Unreal
+.EE
+.SS
+Этапы
+.IP "1." 3
+Выбрать binary или source build.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "2." 3
+Проверить, какой GPU используется.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "3." 3
+Поставить только реально необходимые host runtime/build dependencies.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "4." 3
+Не переносить generic Python/Node/Rust development stack на host.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "5." 3
+Для source build использовать официальный Epic workflow:
+.RS
+.IP "\(bu" 3
+Setup;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+GenerateProjectFiles;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+build.
+.RE
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "6." 3
+Проверить:
+.RS
+.IP "\(bu" 3
+editor launch;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Vulkan;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+project compile;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+shader compilation;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+external monitor;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+AMD offload, если нужен.
+.RE
+.SS
+DONE WHEN
+.IP "\(bu" 3
+Unreal Editor запускается стабильно;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+проект создаётся/открывается;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+build toolchain документирован;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+host dependencies ограничены реально необходимыми UE packages.

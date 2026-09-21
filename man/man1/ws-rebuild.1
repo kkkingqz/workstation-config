@@ -1,0 +1,438 @@
+.\" -*- mode: troff; coding: utf-8 -*-
+.TH "ws-rebuild" "1" "2026-09-21" "Workstation" "User Commands"
+.SH UBUNTU T2 WORKSTATION — REBUILD TO CURRENT BASELINE
+.SH 0. До удаления рабочей системы
+.LP
+С рабочей Ubuntu выполнить:
+.LP
+.EX
+\&./scripts/collect-current-baseline.sh --with-firmware
+.EE
+.PP
+Скопировать полученный архив за пределы ноутбука.
+.PP
+Также сохранить:
+.IP "\(bu" 3
+user data;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+нужные Btrfs snapshots только как дополнительный rollback source;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+текущий rebuild kit;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+установочный T2-Ubuntu ISO и SHA256.
+.SH 1. Подготовка macOS / T2
+.LP
+Если macOS остаётся:
+.IP "\(bu" 3
+обновить firmware Mac;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+оставить Apple EFI;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+в Recovery разрешить загрузку альтернативной ОС;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Apple Secure Boot для Linux отключён;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+не форматировать Apple EFI;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+сохранить возможность получить Apple Wi‑Fi/Bluetooth firmware из macOS.
+.SH 2. Установка Ubuntu
+.LP
+Целевая система:
+.LP
+.EX
+Ubuntu 26.04.1 LTS
+GNOME 50
+Wayland
+amd64
+MacBookPro16,1 / T2
+.EE
+.PP
+Использовать актуальный T2-Ubuntu image.
+.PP
+Разметка — только manual.
+.PP
+Apple EFI:
+.LP
+.EX
+mount: /boot/efi
+format: NO
+.EE
+.PP
+Linux root — Btrfs.
+.PP
+UUID и имя раздела \fBне переносить из старого архива вслепую\fR: после новой разметки они могут измениться.
+.SH 3. Btrfs layout
+.LP
+Итоговая структура:
+.LP
+.EX
+@
+@home
+@root
+@srv
+@cache
+@tmp
+@log
+\&.snapshots
+.EE
+.PP
+Root должен загружаться с:
+.LP
+.EX
+rootflags=subvol=@
+.EE
+.PP
+В архиве rebuild kit сохранены проверенные вспомогательные scripts:
+.LP
+.EX
+reference/t2-ubuntu-btrfs-live-migrate-v2.sh
+reference/t2-ubuntu-btrfs-boot-repair.sh
+.EE
+.PP
+Использовать их только после проверки актуальных disk/partition names.
+.PP
+После установки проверить:
+.LP
+.EX
+findmnt /
+sudo btrfs subvolume list /
+cat /etc/fstab
+.EE
+.SH 4. T2 repository, kernel и firmware
+.LP
+Нужны:
+.LP
+.EX
+linux-t2
+apple-t2-audio-config
+Apple Wi‑Fi/Bluetooth firmware
+.EE
+.PP
+Если installer уже подключил T2 repository, повторно его не добавлять.
+.PP
+Если нет — использовать актуальную T2Linux Ubuntu instruction для codename \f(CRresolute\fR.
+.PP
+После установки:
+.LP
+.EX
+uname -r
+lsmod | grep -E 't2bce|appletb|brcmfmac|hci_bcm'
+wpctl status
+bluetoothctl show
+.EE
+.PP
+Machine-state archive содержит точный список текущих T2 packages и APT sources.
+.SH 5. Boot / rEFInd
+.LP
+rEFInd остаётся основным boot menu.
+.PP
+В state archive сохраняются:
+.IP "\(bu" 3
+rEFInd config;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+\f(CRrefind_linux.conf\fR, если присутствует;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+текущий \f(CR/proc/cmdline\fR;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+\f(CR/etc/fstab\fR;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+boot inventory.
+.LP
+Текущий рабочий kernel cmdline должен содержать как минимум используемые сейчас параметры:
+.LP
+.EX
+intel_iommu=on
+iommu=pt
+pm_async=off
+pcie_aspm=force
+pcie_aspm.policy=powersave
+.EE
+.PP
+Не добавлять параметры, которых нет в зафиксированном рабочем \f(CR/proc/cmdline\fR.
+.PP
+После восстановления boot config заменить старые UUID на UUID новой установки там, где это требуется.
+.PP
+Generic Ubuntu kernel оставить как fallback boot option.
+.SH 6. GNOME baseline
+.LP
+Нужен штатный Ubuntu desktop:
+.LP
+.EX
+GDM3
+GNOME Shell
+Mutter
+Wayland
+Ubuntu Dock
+Nautilus
+GNOME Settings
+NetworkManager
+BlueZ
+PipeWire/WirePlumber
+XWayland
+xdg-desktop-portal + GNOME backend
+.EE
+.PP
+Проверить:
+.LP
+.EX
+echo \(dq$XDG_SESSION_TYPE\(dq
+echo \(dq$XDG_CURRENT_DESKTOP\(dq
+systemctl status gdm3 --no-pager
+systemctl --user is-active pipewire
+systemctl --user is-active wireplumber
+.EE
+.PP
+Не ставить SwayNC/SwayOSD/swaylock/swayidle и не заменять штатные GNOME components.
+.SH 7. Графика
+.LP
+Целевое состояние:
+.LP
+.EX
+Intel UHD 630  → primary desktop GPU
+AMD dGPU       → render/offload
+.EE
+.PP
+Не пытаться автоматически воспроизвести старые экспериментальные AMD power tweaks.
+.PP
+Machine-state archive содержит:
+.IP "\(bu" 3
+текущий kernel cmdline;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+\f(CRlspci -nnk\fR;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+relevant \f(CR/etc/modprobe.d\fR;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+installed packages.
+.LP
+После восстановления проверить реальное распределение GPU, а не только наличие двух adapters.
+.SH 8. Suspend / power
+.LP
+Целевой режим:
+.LP
+.EX
+deep / S3
+.EE
+.PP
+Проверить:
+.LP
+.EX
+cat /sys/power/mem_sleep
+.EE
+.PP
+Затем ручной тест:
+.LP
+.EX
+systemctl suspend
+.EE
+.PP
+После resume проверить Wi‑Fi, Bluetooth, audio, camera, GPU и Touch Bar.
+.PP
+Не запускать:
+.LP
+.EX
+powertop --auto-tune
+TLP
+auto-cpufreq
+.EE
+.PP
+Touch Bar USB runtime PM специально не оптимизировать.
+.SH 9. Touch Bar
+.LP
+Используется только штатный kernel stack:
+.LP
+.EX
+hid_appletb_kbd
+hid_appletb_bl
+.EE
+.PP
+Не устанавливать:
+.LP
+.EX
+react-drm
+mac-touchbar-plus
+tiny-dfr
+.EE
+.PP
+Текущий config:
+.LP
+.EX
+/etc/modprobe.d/tb.conf
+.EE
+.LP
+.EX
+options hid-appletb-kbd mode=1 fntoggle=1 autodim=1 dim_timeout=30 idle_timeout=15 double_press_switch_time=300
+.EE
+.PP
+После создания/восстановления файла обязательно:
+.LP
+.EX
+sudo update-initramfs -u -k \(dq$(uname -r)\(dq
+sudo reboot
+.EE
+.PP
+Целевое поведение:
+.LP
+.EX
+обычно          → F1…F12
+держим Fn       → media / brightness
+отпускаем Fn    → F1…F12
+30 s idle       → dim
+ещё 15 s        → off
+.EE
+.PP
+После reboot проверить параметры:
+.LP
+.EX
+for p in mode fntoggle autodim dim_timeout idle_timeout double_press_switch_time; do
+    printf '%-28s = ' \(dq$p\(dq
+    cat \(dq/sys/module/hid_appletb_kbd/parameters/$p\(dq 2>/dev/null || echo N/A
+done
+.EE
+.SH 10. Window Monitor Pro
+.LP
+GNOME extension \f(CRWindow Monitor Pro\fR остаётся установленной.
+.PP
+State collector сохраняет:
+.IP "\(bu" 3
+список enabled extensions;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+GNOME dconf dump;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+пользовательские GNOME extension directories.
+.LP
+После reinstall сначала загрузить чистый GNOME baseline, затем вернуть extension и проверить совместимость с текущей GNOME 50 build.
+.SH 11. Финальная проверка
+.LP
+Запустить:
+.LP
+.EX
+\&./scripts/verify-current-baseline.sh
+.EE
+.PP
+Затем вручную проверить:
+.IP "\(bu" 3
+boot через rEFInd;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+generic-kernel fallback;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Wi‑Fi;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Bluetooth;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+speakers/mic;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+camera;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Intel primary / AMD offload;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+\f(CRdeep/S3\fR suspend;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+F1…F12 / Fn-media / Touch Bar auto-off;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+GNOME Overview / Dock / Quick Settings / Nautilus.
+.LP
+После этого установка считается восстановленной до текущего baseline.

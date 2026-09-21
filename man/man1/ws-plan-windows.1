@@ -1,0 +1,174 @@
+.\" -*- mode: troff; coding: utf-8 -*-
+.TH "ws-plan-windows" "1" "2026-09-21" "Workstation" "User Commands"
+.SH PLAN — WINDOWS APPS / WINE / STEAM / PROTON
+.SS
+Цель
+.LP
+Разделить Windows desktop apps и gaming, не превращая host в общий Wine prefix.
+.SS
+A. Windows desktop applications
+.SS
+1. Правило
+.LP
+.EX
+одно Windows desktop app
+        ↓
+отдельный Distrobox
+        ↓
+отдельный HOME
+        ↓
+отдельный Wine prefix/state
+.EE
+.LP
+Это даёт понятное удаление и разные версии/configs для разных приложений.
+.SS
+2. Шаблон environment
+.LP
+.EX
+mkdir -p \(ti/.local/share/winapps/foo/home
+
+distrobox create \e
+  --name win-foo \e
+  --image docker.io/library/ubuntu:26.04 \e
+  --home \(dq$HOME/.local/share/winapps/foo/home\(dq
+.EE
+.LP
+Внутри:
+.LP
+.EX
+sudo dpkg --add-architecture i386
+sudo apt update
+sudo apt install wine wine64 wine32:i386 winetricks cabextract
+wineboot
+winecfg
+.EE
+.SS
+3. Scaling
+.LP
+DPI задавать per-prefix, а не глобально для GNOME.
+.PP
+Пример 150%:
+.LP
+.EX
+wine reg add 'HKCU\eControl Panel\eDesktop' \e
+  /v LogPixels /t REG_DWORD /d 144 /f
+.EE
+.SS
+4. Host launcher
+.LP
+Для каждого приложения сделать отдельный launcher в \f(CR\(ti/.local/bin\fR и \f(CR.desktop\fR entry.
+.SS
+5. Wayland
+.LP
+Сначала использовать рабочий Wine/XWayland путь.
+.PP
+Native Wine Wayland тестировать отдельно per-app; не мигрировать working prefix только ради архитектурной чистоты.
+.LP
+\l'2i'
+.SS
+B. Steam / gaming
+.SS
+1. Steam
+.LP
+Предпочтительный desktop-layer вариант:
+.LP
+.EX
+flatpak install --user flathub com.valvesoftware.Steam
+sudo apt install steam-devices
+.EE
+.SS
+2. Proton
+.LP
+Сначала:
+.LP
+.EX
+Valve Proton
+.EE
+.PP
+GE-Proton добавлять только для конкретной совместимости.
+.PP
+При необходимости:
+.LP
+.EX
+flatpak install --user flathub net.davidotek.pupgui2
+.EE
+.SS
+3. GPU
+.LP
+Игры/тяжёлые 3D приложения — основной кандидат для AMD offload.
+.PP
+Для каждой игры проверить:
+.IP "\(bu" 3
+какой GPU реально используется;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Vulkan;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+fullscreen;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+frame pacing;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+suspend/resume после выхода из игры.
+.LP
+\l'2i'
+.SS
+C. Storage
+.LP
+Разнести данные логически:
+.LP
+.EX
+\(ti/Games
+\(ti/.local/share/winapps/<app>
+.EE
+.PP
+Game library при необходимости можно вынести на отдельный filesystem/storage позже, не меняя Wine architecture.
+.LP
+\l'2i'
+.SH DONE WHEN
+.IP "\(bu" 3
+хотя бы один Windows desktop app работает в отдельном box;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+его можно удалить вместе с HOME/prefix;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Steam запускается;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Proton game запускается;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+AMD offload реально используется там, где требуется;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Wine/Steam не загрязняют development box.

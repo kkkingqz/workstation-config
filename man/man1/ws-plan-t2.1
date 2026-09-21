@@ -1,0 +1,330 @@
+.\" -*- mode: troff; coding: utf-8 -*-
+.TH "ws-plan-t2" "1" "2026-09-21" "Workstation" "User Commands"
+.SH PLAN — T2 OPTIONAL / POWER / AUTH
+.SS
+Цель
+.LP
+Добавить только действительно полезные T2-функции, не ломая уже рабочие:
+.IP "\(bu" 3
+\f(CRdeep/S3\fR;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Intel primary + AMD offload;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+штатный Touch Bar;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Wi-Fi/Bluetooth/audio/camera.
+.LP
+Этот этап \fBне является обязательным\fR для завершения workstation.
+.SH 1. Battery audit
+.LP
+Нужно получить реальную базовую цифру расхода:
+.IP "\(bu" 3
+idle на батарее;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+suspend \f(CRdeep/S3\fR на 30–60 минут;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+повторить несколько раз;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+сравнить процент и энергию до/после.
+.LP
+Инструменты:
+.LP
+.EX
+BAT=$(upower -e | grep battery | head -1)
+upower -i \(dq$BAT\(dq
+cat /sys/power/mem_sleep
+.EE
+.PP
+Не применять автоматические Powertop tweaks. Использовать Powertop только как инструмент наблюдения.
+.SS
+Готово, если
+.IP "\(bu" 3
+понятен реальный расход в idle;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+понятен расход в \f(CRdeep/S3\fR;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+нет неожиданного wake source;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+текущий режим признан достаточным либо есть конкретная измеримая проблема.
+.LP
+\l'2i'
+.SH 2. Fan policy
+.LP
+Сначала оставить штатное управление.
+.PP
+Проверить:
+.LP
+.EX
+sensors
+.EE
+.PP
+и поведение вентиляторов:
+.IP "\(bu" 3
+idle;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+браузер/video;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+CPU load;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+AMD offload load.
+.LP
+\f(CRt2fanrd\fR ставить только если штатное поведение реально неудовлетворительно.
+.SS
+Если нужен t2fanrd
+.IP "1." 3
+Сделать snapshot.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "2." 3
+Установить daemon.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "3." 3
+Сначала использовать консервативную кривую.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "4." 3
+Проверить температуры и sleep/resume.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "5." 3
+Не держать два fan controller одновременно.
+.SS
+Готово, если
+.LP
+Либо штатное управление признано нормальным, либо \f(CRt2fanrd\fR даёт предсказуемое улучшение без побочных эффектов.
+.LP
+\l'2i'
+.SH 3. Touch ID
+.LP
+Touch ID — отдельная optional feature.
+.PP
+План:
+.IP "1." 3
+Сохранить парольный login/PAM как обязательный fallback.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "2." 3
+Проверить актуальную поддержку \f(CRt2-touchid\fR.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "3." 3
+Сделать snapshot.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "4." 3
+Установить и настроить только после проверки текущей документации T2Linux.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "5." 3
+Проверить:
+.RS
+.IP "\(bu" 3
+login;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+\f(CRsudo\fR;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+lock/unlock;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+поведение после reboot;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+поведение после suspend/resume.
+.RE
+.LP
+Учитывать, что T2 Touch ID может зависеть от состояния Secure Enclave/macOS после некоторых hard power-off/kernel failure сценариев.
+.SS
+Готово, если
+.LP
+Touch ID является удобным дополнительным методом, но пароль всегда остаётся рабочим.
+.LP
+\l'2i'
+.SH 4. Hibernate — только если нужен
+.LP
+Сейчас \f(CRdeep/S3\fR уже работает, поэтому hibernate не нужен для исправления suspend.
+.PP
+Перед настройкой решить, есть ли практическая цель:
+.IP "\(bu" 3
+очень долгий сон;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+сохранение батареи на сутки/несколько суток;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+suspend-then-hibernate.
+.LP
+План:
+.IP "1." 3
+Проверить swap:
+\f(CRbash
+swapon --show
+\fR
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "2." 3
+Убедиться, что swap достаточен для hibernate.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "3." 3
+Настроить resume.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "4." 3
+Выполнить минимум 3–5 ручных циклов:
+\f(CRbash
+systemctl hibernate
+\fR
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "5." 3
+Каждый раз проверить graphics, T2 audio, Wi-Fi, Bluetooth, Touch Bar.
+.SS
+Stop condition
+.LP
+При нестабильном resume не автоматизировать hibernate.
+.LP
+\l'2i'
+.SH 5. Suspend-then-hibernate
+.LP
+Только после полностью стабильного ручного hibernate.
+.PP
+Пример целевой политики:
+.LP
+.EX
+[Sleep]
+AllowSuspend=yes
+AllowHibernation=yes
+AllowSuspendThenHibernate=yes
+HibernateDelaySec=30min
+.EE
+.PP
+Сначала тестировать вручную:
+.LP
+.EX
+systemctl suspend-then-hibernate
+.EE
+.PP
+Только потом связывать с обычной desktop policy.
+.LP
+\l'2i'
+.SS
+Что специально не делаем
+.IP "\(bu" 3
+не пытаемся любой ценой добиться runtime power-off AMD dGPU;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+не меняем работающий \f(CRdeep/S3\fR;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+не трогаем runtime PM Touch Bar;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+не запускаем \f(CRpowertop --auto-tune\fR;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+не ставим одновременно TLP/auto-cpufreq поверх штатного GNOME power stack.

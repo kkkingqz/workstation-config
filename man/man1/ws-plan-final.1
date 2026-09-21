@@ -1,0 +1,424 @@
+.\" -*- mode: troff; coding: utf-8 -*-
+.TH "ws-plan-final" "1" "2026-09-21" "Workstation" "User Commands"
+.SH PLAN — BACKUP / INVENTORY / FINALIZATION
+.SS
+Цель
+.LP
+После завершения application layer превратить workstation из «настроенной системы» в воспроизводимую и восстанавливаемую.
+.SH 1. System inventory
+.LP
+Создать:
+.LP
+.EX
+mkdir -p \(ti/system-state
+
+apt-mark showmanual | sort \e
+  > \(ti/system-state/apt-manual-final.txt
+
+snap list \e
+  > \(ti/system-state/snap-final.txt
+
+flatpak list --app --columns=application \e
+  > \(ti/system-state/flatpak-apps.txt
+
+distrobox list \e
+  > \(ti/system-state/distroboxes.txt
+
+podman images \e
+  > \(ti/system-state/podman-images.txt
+
+gnome-extensions list --enabled \e
+  > \(ti/system-state/gnome-extensions-final.txt
+.EE
+.PP
+Дополнительно сохранить:
+.LP
+.EX
+uname -r
+/proc/cmdline
+/etc/modprobe.d/tb.conf
+rEFInd relevant config
+.EE
+.LP
+\l'2i'
+.SH 2. Что backup\(cqить отдельно от Btrfs snapshots
+.LP
+Snapshots root не являются backup.
+.PP
+Отдельно сохранять:
+.LP
+.EX
+\(ti/Projects
+\(ti/VMs
+\(ti/Games / saves
+Wine HOME/prefixes
+important \(ti/.var/app
+\(ti/.config — выборочно
+\(ti/.local/bin
+\(ti/.local/share/applications
+\(ti/system-state
+T2-specific config files
+.EE
+.PP
+Не backup\(cqить автоматически огромные caches/runtimes, если они восстанавливаются установкой.
+.LP
+\l'2i'
+.SH 3. Snapshot policy
+.LP
+Snapshot делать перед:
+.IP "\(bu" 3
+kernel/T2 changes;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+boot/rEFInd changes;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+GNOME extensions;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+power/sleep changes;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+large application infrastructure changes;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+virtualization config changes.
+.LP
+Не создавать snapshot перед каждым обычным Flatpak update.
+.LP
+\l'2i'
+.SH 4. Restore test
+.LP
+Хотя бы один раз проверить реальный сценарий:
+.IP "1." 3
+создать snapshot;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "2." 3
+внести безопасное тестовое изменение;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "3." 3
+убедиться, что snapshot виден;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "4." 3
+выполнить документированный rollback;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "5." 3
+убедиться, что root возвращён корректно.
+.LP
+Отдельно помнить: rollback root не восстанавливает внешний backup HOME/VM/projects.
+.LP
+\l'2i'
+.SH 5. Финальный smoke-test
+.SS
+Desktop
+.IP "\(bu" 3
+GNOME login;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Overview;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Ubuntu Dock;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Quick Settings;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Settings;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Nautilus;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+notifications;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+lock/unlock.
+.SS
+Hardware
+.IP "\(bu" 3
+keyboard/trackpad;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+F1–F12 Touch Bar;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Fn media;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Touch Bar autodim/off;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Wi-Fi;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Bluetooth;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+audio/mic;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+camera;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Intel desktop;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+AMD offload.
+.SS
+Power
+.IP "\(bu" 3
+\f(CRdeep/S3\fR;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+resume;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+lid behavior;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+battery status.
+.SS
+App layer
+.IP "\(bu" 3
+Flatpak file chooser;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Flatpak screen sharing;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+dev Distrobox;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Python/uv;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+IDE export;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Wine app;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Steam/Proton;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+virt-manager.
+.LP
+Optional features проверяются только если были реально включены:
+.IP "\(bu" 3
+Touch ID;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+t2fanrd;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+hibernate;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+suspend-then-hibernate.
+.LP
+\l'2i'
+.SH 6. Maintenance routine
+.SS
+Ubuntu
+.LP
+.EX
+sudo apt update
+sudo apt full-upgrade
+.EE
+.LP
+После T2 kernel update отдельно проверить:
+.IP "\(bu" 3
+boot;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+graphics;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+audio;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Touch Bar;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+suspend/resume.
+.SS
+Flatpak
+.LP
+.EX
+flatpak update --user
+flatpak uninstall --user --unused
+.EE
+.SS
+Distrobox / Podman
+.LP
+.EX
+distrobox-upgrade --all
+podman images
+podman ps -a
+.EE
+.LP
+Не запускать destructive prune автоматически без просмотра данных.
+.LP
+\l'2i'
+.SH DONE WHEN
+.LP
+Система считается завершённой как workstation, когда:
+.IP "\(bu" 3
+весь используемый software имеет понятный installation boundary;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+host inventory сохранён;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+user data backup определён;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Btrfs rollback документирован и проверен;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+final smoke-test проходит;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+восстановление не зависит от памяти о старых чатах.

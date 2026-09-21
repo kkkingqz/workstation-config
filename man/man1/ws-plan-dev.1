@@ -1,0 +1,287 @@
+.\" -*- mode: troff; coding: utf-8 -*-
+.TH "ws-plan-dev" "1" "2026-09-21" "Workstation" "User Commands"
+.SH PLAN — DISTROBOX DEVELOPMENT
+.SS
+Цель
+.LP
+Создать постоянный development слой без Python/Node/Rust/SDK clutter на Ubuntu host.
+.PP
+Distrobox/Podman уже доказали работоспособность во время сборки \f(CRreact-drm\fR; теперь нужно оформить это как постоянную архитектуру.
+.SH 1. Host infrastructure
+.LP
+На host допускаются только container integration packages:
+.LP
+.EX
+sudo apt install podman distrobox uidmap fuse-overlayfs slirp4netns passt
+.EE
+.PP
+Проверить rootless setup:
+.LP
+.EX
+podman info --format '{{.Host.Security.Rootless}}'
+grep \(dq\(ha$USER:\(dq /etc/subuid /etc/subgid
+.EE
+.LP
+\l'2i'
+.SH 2. Основной dev box
+.LP
+Создать отдельный HOME:
+.LP
+.EX
+mkdir -p \(ti/.local/share/distrobox-homes/dev
+.EE
+.PP
+Создать box:
+.LP
+.EX
+distrobox create \e
+  --name dev \e
+  --image docker.io/library/ubuntu:26.04 \e
+  --home \(dq$HOME/.local/share/distrobox-homes/dev\(dq
+.EE
+.PP
+Назначение:
+.IP "\(bu" 3
+Git;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+compilers;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+CMake/Ninja;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Python/uv;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Node;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Rust;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+debugger/toolchain utilities.
+.LP
+\l'2i'
+.SH 3. Базовые packages внутри dev
+.LP
+Внутри box:
+.LP
+.EX
+sudo apt update
+sudo apt install \e
+  build-essential git curl wget ca-certificates \e
+  pkg-config cmake ninja-build clang lldb gdb \e
+  python3 python3-venv fish
+.EE
+.PP
+Node/Rust добавлять только если реально нужны проектам.
+.LP
+\l'2i'
+.SH 4. Python / uv
+.LP
+\f(CRuv\fR ставить \fBв dev box\fR, не в host.
+.PP
+Принцип:
+.LP
+.EX
+dev box
+  └── project
+      └── .venv / uv-managed Python
+.EE
+.PP
+Для каждого Python проекта:
+.IP "\(bu" 3
+собственный Python pin;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+project-local dependencies;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+никаких глобальных \f(CRpip install --user\fR на host.
+.LP
+\l'2i'
+.SH 5. VS Code
+.LP
+Если выбираем VS Code как основной IDE:
+.IP "1." 3
+установить его внутри \f(CRdev\fR;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "2." 3
+проверить Wayland;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "3." 3
+экспортировать desktop entry:
+\f(CRbash
+distrobox-export --app code
+\fR
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "4." 3
+проекты хранить на host, например:
+\f(CRtext
+\(ti/Projects
+\fR
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "5." 3
+toolchain остаётся внутри box.
+.LP
+\l'2i'
+.SH 6. Specialized boxes
+.LP
+Не создавать заранее всё возможное.
+.PP
+Создавать по потребности:
+.LP
+.EX
+dev        → generic development
+python-ai  → AI / PyTorch / ComfyUI tooling
+legacy     → старый userspace
+net-tools  → специальные network utilities
+.EE
+.PP
+Для тяжёлых boxes использовать отдельный custom HOME.
+.LP
+\l'2i'
+.SH 7. Lifecycle
+.LP
+Для каждого box должно быть понятно:
+.IP "\(bu" 3
+зачем он нужен;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+где его HOME;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+какие projects он использует;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+можно ли его удалить целиком без повреждения host.
+.LP
+Периодически:
+.LP
+.EX
+distrobox list
+podman ps -a
+podman images
+.EE
+.PP
+Удалять abandoned boxes и unused images осознанно.
+.LP
+\l'2i'
+.SH 8. Host boundary
+.LP
+На host \fBне ставить без необходимости\fR:
+.IP "\(bu" 3
+project Python versions;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+pipx;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Rust toolchains;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Node version managers;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+random SDKs;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+project compilers.
+.LP
+Исключения — только tools, тесно связанные с kernel/hardware/desktop/virtualization.
+.LP
+\l'2i'
+.SH DONE WHEN
+.IP "\(bu" 3
+есть один рабочий \f(CRdev\fR box;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Python/uv project работает внутри него;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+compiler stack работает;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+IDE запускается как desktop app;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Projects доступны без копирования;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+удаление box не ломает Ubuntu host.

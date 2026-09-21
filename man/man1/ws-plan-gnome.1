@@ -1,0 +1,370 @@
+.\" -*- mode: troff; coding: utf-8 -*-
+.TH "ws-plan-gnome" "1" "2026-09-21" "Workstation" "User Commands"
+.SH PLAN — GNOME VISUAL / INPUT / PORTALS
+.SS
+Цель
+.LP
+Завершить desktop layer, оставаясь максимально близко к штатному Ubuntu GNOME.
+.PP
+Уже работают GNOME 50, Wayland, GDM3, Ubuntu Dock, Quick Settings, Nautilus и системные OSD. Этот план — не замена desktop environment, а финальная интеграция.
+.SH 1. Appearance baseline
+.LP
+Через \f(CRSettings → Appearance\fR зафиксировать:
+.IP "\(bu" 3
+Dark/Light;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+accent;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Dock position;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+autohide;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+icon size;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+wallpaper.
+.LP
+Не использовать:
+.IP "\(bu" 3
+custom GNOME Shell CSS;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+theme forks;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+замену Ubuntu Dock;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+отдельные notification/OSD daemons.
+.SS
+Результат
+.LP
+Один штатный visual profile, который переживает GNOME updates.
+.LP
+\l'2i'
+.SH 2. Retina scaling
+.LP
+На встроенной 3072×1920 панели проверить:
+.IP "\(bu" 3
+200%;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+при необходимости 175%/150%.
+.LP
+Настраивать только через \f(CRSettings → Displays\fR.
+.PP
+Не использовать:
+.IP "\(bu" 3
+\f(CRxrandr\fR scale hacks;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+глобальный \f(CRXft.dpi\fR;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+ручные Mutter experimental flags без необходимости.
+.SS
+Проверка
+.IP "\(bu" 3
+GNOME Shell;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Nautilus;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Firefox;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+GTK3;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+GTK4/libadwaita;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Qt;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+XWayland application.
+.LP
+\l'2i'
+.SH 3. Qt5/Qt6 integration
+.LP
+Если Qt apps выглядят заметно чужеродно, добавить штатную GNOME integration:
+.LP
+.EX
+sudo apt install \e
+  qgnomeplatform-qt5 qgnomeplatform-qt6 \e
+  adwaita-qt adwaita-qt6
+.EE
+.PP
+После logout/login проверить palette, fonts и file dialogs.
+.PP
+Не задавать глобально \f(CRQT_STYLE_OVERRIDE=kvantum\fR, если нет конкретной причины.
+.LP
+\l'2i'
+.SH 4. GNOME Tweaks — только при необходимости
+.LP
+Можно установить:
+.LP
+.EX
+sudo apt install gnome-tweaks
+.EE
+.PP
+Использовать только для:
+.IP "\(bu" 3
+fonts;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+window behavior;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+startup applications;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+обычных GSettings options.
+.LP
+Не использовать Tweaks как повод поставить много Shell extensions.
+.LP
+\l'2i'
+.SH 5. Extensions policy
+.LP
+Текущий известный non-default extension:
+.LP
+.EX
+Window Monitor Pro
+.EE
+.PP
+Его оставить.
+.PP
+Новые extensions добавлять по одному:
+.IP "1." 3
+snapshot;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "2." 3
+установить extension;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "3." 3
+logout/login или reload session;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "4." 3
+проверить Overview, Dock, Quick Settings и idle responsiveness;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "5." 3
+оставить только если функция действительно нужна.
+.LP
+\l'2i'
+.SH 6. Keyboard / shortcuts
+.LP
+Через \f(CRSettings → Keyboard → Keyboard Shortcuts\fR настроить только реальные пользовательские shortcuts.
+.PP
+Возможные кандидаты:
+.IP "\(bu" 3
+terminal;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+screenshot;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+lock;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+workspace navigation;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+application launcher.
+.LP
+Не дублировать shortcuts через \f(CRxdotool\fR/\f(CRxbindkeys\fR, пока GNOME умеет сделать это штатно.
+.PP
+Touch Bar здесь не менять: текущий F1–F12 + Fn media baseline уже готов.
+.LP
+\l'2i'
+.SH 7. Toolkit smoke-test
+.LP
+Проверить матрицу:
+.LP
+.EX
+GTK4/libadwaita  → Settings / Files / system apps
+GTK3             → pavucontrol или другая GTK3 utility
+Qt5/Qt6          → выбранное Qt app
+Flatpak          → после плана 03
+XWayland         → legacy test app
+.EE
+.PP
+Отдельно проверить:
+.IP "\(bu" 3
+file chooser;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+clipboard;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+drag-and-drop;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+HiDPI;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+dark preference.
+.LP
+\l'2i'
+.SH 8. Portals / screen sharing
+.LP
+После появления основных Flatpak apps проверить:
+.IP "\(bu" 3
+screenshot portal;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+file chooser portal;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+browser screen sharing;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+PipeWire screen capture.
+.LP
+Не создавать собственный \f(CRportals.conf\fR, пока нет доказанной проблемы.
+.LP
+\l'2i'
+.SH DONE WHEN
+.LP
+Этап завершён, когда:
+.IP "\(bu" 3
+GNOME выглядит цельно без Shell hacks;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Retina scale выбран;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+GTK/Qt/XWayland apps имеют приемлемый DPI;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Overview/Dock/Quick Settings не тормозят;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+screen sharing и portal dialogs работают;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+список extensions короткий и осознанный.

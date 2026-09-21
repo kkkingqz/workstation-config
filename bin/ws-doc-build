@@ -6,9 +6,12 @@ mandir="$repo/man/man1"
 
 mkdir -p "$mandir"
 
-lowdown -s -t man "$repo/docs/terminal.md" > "$mandir/ws-terminal.1"
-lowdown -s -t man "$repo/docs/workstation.md" > "$mandir/ws-workstation.1"
-
-echo "Generated:"
-echo "  $mandir/ws-terminal.1"
-echo "  $mandir/ws-workstation.1"
+find "$repo/docs" -type f -name '*.md' | sort | while IFS= read -r doc; do
+    page="$(sed -n 's/^title:[[:space:]]*//p' "$doc" | head -n 1)"
+    [ -n "$page" ] || {
+        echo "Skipping $doc: no title metadata" >&2
+        continue
+    }
+    lowdown -s -t man "$doc" > "$mandir/$page.1"
+    echo "Generated: $mandir/$page.1"
+done

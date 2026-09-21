@@ -10,17 +10,19 @@ open_md() {
 }
 
 case "$topic" in
-    terminal|term)
-        open_md "$repo/docs/terminal.md"
-        ;;
-    ghostty|fish|keys)
-        # These topics live in the terminal handbook. Open the same source;
-        # Ctrl+F can be used to jump to the requested section.
-        open_md "$repo/docs/terminal.md"
-        ;;
-    workstation|system|baseline)
-        open_md "$repo/docs/workstation.md"
-        ;;
+    terminal|term) open_md "$repo/docs/terminal.md" ;;
+    ghostty|fish|keys) open_md "$repo/docs/terminal.md" ;;
+    workstation|system|baseline) open_md "$repo/docs/workstation.md" ;;
+    touchbar|touch-bar) open_md "$repo/docs/touchbar.md" ;;
+    rebuild|reinstall|install) open_md "$repo/docs/rebuild.md" ;;
+    roadmap|plans) open_md "$repo/docs/roadmap.md" ;;
+    plan-t2) open_md "$repo/docs/plans/t2-optional.md" ;;
+    plan-gnome) open_md "$repo/docs/plans/gnome.md" ;;
+    plan-flatpak) open_md "$repo/docs/plans/flatpak.md" ;;
+    plan-dev) open_md "$repo/docs/plans/development.md" ;;
+    plan-windows) open_md "$repo/docs/plans/windows-gaming.md" ;;
+    plan-virt) open_md "$repo/docs/plans/virtualization-unreal.md" ;;
+    plan-final) open_md "$repo/docs/plans/finalization.md" ;;
     man)
         page="${2:-ws-terminal}"
         tmp="$(mktemp "${TMPDIR:-/tmp}/helpws.XXXXXX")"
@@ -32,18 +34,24 @@ case "$topic" in
         cat <<'USAGE'
 Usage: helpws [topic]
 
-Topics:
-  terminal       Ghostty + Fish handbook (default)
-  ghostty        Terminal handbook; use Ctrl+F for Ghostty
-  fish           Terminal handbook; use Ctrl+F for Fish
-  keys           Terminal handbook; use Ctrl+F for hotkeys
-  workstation    Full workstation baseline
-  man PAGE       Open a generated man page in Micro
+Core:
+  terminal         Ghostty + Fish handbook
+  workstation      Current workstation baseline
+  touchbar         Touch Bar implementation notes
+  rebuild          Reinstall to current baseline
+  roadmap          Remaining workstation roadmap
 
-Examples:
-  helpws
-  helpws workstation
-  helpws man ws-terminal
+Plans:
+  plan-t2          T2 optional / power / auth
+  plan-gnome       GNOME visual / input / portals
+  plan-flatpak     Flatpak desktop apps
+  plan-dev         Distrobox development
+  plan-windows     Wine / Steam / Proton
+  plan-virt        KVM / libvirt / Unreal Engine
+  plan-final       Backup / inventory / finalization
+
+Other:
+  man PAGE         Open generated man page in Micro
 USAGE
         ;;
     *)
