@@ -1,0 +1,15 @@
+#!/usr/bin/env sh
+set -eu
+
+repo="${WORKSTATION_CONFIG:-$HOME/.local/share/workstation-config}"
+mkdir -p "$repo/man/man1"
+
+lowdown -s -tman "$repo/docs/terminal.md" ' \
+
+-s
+-tman
+/home/king/.local/share/workstation-config/docs/workstation.md
+'
+    > "$repo/man/man1/ws-workstation.1"
+
+echo "Man pages rebuilt."

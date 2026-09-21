@@ -1,0 +1,27 @@
+#!/usr/bin/env sh
+set -eu
+
+repo="${WORKSTATION_CONFIG:-$HOME/.local/share/workstation-config}"
+topic="${1:-terminal}"
+
+case "$topic" in
+    terminal|term|ghostty|fish|keys)
+        doc="$repo/docs/terminal.md"
+        ;;
+    workstation|system|baseline)
+        doc="$repo/docs/workstation.md"
+        ;;
+    man)
+        exec man "${2:-ws-terminal}"
+        ;;
+    *)
+        echo "Usage: help-ws [terminal|ghostty|fish|keys|workstation|man]" >&2
+        exit 2
+        ;;
+esac
+
+if command -v lowdown >/dev/null 2>&1; then
+    lowdown -tterm "$doc" | less -R
+else
+    less "$doc"
+fi
