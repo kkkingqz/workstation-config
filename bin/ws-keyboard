@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+set -euo pipefail
+repo="${WORKSTATION_CONFIG:-$HOME/.local/share/workstation-config}"
+
+usage() {
+    cat <<'USAGE'
+Usage: ws-keyboard COMMAND
+
+Commands:
+  apply       Apply GNOME shortcuts, symlinks and start xremap if ready
+  restore     Restore backed-up GNOME shortcuts and disable xremap
+  status      Show keyboard/xremap/GNOME status
+  start       Enable and start xremap user service
+  stop        Stop xremap user service
+  restart     Restart xremap user service
+  logs        Follow xremap user-service log
+  devices     List xremap input devices
+  gnome-apps  Query GNOME xremap application bridge
+USAGE
+}
+
+case "${1:-status}" in
+    apply) exec "$repo/bin/ws-keyboard-apply" ;;
+    restore) exec "$repo/bin/ws-keyboard-apply" --restore ;;
+    status) exec "$repo/bin/ws-keyboard-status" ;;
+    start) systemctl --user daemon-reload; systemctl --user enable --now xremap.service ;;
+    stop) systemctl --user stop xremap.service ;;
+    restart) systemctl --user daemon-reload; systemctl --user restart xremap.service ;;
+    logs) exec journalctl --user -fu xremap.service ;;
+    devices) exec xremap --list-devices ;;
+    gnome-apps) exec busctl --user call org.gnome.Shell /com/k0kubun/Xremap com.k0kubun.Xremap WMClasses ;;
+    -h|--help|help) usage ;;
+    *) echo "Unknown command: $1" >&2; usage >&2; exit 2 ;;
+esac

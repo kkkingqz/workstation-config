@@ -28,7 +28,9 @@ helpws man ws-workstation
 .LP
 .EX
 Ctrl+T                  новый tab Ghostty
-Ctrl+Shift+C / V        copy / paste
+Ctrl+Shift+C / V        Linux-style copy / paste
+Command/Win+C / V       macOS-style copy / paste
+Command/Win+T           macOS-style new tab
 Ctrl+R                  fuzzy history Fish
 Option+C                directory browser
 Ctrl+Shift+F            поиск в scrollback
@@ -111,6 +113,31 @@ Shift+Insert            paste
 .EE
 .LP
 Ghostty настроен так, что буквенные shortcuts используют физические клавиши. Поэтому \f(CRCtrl+Shift+C/V\fR работают одинаково в English / Українська / Русская раскладках.
+.SS
+macOS-style semantic layer
+.LP
+На Linux Apple \f(CRCommand\fR и PC \f(CRWin\fR обе являются \f(CRSuper\fR. Ghostty имеет native
+bindings, поэтому terminal Ctrl semantics не ломаются.
+.LP
+.EX
+Command/Win+C           copy
+Command/Win+V           paste
+Command/Win+A           select all
+Command/Win+F           search
+Command/Win+T           new tab
+Command/Win+N           new window
+Command/Win+W           close surface
+Command/Win+Q           close all Ghostty windows
+Command/Win+,           open config
+Command/Win+= / - / 0   font larger / smaller / reset
+.EE
+.PP
+В терминале \f(CRCommand/Win+Left/Right\fR, \f(CRCommand/Win+Backspace\fR и
+\f(CROption/Alt+Left/Right\fR реализованы terminal-specific слоем xremap. Это
+позволяет обойти штатный GNOME \f(CRSuper+Left/Right\fR tiling до того, как
+сочетание попадёт в Mutter.
+.PP
+Полный workstation keyboard profile: \f(CRhelpws keyboard\fR.
 .SS
 Clipboard security
 .IP "\(bu" 3
@@ -269,7 +296,7 @@ Ctrl+A                  начало строки
 Ctrl+E                  конец строки
 Ctrl+B / Ctrl+F         символ назад / вперёд
 Option+B / Option+F     слово назад / вперёд
-Ctrl+← / Ctrl+→         переход по shell token'ам
+Option+← / Option+→     слово назад / вперёд в macOS-style profile
 Ctrl+U                  удалить к началу строки
 Ctrl+K                  удалить до конца строки
 Ctrl+W                  удалить предыдущий компонент

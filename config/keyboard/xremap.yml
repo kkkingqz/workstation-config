@@ -1,0 +1,93 @@
+# =============================================================================
+# Workstation macOS-style keyboard layer
+# =============================================================================
+#
+# Semantic modifier model:
+#
+#   Apple keyboard       PC / Windows keyboard       Linux
+#   Command              Win                         Super
+#   Option               Alt                         Alt
+#   Control              Ctrl                        Ctrl
+#
+# Do NOT globally swap Ctrl/Super. Ctrl must remain Ctrl for terminals/TUI apps.
+#
+# GNOME owns system shortcuts. xremap translates application shortcuts and
+# converts physical Ctrl+Left/Right into private GNOME workspace chords.
+#
+# GNOME Wayland application filtering requires the xremap GNOME extension.
+# ws-xremap refuses to start without its D-Bus bridge, so terminal exclusions
+# can never silently stop working.
+
+keymap:
+  - name: macOS Spaces
+    exact_match: true
+    remap:
+      Ctrl-Left: Ctrl-Alt-Super-Left
+      Ctrl-Right: Ctrl-Alt-Super-Right
+
+  # Terminal-specific macOS navigation.
+  # GNOME normally consumes Super+Left/Right for window tiling. xremap sees
+  # the physical event first and converts it before Mutter receives it.
+  - name: macOS terminal shortcuts
+    exact_match: true
+    application:
+      only:
+        - '/.*[Gg]hostty.*/'
+        - '/.*[Ww]ave.*/'
+        - '/.*[Tt]erminal.*/'
+        - '/.*[Pp]tyxis.*/'
+        - '/.*[Kk]itty.*/'
+        - '/.*[Aa]lacritty.*/'
+    remap:
+      Super-Left: Ctrl-A
+      Super-Right: Ctrl-E
+      Super-Backspace: Ctrl-U
+      Alt-Left: Alt-B
+      Alt-Right: Alt-F
+
+  - name: macOS GUI shortcuts
+    exact_match: true
+    application:
+      not:
+        - '/.*[Gg]hostty.*/'
+        - '/.*[Ww]ave.*/'
+        - '/.*[Tt]erminal.*/'
+        - '/.*[Pp]tyxis.*/'
+        - '/.*[Kk]itty.*/'
+        - '/.*[Aa]lacritty.*/'
+    remap:
+      # Editing
+      Super-C: Ctrl-C
+      Super-V: Ctrl-V
+      Super-X: Ctrl-X
+      Super-A: Ctrl-A
+      Super-Z: Ctrl-Z
+      Super-Shift-Z: Ctrl-Shift-Z
+
+      # Documents / application
+      Super-S: Ctrl-S
+      Super-O: Ctrl-O
+      Super-P: Ctrl-P
+      Super-F: Ctrl-F
+      Super-N: Ctrl-N
+      Super-T: Ctrl-T
+      Super-W: Ctrl-W
+      Super-Q: Ctrl-Q
+      Super-Comma: Ctrl-Comma
+
+      # macOS line/document navigation
+      Super-Left: Home
+      Super-Right: End
+      Super-Up: Ctrl-Home
+      Super-Down: Ctrl-End
+      Super-Shift-Left: Shift-Home
+      Super-Shift-Right: Shift-End
+      Super-Shift-Up: Ctrl-Shift-Home
+      Super-Shift-Down: Ctrl-Shift-End
+
+      # macOS Option word navigation
+      Alt-Left: Ctrl-Left
+      Alt-Right: Ctrl-Right
+      Alt-Shift-Left: Ctrl-Shift-Left
+      Alt-Shift-Right: Ctrl-Shift-Right
+      Alt-Backspace: Ctrl-Backspace

@@ -29,7 +29,9 @@ helpws man ws-workstation
 
 ```text
 Ctrl+T                  новый tab Ghostty
-Ctrl+Shift+C / V        copy / paste
+Ctrl+Shift+C / V        Linux-style copy / paste
+Command/Win+C / V       macOS-style copy / paste
+Command/Win+T           macOS-style new tab
 Ctrl+R                  fuzzy history Fish
 Option+C                directory browser
 Ctrl+Shift+F            поиск в scrollback
@@ -103,6 +105,31 @@ Shift+Insert            paste
 ```
 
 Ghostty настроен так, что буквенные shortcuts используют физические клавиши. Поэтому `Ctrl+Shift+C/V` работают одинаково в English / Українська / Русская раскладках.
+
+### macOS-style semantic layer
+
+На Linux Apple `Command` и PC `Win` обе являются `Super`. Ghostty имеет native
+bindings, поэтому terminal Ctrl semantics не ломаются.
+
+```text
+Command/Win+C           copy
+Command/Win+V           paste
+Command/Win+A           select all
+Command/Win+F           search
+Command/Win+T           new tab
+Command/Win+N           new window
+Command/Win+W           close surface
+Command/Win+Q           close all Ghostty windows
+Command/Win+,           open config
+Command/Win+= / - / 0   font larger / smaller / reset
+```
+
+В терминале `Command/Win+Left/Right`, `Command/Win+Backspace` и
+`Option/Alt+Left/Right` реализованы terminal-specific слоем xremap. Это
+позволяет обойти штатный GNOME `Super+Left/Right` tiling до того, как
+сочетание попадёт в Mutter.
+
+Полный workstation keyboard profile: `helpws keyboard`.
 
 ### Clipboard security
 
@@ -223,7 +250,7 @@ Ctrl+A                  начало строки
 Ctrl+E                  конец строки
 Ctrl+B / Ctrl+F         символ назад / вперёд
 Option+B / Option+F     слово назад / вперёд
-Ctrl+← / Ctrl+→         переход по shell token'ам
+Option+← / Option+→     слово назад / вперёд в macOS-style profile
 Ctrl+U                  удалить к началу строки
 Ctrl+K                  удалить до конца строки
 Ctrl+W                  удалить предыдущий компонент

@@ -158,6 +158,37 @@ Window Monitor Pro
 Она остаётся установленной и может быть использована позже для определения активного окна.
 .LP
 \l'2i'
+.SH KEYBOARD / SHORTCUTS
+.LP
+Используется единый macOS-style semantic profile для Apple и PC keyboards:
+.LP
+.EX
+Apple Command = PC Win = Super
+Apple Option  = PC Alt = Alt
+Apple Control = PC Ctrl = Ctrl
+.EE
+.PP
+Системные shortcuts обслуживаются GNOME/Mutter, application shortcuts —
+\f(CRxremap\fR, а Ghostty имеет отдельный terminal-safe Super layer.
+.PP
+Source of truth:
+.LP
+.EX
+config/keyboard/settings.conf
+config/keyboard/xremap.yml
+systemd/user/xremap.service
+bin/ws-keyboard*
+.EE
+.PP
+Runtime конфиги не копируются: вне repository используются только symlink\(cqи
+и system state. Проверка:
+.LP
+.EX
+helpws keyboard
+ws-keyboard status
+.EE
+.LP
+\l'2i'
 .SH T2 HARDWARE
 .LP
 Работают:
@@ -628,8 +659,12 @@ workstation-config/
 ├── config/
 │   ├── fish/
 │   ├── ghostty/
+│   ├── keyboard/
 │   └── micro-help/
+├── systemd/user/
+│   └── xremap.service
 ├── docs/
+│   ├── keyboard.md
 │   ├── terminal.md
 │   └── workstation.md
 └── man/man1/
@@ -773,6 +808,10 @@ Ubuntu 26.04.1 LTS
     ├── deep / S3 suspend
     ├── Btrfs + snapshots architecture
     ├── stock T2 Touch Bar
+    ├── macOS-style keyboard layer
+    │   ├── GNOME system shortcuts
+    │   ├── xremap GUI shortcuts
+    │   └── Apple + PC semantic modifiers
     └── terminal environment
         ├── Ghostty 1.3.0 / Desert / opacity 0.90
         ├── Fish 4.9.3

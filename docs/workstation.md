@@ -88,6 +88,38 @@ Window Monitor Pro
 
 ---
 
+# KEYBOARD / SHORTCUTS
+
+Используется единый macOS-style semantic profile для Apple и PC keyboards:
+
+```text
+Apple Command = PC Win = Super
+Apple Option  = PC Alt = Alt
+Apple Control = PC Ctrl = Ctrl
+```
+
+Системные shortcuts обслуживаются GNOME/Mutter, application shortcuts —
+`xremap`, а Ghostty имеет отдельный terminal-safe Super layer.
+
+Source of truth:
+
+```text
+config/keyboard/settings.conf
+config/keyboard/xremap.yml
+systemd/user/xremap.service
+bin/ws-keyboard*
+```
+
+Runtime конфиги не копируются: вне repository используются только symlink'и
+и system state. Проверка:
+
+```console
+helpws keyboard
+ws-keyboard status
+```
+
+---
+
 # T2 HARDWARE
 
 Работают:
@@ -456,8 +488,12 @@ workstation-config/
 ├── config/
 │   ├── fish/
 │   ├── ghostty/
+│   ├── keyboard/
 │   └── micro-help/
+├── systemd/user/
+│   └── xremap.service
 ├── docs/
+│   ├── keyboard.md
 │   ├── terminal.md
 │   └── workstation.md
 └── man/man1/
@@ -528,6 +564,10 @@ Ubuntu 26.04.1 LTS
     ├── deep / S3 suspend
     ├── Btrfs + snapshots architecture
     ├── stock T2 Touch Bar
+    ├── macOS-style keyboard layer
+    │   ├── GNOME system shortcuts
+    │   ├── xremap GUI shortcuts
+    │   └── Apple + PC semantic modifiers
     └── terminal environment
         ├── Ghostty 1.3.0 / Desert / opacity 0.90
         ├── Fish 4.9.3

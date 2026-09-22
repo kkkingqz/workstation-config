@@ -11,7 +11,8 @@ open_md() {
 
 case "$topic" in
     terminal|term) open_md "$repo/docs/terminal.md" ;;
-    ghostty|fish|keys) open_md "$repo/docs/terminal.md" ;;
+    ghostty|fish) open_md "$repo/docs/terminal.md" ;;
+    keyboard|keys) open_md "$repo/docs/keyboard.md" ;;
     workstation|system|baseline) open_md "$repo/docs/workstation.md" ;;
     touchbar|touch-bar) open_md "$repo/docs/touchbar.md" ;;
     rebuild|reinstall|install) open_md "$repo/docs/rebuild.md" ;;
@@ -36,6 +37,7 @@ Usage: helpws [topic]
 
 Core:
   terminal         Ghostty + Fish handbook
+  keyboard         macOS-style keyboard layer
   workstation      Current workstation baseline
   touchbar         Touch Bar implementation notes
   rebuild          Reinstall to current baseline

@@ -1,0 +1,79 @@
+#!/usr/bin/env bash
+set -u
+
+repo="${WORKSTATION_CONFIG:-$HOME/.local/share/workstation-config}"
+settings="$repo/config/keyboard/settings.conf"
+[[ -r "$settings" ]] && source "$settings"
+
+ok()   { printf '  %-24s %s\n' "$1" "OK"; }
+warn() { printf '  %-24s %s\n' "$1" "$2"; }
+
+echo "Workstation keyboard"
+echo "────────────────────────────────────────"
+printf '  %-24s %s\n' "Profile" "${PROFILE:-unknown}"
+printf '  %-24s %s\n' "PC modifier layout" "${PC_MODIFIER_LAYOUT:-unknown}"
+printf '  %-24s %s\n' "Desktop" "${XDG_CURRENT_DESKTOP:-unknown}"
+printf '  %-24s %s\n' "Session" "${XDG_SESSION_TYPE:-unknown}"
+echo
+echo "Modifiers"
+echo "  Command / Win            -> Super"
+echo "  Option / Alt             -> Alt"
+echo "  Control / Ctrl           -> Ctrl"
+echo
+echo "xremap"
+
+if command -v xremap >/dev/null 2>&1; then
+    printf '  %-24s %s\n' "Binary" "$(command -v xremap)"
+    printf '  %-24s %s\n' "Version" "$(xremap --version 2>/dev/null || echo unknown)"
+else
+    warn "Binary" "MISSING"
+fi
+
+id -nG | tr ' ' '\n' | grep -Fxq input && ok "input group" || warn "input group" "MISSING"
+if [[ -e /dev/uinput ]]; then
+    [[ -w /dev/uinput ]] && ok "/dev/uinput" || warn "/dev/uinput" "present, not writable"
+else
+    warn "/dev/uinput" "MISSING"
+fi
+
+if busctl --user call org.gnome.Shell /com/k0kubun/Xremap com.k0kubun.Xremap WMClasses >/dev/null 2>&1; then
+    ok "GNOME xremap bridge"
+else
+    warn "GNOME xremap bridge" "MISSING"
+fi
+
+if [[ -L "$HOME/.config/systemd/user/xremap.service" ]]; then
+    printf '  %-24s %s\n' "Service link" "$(readlink "$HOME/.config/systemd/user/xremap.service")"
+else
+    warn "Service link" "MISSING"
+fi
+
+systemctl --user is-active --quiet xremap.service 2>/dev/null && ok "Service" || warn "Service" "$(systemctl --user is-active xremap.service 2>/dev/null || echo inactive)"
+
+echo
+echo "GNOME bindings"
+for spec in \
+    "org.gnome.desktop.wm.keybindings|switch-applications" \
+    "org.gnome.desktop.wm.keybindings|switch-group" \
+    "org.gnome.desktop.wm.keybindings|minimize" \
+    "org.gnome.desktop.wm.keybindings|toggle-fullscreen" \
+    "org.gnome.desktop.wm.keybindings|switch-to-workspace-left" \
+    "org.gnome.desktop.wm.keybindings|switch-to-workspace-right" \
+    "org.gnome.desktop.wm.keybindings|switch-input-source" \
+    "org.gnome.shell.keybindings|toggle-overview" \
+    "org.gnome.shell.keybindings|screenshot" \
+    "org.gnome.shell.keybindings|show-screenshot-ui" \
+    "org.gnome.settings-daemon.plugins.media-keys|screensaver"
+do
+    schema="${spec%%|*}"
+    key="${spec#*|}"
+    if gsettings list-keys "$schema" 2>/dev/null | grep -Fxq "$key"; then
+        printf '  %-30s %s\n' "$key" "$(gsettings get "$schema" "$key")"
+    fi
+done
+
+if command -v xremap >/dev/null 2>&1; then
+    echo
+echo "Detected input devices"
+    xremap --list-devices 2>/dev/null || true
+fi

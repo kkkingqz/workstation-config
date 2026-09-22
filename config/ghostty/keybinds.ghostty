@@ -50,6 +50,24 @@ keybind = performable:ctrl+shift+KeyC=copy_to_clipboard
 keybind = ctrl+shift+KeyV=paste_from_clipboard
 keybind = shift+insert=paste_from_clipboard
 
+# macOS-style semantic layer
+# Apple Command and PC Win are both Super on Linux.
+keybind = super+KeyC=copy_to_clipboard
+keybind = super+KeyV=paste_from_clipboard
+keybind = super+KeyA=select_all
+keybind = super+KeyF=start_search
+keybind = super+KeyT=new_tab
+keybind = super+KeyN=new_window
+keybind = super+KeyW=close_surface
+# Close all Ghostty windows. Upstream recommends all:close_window rather than
+# the deprecated close_all_windows action.
+keybind = all:super+KeyQ=close_window
+
+keybind = super+comma=open_config
+keybind = super+equal=increase_font_size:1
+keybind = super+minus=decrease_font_size:1
+keybind = super+Digit0=reset_font_size
+
 # URL under cursor
 keybind = ctrl+shift+KeyL=copy_url_to_clipboard
 

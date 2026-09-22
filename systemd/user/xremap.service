@@ -1,0 +1,16 @@
+[Unit]
+Description=Workstation macOS-style keyboard remapping
+PartOf=graphical-session.target
+After=graphical-session.target
+StartLimitIntervalSec=120
+StartLimitBurst=8
+
+[Service]
+Type=simple
+Environment="PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin"
+ExecStart=/usr/bin/bash %h/.local/share/workstation-config/bin/ws-xremap
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=graphical-session.target

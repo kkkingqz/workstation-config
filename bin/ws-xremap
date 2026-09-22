@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo="${WORKSTATION_CONFIG:-$HOME/.local/share/workstation-config}"
+settings="$repo/config/keyboard/settings.conf"
+config="$repo/config/keyboard/xremap.yml"
+
+if [[ -r "$settings" ]]; then
+    # shellcheck disable=SC1090
+    source "$settings"
+fi
+
+desktop="${XREMAP_DESKTOP:-gnome}"
+watch="${XREMAP_WATCH:-config,device}"
+
+[[ -r "$config" ]] || { echo "ws-xremap: missing config: $config" >&2; exit 66; }
+
+xremap_bin="$(command -v xremap || true)"
+[[ -n "$xremap_bin" ]] || { echo "ws-xremap: xremap is not installed or not in PATH" >&2; exit 127; }
+
+# Application-specific exclusions are safety-critical: without the GNOME
+# bridge Super+C could become Ctrl+C inside a terminal. On login GNOME Shell
+# may expose the bridge a few seconds after graphical-session.target, so wait
+# briefly rather than starting xremap without app awareness.
+if [[ "$desktop" == "gnome" && "${XDG_SESSION_TYPE:-wayland}" == "wayland" ]]; then
+    bridge_ready=false
+    for _ in {1..30}; do
+        if busctl --user call \
+            org.gnome.Shell \
+            /com/k0kubun/Xremap \
+            com.k0kubun.Xremap \
+            WMClasses >/dev/null 2>&1; then
+            bridge_ready=true
+            break
+        fi
+        sleep 1
+    done
+    if [[ "$bridge_ready" != true ]]; then
+        echo "ws-xremap: GNOME xremap bridge is unavailable" >&2
+        exit 69
+    fi
+fi
+
+exec "$xremap_bin" \
+    "--watch=$watch" \
+    --desktop "$desktop" \
+    --output-device-name workstation-xremap \
+    "$config"
