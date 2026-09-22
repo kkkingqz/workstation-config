@@ -369,3 +369,40 @@ output is a printable shortcut such as `Ctrl+N`. For that reason:
 If a specific GUI application fails to honor its native Ctrl shortcut on a
 non-Latin layout, add an application-specific solution instead of globally
 switching keyboard layouts inside xremap.
+
+---
+
+## MACOS APP WINDOW ACTIONS
+
+Application-level window operations use the third-party GNOME Shell extension
+Window Control (`window-control@carlo9890.github.io`) through its D-Bus API.
+No workstation-owned GNOME Shell extension is used.
+
+```text
+Option+Command/Win+Esc       GNOME System Monitor
+Command/Win+H                minimize all windows of current app
+Option+Command/Win+H         minimize all windows except current app
+Option+Command/Win+W         close all windows of current app
+Option+Command/Win+M         minimize all windows of current app
+
+Shift+Command/Win+Q          logout with confirmation
+Option+Shift+Command/Win+Q   logout immediately
+```
+
+`ws-window` gets the complete window list from Window Control's
+`ListDetailed` D-Bus method. It identifies the focused application using, in
+order, `sandboxed_app_id`, `gtk_application_id`, and `wm_class`.
+
+`Close All` calls Window Control's polite `Close` method for every window of
+the current application, so applications can still present save/confirm
+dialogs.
+
+`Option+Command/Win+Esc` deliberately does not force-kill anything. It opens
+GNOME System Monitor, where the process/application can be inspected and
+terminated manually.
+
+Dependency:
+
+```text
+GNOME Shell extension: window-control@carlo9890.github.io
+```

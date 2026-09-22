@@ -28,6 +28,17 @@ keymap:
   # Terminal-specific macOS navigation.
   # GNOME normally consumes Super+Left/Right for window tiling. xremap sees
   # the physical event first and converts it before Mutter receives it.
+  - name: macOS app/window actions
+    exact_match: true
+    remap:
+      Alt-Super-Esc: { launch: ["ws-window", "task-manager"] }
+      Super-H: { launch: ["ws-window", "hide-current"] }
+      Alt-Super-H: { launch: ["ws-window", "hide-others"] }
+      Alt-Super-W: { launch: ["ws-window", "close-current"] }
+      Alt-Super-M: { launch: ["ws-window", "minimize-current"] }
+      Super-Shift-Q: { launch: ["ws-window", "logout"] }
+      Alt-Super-Shift-Q: { launch: ["ws-window", "logout-now"] }
+
   - name: macOS terminal shortcuts
     exact_match: true
     application:
