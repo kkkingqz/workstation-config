@@ -45,6 +45,7 @@ backup_once() {
     backup_key org.gnome.desktop.wm.keybindings switch-to-workspace-right >> "$tmp"
     backup_key org.gnome.desktop.wm.keybindings switch-input-source >> "$tmp"
     backup_key org.gnome.desktop.wm.keybindings switch-input-source-backward >> "$tmp"
+    backup_key org.gnome.mutter overlay-key >> "$tmp"
     backup_key org.gnome.shell.keybindings toggle-overview >> "$tmp"
     backup_key org.gnome.shell.keybindings toggle-application-view >> "$tmp"
     backup_key org.gnome.shell.keybindings toggle-message-tray >> "$tmp"
@@ -149,6 +150,7 @@ for spec in \
     "org.gnome.desktop.wm.keybindings|switch-to-workspace-right" \
     "org.gnome.desktop.wm.keybindings|switch-input-source" \
     "org.gnome.desktop.wm.keybindings|switch-input-source-backward" \
+    "org.gnome.mutter|overlay-key" \
     "org.gnome.shell.keybindings|toggle-overview" \
     "org.gnome.shell.keybindings|toggle-application-view" \
     "org.gnome.shell.keybindings|toggle-message-tray" \
@@ -271,6 +273,11 @@ set_key org.gnome.shell.keybindings switch-to-application-9 "[]"
 if schema_has_key org.gnome.shell.extensions.dash-to-dock hot-keys; then
     set_key org.gnome.shell.extensions.dash-to-dock hot-keys "false"
 fi
+
+# Make Super a pure modifier. macOS Command alone does nothing, and
+# disabling Mutter's overlay key prevents accidental Overview after
+# Command/Win+Arrow remaps.
+set_key org.gnome.mutter overlay-key "''"
 
 # Overview / Spotlight-style search
 set_key org.gnome.shell.keybindings toggle-overview "['<Super>space', '<Control>Up']"

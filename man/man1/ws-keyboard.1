@@ -301,3 +301,24 @@ keeps the original values in \f(CRstate/keyboard/gsettings-backup.tsv\fR.
 .LP
 The dock itself and pinned applications are not removed or otherwise
 changed; only their Super-number keyboard launcher shortcuts are disabled.
+.LP
+\l'2i'
+.SS
+MUTTER OVERLAY KEY
+.LP
+GNOME normally treats a standalone \f(CRSuper_L\fR press as the Activities/Overview
+trigger. That conflicts with macOS semantics, where Command by itself does
+nothing, and it can also cause accidental Overview activation after remapped
+\f(CRCommand+Arrow\fR sequences.
+.PP
+The workstation profile therefore sets:
+.LP
+.EX
+org.gnome.mutter overlay-key = ''
+.EE
+.PP
+\f(CRSuper\fR remains fully usable as a modifier. Overview remains available through
+\f(CRCommand/Win+Space\fR and \f(CRControl+Up\fR.
+.PP
+The original value is kept in \f(CRstate/keyboard/gsettings-backup.tsv\fR and restored
+by \f(CRws-keyboard restore\fR.

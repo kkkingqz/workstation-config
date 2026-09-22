@@ -278,3 +278,24 @@ The workstation profile therefore:
 The dock itself and pinned applications are not removed or otherwise
 changed; only their Super-number keyboard launcher shortcuts are disabled.
 
+---
+
+## MUTTER OVERLAY KEY
+
+GNOME normally treats a standalone `Super_L` press as the Activities/Overview
+trigger. That conflicts with macOS semantics, where Command by itself does
+nothing, and it can also cause accidental Overview activation after remapped
+`Command+Arrow` sequences.
+
+The workstation profile therefore sets:
+
+```text
+org.gnome.mutter overlay-key = ''
+```
+
+`Super` remains fully usable as a modifier. Overview remains available through
+`Command/Win+Space` and `Control+Up`.
+
+The original value is kept in `state/keyboard/gsettings-backup.tsv` and restored
+by `ws-keyboard restore`.
+

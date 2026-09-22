@@ -60,6 +60,7 @@ for spec in \
     "org.gnome.desktop.wm.keybindings|switch-to-workspace-left" \
     "org.gnome.desktop.wm.keybindings|switch-to-workspace-right" \
     "org.gnome.desktop.wm.keybindings|switch-input-source" \
+    "org.gnome.mutter|overlay-key" \
     "org.gnome.shell.keybindings|toggle-overview" \
     "org.gnome.shell.keybindings|toggle-application-view" \
     "org.gnome.shell.keybindings|toggle-message-tray" \
