@@ -255,3 +255,22 @@ ws-keyboard gnome-apps
 systemctl --user status xremap.service
 journalctl --user -u xremap.service
 .EE
+.LP
+\l'2i'
+.SS
+GNOME RESERVED SUPER KEYS
+.LP
+GNOME Shell has several global \f(CRSuper+letter\fR shortcuts that conflict with
+macOS-style application commands. The workstation profile disables these Shell
+bindings so the event can reach xremap/Ghostty:
+.LP
+.EX
+Super+A        Show Applications    -> disabled; application gets Command+A
+Super+V        notification list    -> disabled; application gets Command+V
+Super+M        notification list    -> disabled; GNOME minimize owns Super+M
+Super+S        Quick Settings       -> disabled; application gets Command+S
+Super+N        focus notification   -> disabled; application gets Command+N
+.EE
+.PP
+The original values are kept in
+\f(CRstate/keyboard/gsettings-backup.tsv\fR and restored by \f(CRws-keyboard restore\fR.

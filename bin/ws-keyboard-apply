@@ -46,6 +46,10 @@ backup_once() {
     backup_key org.gnome.desktop.wm.keybindings switch-input-source >> "$tmp"
     backup_key org.gnome.desktop.wm.keybindings switch-input-source-backward >> "$tmp"
     backup_key org.gnome.shell.keybindings toggle-overview >> "$tmp"
+    backup_key org.gnome.shell.keybindings toggle-application-view >> "$tmp"
+    backup_key org.gnome.shell.keybindings toggle-message-tray >> "$tmp"
+    backup_key org.gnome.shell.keybindings toggle-quick-settings >> "$tmp"
+    backup_key org.gnome.shell.keybindings focus-active-notification >> "$tmp"
     backup_key org.gnome.shell.keybindings screenshot >> "$tmp"
     backup_key org.gnome.shell.keybindings show-screenshot-ui >> "$tmp"
     backup_key org.gnome.settings-daemon.plugins.media-keys screensaver >> "$tmp"
@@ -134,6 +138,10 @@ for spec in \
     "org.gnome.desktop.wm.keybindings|switch-input-source" \
     "org.gnome.desktop.wm.keybindings|switch-input-source-backward" \
     "org.gnome.shell.keybindings|toggle-overview" \
+    "org.gnome.shell.keybindings|toggle-application-view" \
+    "org.gnome.shell.keybindings|toggle-message-tray" \
+    "org.gnome.shell.keybindings|toggle-quick-settings" \
+    "org.gnome.shell.keybindings|focus-active-notification" \
     "org.gnome.shell.keybindings|screenshot" \
     "org.gnome.shell.keybindings|show-screenshot-ui" \
     "org.gnome.settings-daemon.plugins.media-keys|screensaver"
@@ -218,6 +226,14 @@ set_key org.gnome.desktop.wm.keybindings switch-to-workspace-right "['<Control><
 # Input sources
 set_key org.gnome.desktop.wm.keybindings switch-input-source "['<Control>space']"
 set_key org.gnome.desktop.wm.keybindings switch-input-source-backward "['<Control><Alt>space']"
+
+# Free GNOME Shell Super-letter shortcuts that conflict with macOS
+# application semantics. Without this, GNOME Shell consumes the event before
+# xremap/Ghostty can see it.
+set_key org.gnome.shell.keybindings toggle-application-view "[]"
+set_key org.gnome.shell.keybindings toggle-message-tray "[]"
+set_key org.gnome.shell.keybindings toggle-quick-settings "[]"
+set_key org.gnome.shell.keybindings focus-active-notification "[]"
 
 # Overview / Spotlight-style search
 set_key org.gnome.shell.keybindings toggle-overview "['<Super>space', '<Control>Up']"

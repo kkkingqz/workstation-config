@@ -61,6 +61,10 @@ for spec in \
     "org.gnome.desktop.wm.keybindings|switch-to-workspace-right" \
     "org.gnome.desktop.wm.keybindings|switch-input-source" \
     "org.gnome.shell.keybindings|toggle-overview" \
+    "org.gnome.shell.keybindings|toggle-application-view" \
+    "org.gnome.shell.keybindings|toggle-message-tray" \
+    "org.gnome.shell.keybindings|toggle-quick-settings" \
+    "org.gnome.shell.keybindings|focus-active-notification" \
     "org.gnome.shell.keybindings|screenshot" \
     "org.gnome.shell.keybindings|show-screenshot-ui" \
     "org.gnome.settings-daemon.plugins.media-keys|screensaver"
