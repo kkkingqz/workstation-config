@@ -299,3 +299,73 @@ org.gnome.mutter overlay-key = ''
 The original value is kept in `state/keyboard/gsettings-backup.tsv` and restored
 by `ws-keyboard restore`.
 
+---
+
+## NAUTILUS / FINDER LAYER
+
+When GNOME Files (`org.gnome.Nautilus`) is active, xremap applies a Finder-like
+override before the generic GUI mappings.
+
+```text
+Command/Win+Up             parent folder
+Command/Win+Down           open selected item
+Command/Win+[              back
+Command/Win+]              forward
+
+Command/Win+I              Properties
+Command/Win+Backspace      Move to Trash
+Shift+Command/Win+N        New Folder
+
+Shift+Command/Win+G        Go to Folder / location entry
+Command/Win+K              Network / Connect to Server view
+Shift+Command/Win+.        show/hide hidden files
+
+Space                      Quick Look via GNOME Sushi
+```
+
+Back/Forward use Nautilus supported Back/Forward input events rather than
+Alt+Left/Right.
+
+`Command/Win+K` opens Nautilus `x-network-view:///`, which exposes the
+dedicated network server address bar for GVfs URIs such as `smb://`,
+`sftp://`, `ssh://`, `nfs://`, and `dav://`.
+
+Deletion:
+
+```text
+Command/Win+Backspace      macOS-style Move to Trash
+Delete                     Nautilus native Move to Trash
+Shift+Delete               Nautilus native permanent delete
+Fn+Delete on Apple         normally emits forward Delete
+```
+
+The bare Apple key labelled `delete` normally emits Backspace. It is not
+globally changed to Delete because that would break Backspace while editing
+the Nautilus location/search fields.
+
+Empty Trash is intentionally not mapped.
+
+---
+
+## KEYBOARD LAYOUT DEPENDENCE
+
+The workstation xremap triggers are based on evdev physical key codes, so
+trigger matching itself is independent of EN/UA/RU layout.
+
+The receiving application can still make a remap layout-dependent when the
+output is a printable shortcut such as `Ctrl+N`. For that reason:
+
+- Nautilus `Shift+Command/Win+N -> Ctrl+Shift+N` is intentionally retained and
+  is currently considered EN-layout-only.
+- No Nautilus Python extension or other plugin is installed for this shortcut.
+- Generic GUI mappings (`Command+C -> Ctrl+C`, etc.) remain native application
+  shortcuts. Their non-Latin behavior depends on the application's toolkit.
+- Ghostty does not use xremap-generated Ctrl-letter sequences. It uses physical
+  W3C key codes and explicit terminal control bytes/ESC sequences, so terminal
+  controls and macOS-style shell navigation are layout-independent.
+- Ghostty punctuation bindings use physical `Comma`, `Equal`, `Minus`, and
+  `Digit0` key codes.
+
+If a specific GUI application fails to honor its native Ctrl shortcut on a
+non-Latin layout, add an application-specific solution instead of globally
+switching keyboard layouts inside xremap.

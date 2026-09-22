@@ -44,5 +44,6 @@ fi
 exec "$xremap_bin" \
     "--watch=$watch" \
     --desktop "$desktop" \
+    --allow-launch true \
     --output-device-name workstation-xremap \
     "$config"

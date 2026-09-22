@@ -45,6 +45,33 @@ keymap:
       Alt-Left: Alt-B
       Alt-Right: Alt-F
 
+  - name: macOS Nautilus / Finder shortcuts
+    exact_match: true
+    application:
+      only:
+        - '/.*[Nn]autilus.*/'
+    remap:
+      # Finder navigation
+      Super-Up: Alt-Up
+      Super-Down: Enter
+      Super-LeftBrace: Back
+      Super-RightBrace: Forward
+
+      # Finder file actions
+      Super-I: Alt-Enter
+      Super-Backspace: Delete
+      Super-Delete: Delete
+      Super-Shift-N: Ctrl-Shift-N
+
+      # Finder "Go to Folder" / "Connect to Server".
+      # Nautilus uses the location entry for both local paths and URIs
+      # such as smb:// and sftp://.
+      Super-Shift-G: Ctrl-L
+      Super-K: { launch: ["nautilus", "x-network-view:///"] }
+
+      # Finder hidden-files toggle
+      Super-Shift-Dot: Ctrl-H
+
   - name: macOS GUI shortcuts
     exact_match: true
     application:
