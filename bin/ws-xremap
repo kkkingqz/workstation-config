@@ -45,5 +45,5 @@ exec "$xremap_bin" \
     "--watch=$watch" \
     --desktop "$desktop" \
     --allow-launch true \
-    --output-device-name workstation-xremap \
+    --ignore "Dynamic Function Row Virtual Input Device" --output-device-name workstation-xremap \
     "$config"

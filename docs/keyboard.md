@@ -452,3 +452,109 @@ Command/Win+K             Network / Connect to Server
 Shift+Command/Win+.       show/hide hidden files
 Space                     Quick Look
 ```
+
+---
+
+## MACOS TILING
+
+Ubuntu Tiling Assistant is the tiling backend.
+
+### Apple keyboard
+
+The internal Apple/T2 keyboard exposes `KEY_FN`. xremap keeps that event and
+uses Fn press/release only to enable an internal `apple_fn` mode.
+
+The Apple HID layer converts Fn+arrows before xremap sees the arrow key:
+
+```text
+Fn+Left   -> Home
+Fn+Right  -> End
+Fn+Up     -> PageUp
+Fn+Down   -> PageDown
+```
+
+Therefore the actual xremap triggers are Ctrl+Home/End/PageUp/PageDown while
+`apple_fn` mode is active.
+
+User-facing shortcuts:
+
+```text
+Fn+Control+Left       tile left half
+Fn+Control+Right      tile right half
+Fn+Control+Up         tile top half
+Fn+Control+Down       tile bottom half
+
+Fn+Control+F          Fill
+Fn+Control+C          Center
+Fn+Control+R          Return to Previous Size
+```
+
+The private Tiling Assistant accelerators use ordinary keys rather than
+F13-F19:
+
+```text
+Shift+Ctrl+Alt+Super+Left/Right/Up/Down
+Shift+Ctrl+Alt+Super+F
+Shift+Ctrl+Alt+Super+C
+Shift+Ctrl+Alt+Super+R
+```
+
+### PC keyboard
+
+```text
+Control+Win+Left      tile left half
+Control+Win+Right     tile right half
+Control+Win+Up        tile top half
+Control+Win+Down      tile bottom half
+```
+
+They normalize to the same private directional accelerators.
+
+### Touch Bar
+
+Touch Bar rendering and button handling are provided by `tiny-dfr`.
+
+The old `ws-touchbar-fn.service` bridge that mirrored `KEY_FN` into
+`hid_appletb_kbd` mode 1/2 has been removed.
+
+xremap still keeps its Apple Fn mode for the macOS-style tiling shortcuts,
+but `KEY_FN` is passed through (`skip_key_event: false`). tiny-dfr listens
+to seat0 through libinput, so it can receive the Fn event from the
+`workstation-xremap` virtual keyboard.
+
+Configuration source:
+
+```text
+config/tiny-dfr/config.toml
+```
+
+Installed runtime copy:
+
+```text
+/etc/tiny-dfr/config.toml
+```
+
+Current layer behavior:
+
+```text
+normal       F1..F12
+hold Fn      media / brightness layer
+```
+
+The tiny-dfr package owns the system service and Touch Bar DRM/uinput setup.
+
+### Finder-style fixed locations
+
+These shortcuts navigate the currently focused Nautilus window/tab; they do
+not launch a new Nautilus window:
+
+```text
+Shift+Command/Win+H    Home
+Shift+Command/Win+C    Computer (/)
+Shift+Command/Win+O    Documents
+Shift+Command/Win+D    Desktop
+```
+
+`H` uses Nautilus' native `Alt+Home`. `C/O/D` use the current window's
+`Ctrl+L` location entry through `ws-nautilus-current`.
+
