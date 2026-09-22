@@ -62,6 +62,18 @@ keymap:
       only:
         - '/.*[Nn]autilus.*/'
     remap:
+      # Finder view modes
+      # Finder Command+1 = Icons; Nautilus Ctrl+2 = Grid
+      Super-1: Ctrl-2
+      # Finder Command+2 = List; Nautilus Ctrl+1 = List
+      Super-2: Ctrl-1
+
+      # Finder Go locations
+      Super-Shift-H: Alt-Home
+      Super-Shift-C: { launch: ["ws-nautilus-go", "computer"] }
+      Super-Shift-O: { launch: ["ws-nautilus-go", "documents"] }
+      Super-Shift-D: { launch: ["ws-nautilus-go", "desktop"] }
+
       # Finder navigation
       Super-Up: Alt-Up
       Super-Down: Enter

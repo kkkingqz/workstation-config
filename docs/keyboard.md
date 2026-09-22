@@ -406,3 +406,49 @@ Dependency:
 ```text
 GNOME Shell extension: window-control@carlo9890.github.io
 ```
+
+---
+
+## FINDER EXTRA SHORTCUTS
+
+Additional Finder-style mappings in GNOME Files:
+
+```text
+Command/Win+1             Grid / icon view
+Command/Win+2             List view
+Command/Win+F             Search current folder (existing generic mapping)
+
+Shift+Command/Win+H       Home
+Shift+Command/Win+C       Computer equivalent: filesystem root /
+Shift+Command/Win+O       XDG Documents
+Shift+Command/Win+D       XDG Desktop
+```
+
+The following Finder shortcuts are intentionally left unmapped because
+Nautilus 50 has no direct native equivalent suitable for this keyboard layer:
+
+```text
+Command/Win+3             Column View
+Command/Win+4             Gallery View
+Command/Win+J             View Options
+Command/Win+D             Duplicate
+Command/Win+E             Eject
+Shift+Command/Win+U       Utilities
+```
+
+Existing Nautilus/Finder mappings remain unchanged:
+
+```text
+Command/Win+Up            parent folder
+Command/Win+Down          open selection
+Command/Win+[ / ]         back / forward
+Command/Win+I             Properties
+Command/Win+Backspace     Move to Trash
+Delete                    Move to Trash
+Shift+Delete              Delete permanently
+Shift+Command/Win+N       New Folder (EN layout only)
+Shift+Command/Win+G       Go to Folder / location entry
+Command/Win+K             Network / Connect to Server
+Shift+Command/Win+.       show/hide hidden files
+Space                     Quick Look
+```
