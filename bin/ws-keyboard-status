@@ -81,3 +81,16 @@ if command -v xremap >/dev/null 2>&1; then
 echo "Detected input devices"
     xremap --list-devices 2>/dev/null || true
 fi
+
+echo
+echo "Numeric launcher conflicts"
+for n in $(seq 1 9); do
+    printf "  switch-to-application-%-2s     %s\n" \
+        "$n" "$(gsettings get org.gnome.shell.keybindings "switch-to-application-$n" 2>/dev/null || echo MISSING)"
+done
+
+if gsettings range org.gnome.shell.extensions.dash-to-dock hot-keys >/dev/null 2>&1; then
+    printf "  Ubuntu Dock hot-keys          %s\n" \
+        "$(gsettings get org.gnome.shell.extensions.dash-to-dock hot-keys)"
+fi
+

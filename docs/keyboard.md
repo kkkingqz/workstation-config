@@ -260,3 +260,21 @@ Super+N        focus notification   -> disabled; application gets Command+N
 
 The original values are kept in
 `state/keyboard/gsettings-backup.tsv` and restored by `ws-keyboard restore`.
+---
+
+## GNOME / UBUNTU DOCK NUMBER KEYS
+
+Ubuntu Dock and GNOME Shell reserve `Super+1..9`; Ubuntu Dock also
+uses `Shift+Super+1..9`. These conflict with macOS-style screenshots
+such as `Shift+Command+3/4/5`.
+
+The workstation profile therefore:
+
+- clears `org.gnome.shell.keybindings switch-to-application-1..9`;
+- sets `org.gnome.shell.extensions.dash-to-dock hot-keys` to `false`
+  when Ubuntu Dock is installed;
+- keeps the original values in `state/keyboard/gsettings-backup.tsv`.
+
+The dock itself and pinned applications are not removed or otherwise
+changed; only their Super-number keyboard launcher shortcuts are disabled.
+

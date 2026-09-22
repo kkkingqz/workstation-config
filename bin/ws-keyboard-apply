@@ -50,6 +50,18 @@ backup_once() {
     backup_key org.gnome.shell.keybindings toggle-message-tray >> "$tmp"
     backup_key org.gnome.shell.keybindings toggle-quick-settings >> "$tmp"
     backup_key org.gnome.shell.keybindings focus-active-notification >> "$tmp"
+    backup_key org.gnome.shell.keybindings switch-to-application-1 >> "$tmp"
+    backup_key org.gnome.shell.keybindings switch-to-application-2 >> "$tmp"
+    backup_key org.gnome.shell.keybindings switch-to-application-3 >> "$tmp"
+    backup_key org.gnome.shell.keybindings switch-to-application-4 >> "$tmp"
+    backup_key org.gnome.shell.keybindings switch-to-application-5 >> "$tmp"
+    backup_key org.gnome.shell.keybindings switch-to-application-6 >> "$tmp"
+    backup_key org.gnome.shell.keybindings switch-to-application-7 >> "$tmp"
+    backup_key org.gnome.shell.keybindings switch-to-application-8 >> "$tmp"
+    backup_key org.gnome.shell.keybindings switch-to-application-9 >> "$tmp"
+    if schema_has_key org.gnome.shell.extensions.dash-to-dock hot-keys; then
+        backup_key org.gnome.shell.extensions.dash-to-dock hot-keys >> "$tmp"
+    fi
     backup_key org.gnome.shell.keybindings screenshot >> "$tmp"
     backup_key org.gnome.shell.keybindings show-screenshot-ui >> "$tmp"
     backup_key org.gnome.settings-daemon.plugins.media-keys screensaver >> "$tmp"
@@ -142,6 +154,15 @@ for spec in \
     "org.gnome.shell.keybindings|toggle-message-tray" \
     "org.gnome.shell.keybindings|toggle-quick-settings" \
     "org.gnome.shell.keybindings|focus-active-notification" \
+    "org.gnome.shell.keybindings|switch-to-application-1" \
+    "org.gnome.shell.keybindings|switch-to-application-2" \
+    "org.gnome.shell.keybindings|switch-to-application-3" \
+    "org.gnome.shell.keybindings|switch-to-application-4" \
+    "org.gnome.shell.keybindings|switch-to-application-5" \
+    "org.gnome.shell.keybindings|switch-to-application-6" \
+    "org.gnome.shell.keybindings|switch-to-application-7" \
+    "org.gnome.shell.keybindings|switch-to-application-8" \
+    "org.gnome.shell.keybindings|switch-to-application-9" \
     "org.gnome.shell.keybindings|screenshot" \
     "org.gnome.shell.keybindings|show-screenshot-ui" \
     "org.gnome.settings-daemon.plugins.media-keys|screensaver"
@@ -234,6 +255,22 @@ set_key org.gnome.shell.keybindings toggle-application-view "[]"
 set_key org.gnome.shell.keybindings toggle-message-tray "[]"
 set_key org.gnome.shell.keybindings toggle-quick-settings "[]"
 set_key org.gnome.shell.keybindings focus-active-notification "[]"
+
+# Free Super+number shortcuts from GNOME Shell / Ubuntu Dock.
+# This is required for macOS-style Shift+Super+3/4/5 screenshots and
+# also leaves Command/Win+number available to applications.
+set_key org.gnome.shell.keybindings switch-to-application-1 "[]"
+set_key org.gnome.shell.keybindings switch-to-application-2 "[]"
+set_key org.gnome.shell.keybindings switch-to-application-3 "[]"
+set_key org.gnome.shell.keybindings switch-to-application-4 "[]"
+set_key org.gnome.shell.keybindings switch-to-application-5 "[]"
+set_key org.gnome.shell.keybindings switch-to-application-6 "[]"
+set_key org.gnome.shell.keybindings switch-to-application-7 "[]"
+set_key org.gnome.shell.keybindings switch-to-application-8 "[]"
+set_key org.gnome.shell.keybindings switch-to-application-9 "[]"
+if schema_has_key org.gnome.shell.extensions.dash-to-dock hot-keys; then
+    set_key org.gnome.shell.extensions.dash-to-dock hot-keys "false"
+fi
 
 # Overview / Spotlight-style search
 set_key org.gnome.shell.keybindings toggle-overview "['<Super>space', '<Control>Up']"
