@@ -18,7 +18,7 @@ source "$settings"
 
 schema_has_key() {
     local schema="$1" key="$2"
-    gsettings list-keys "$schema" 2>/dev/null | grep -Fxq "$key"
+    gsettings range "$schema" "$key" >/dev/null 2>&1
 }
 
 backup_key() {
