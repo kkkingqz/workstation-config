@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema id="org.gnome.shell.extensions.workstation-smart-popup"
+          path="/org/gnome/shell/extensions/workstation-smart-popup/">
+    <key name="smart-popup" type="as">
+      <default><![CDATA[['<Shift><Control><Alt><Super>space']]]></default>
+      <summary>Open Smart Tiling Popup</summary>
+    </key>
+  </schema>
+</schemalist>

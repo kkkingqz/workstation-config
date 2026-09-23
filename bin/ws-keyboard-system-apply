@@ -1,0 +1,145 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo="${WORKSTATION_CONFIG:-$HOME/.local/share/workstation-config}"
+udev_src="$repo/system/udev/99-workstation-uinput.rules"
+udev_dst="/etc/udev/rules.d/99-workstation-uinput.rules"
+old_udev="/etc/udev/rules.d/70-workstation-uinput.rules"
+keyboard="/etc/default/keyboard"
+tiny_src="$repo/config/tiny-dfr/config.toml"
+tiny_dst="/etc/tiny-dfr/config.toml"
+
+die() {
+    echo "ws-keyboard-system-apply: $*" >&2
+    exit 1
+}
+
+command -v sudo >/dev/null 2>&1 || die "sudo not found"
+command -v python3 >/dev/null 2>&1 || die "python3 not found"
+
+[[ -r "$udev_src" ]] || die "missing: $udev_src"
+[[ -r "$keyboard" ]] || die "missing: $keyboard"
+
+echo "== uinput rule =="
+sudo install -Dm0644 "$udev_src" "$udev_dst"
+
+# Remove only the known obsolete workstation rule.
+if [[ -f "$old_udev" ]]; then
+    if grep -Fxq 'KERNEL=="uinput", TAG+="uaccess", OPTIONS+="static_node=uinput"' "$old_udev"; then
+        sudo rm -f "$old_udev"
+        echo "removed obsolete: $old_udev"
+    else
+        echo "WARNING: $old_udev exists but does not match the known old workstation rule; left untouched" >&2
+    fi
+fi
+
+echo
+echo "== GDM/login keyboard =="
+tmp="$(mktemp)"
+trap 'rm -f "$tmp"' EXIT
+sudo cat "$keyboard" > "$tmp"
+
+python3 - "$tmp" <<'PY'
+from pathlib import Path
+import re
+import sys
+
+p = Path(sys.argv[1])
+text = p.read_text()
+
+def get_value(name, default=""):
+    m = re.search(
+        rf'(?m)^\s*{re.escape(name)}\s*=\s*(?:"([^"]*)"|\'([^\']*)\'|([^\n#]*))',
+        text,
+    )
+    if not m:
+        return default
+    return next((g.strip() for g in m.groups() if g is not None), default)
+
+def set_value(name, value):
+    global text
+    line = f'{name}="{value}"'
+    pat = rf'(?m)^\s*{re.escape(name)}\s*=.*$'
+    if re.search(pat, text):
+        text = re.sub(pat, line, text, count=1)
+    else:
+        if text and not text.endswith("\n"):
+            text += "\n"
+        text += line + "\n"
+
+model = get_value("XKBMODEL", "pc105") or "pc105"
+options = get_value("XKBOPTIONS", "")
+
+kept = []
+for option in (x.strip() for x in options.split(",")):
+    if not option:
+        continue
+    if option.startswith("grp:") or option.startswith("grp_led:"):
+        continue
+    kept.append(option)
+
+set_value("XKBMODEL", model)
+set_value("XKBLAYOUT", "us")
+set_value("XKBVARIANT", "")
+set_value("XKBOPTIONS", ",".join(kept))
+
+p.write_text(text)
+PY
+
+sudo install -m0644 "$tmp" "$keyboard"
+
+echo
+echo "== tiny-dfr config =="
+if [[ -r "$tiny_src" ]]; then
+    sudo install -Dm0644 "$tiny_src" "$tiny_dst"
+    if systemctl list-unit-files tiny-dfr.service >/dev/null 2>&1; then
+        sudo systemctl restart tiny-dfr.service
+        echo "tiny-dfr.service restarted"
+    else
+        echo "WARNING: tiny-dfr.service not installed" >&2
+    fi
+else
+    echo "WARNING: $tiny_src missing; tiny-dfr config not installed" >&2
+fi
+
+echo
+echo "== Reload udev =="
+sudo udevadm control --reload-rules
+sudo udevadm trigger --subsystem-match=input --action=change || true
+sudo udevadm settle || true
+
+echo
+echo "== Verification =="
+cmp -s "$udev_src" "$udev_dst" || die "runtime udev rule differs from repo"
+
+python3 - "$keyboard" <<'PY'
+from pathlib import Path
+import re
+import sys
+text=Path(sys.argv[1]).read_text()
+
+def value(name):
+    m=re.search(
+        rf'(?m)^\s*{re.escape(name)}\s*=\s*(?:"([^"]*)"|\'([^\']*)\'|([^\n#]*))',
+        text,
+    )
+    if not m:
+        return None
+    return next((g.strip() for g in m.groups() if g is not None), "")
+
+layout=value("XKBLAYOUT")
+variant=value("XKBVARIANT")
+options=value("XKBOPTIONS") or ""
+
+assert layout == "us", layout
+assert variant in ("", None), variant
+assert not any(x.startswith(("grp:", "grp_led:")) for x in options.split(","))
+print("GDM/login keyboard: EN only")
+PY
+
+if [[ -r "$tiny_src" && -r "$tiny_dst" ]]; then
+    cmp -s "$tiny_src" "$tiny_dst" || die "runtime tiny-dfr config differs from repo"
+fi
+
+echo
+echo "System keyboard/uinput/tiny-dfr baseline applied."

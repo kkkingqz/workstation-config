@@ -1,6 +1,6 @@
 title: ws-plan-gnome
 section: 1
-date: 2026-09-21
+date: 2026-09-23
 source: Workstation
 volume: User Commands
 
@@ -100,39 +100,70 @@ sudo apt install gnome-tweaks
 
 # 5. Extensions policy
 
-Текущий известный non-default extension:
+Текущий extension set для workstation является осознанной частью baseline:
 
 ```text
-Window Monitor Pro
+xremap@k0kubun.com
+window-control@carlo9890.github.io
+Tiling Assistant
+workstation-smart-popup@local
+workstation-input-source@local
 ```
 
-Его оставить.
+Назначение:
 
-Новые extensions добавлять по одному:
+```text
+xremap@k0kubun.com              application awareness для xremap/Wayland
+Window Control                  application/window actions
+Tiling Assistant                tiling backend
+workstation-smart-popup@local   Smart Tiling Popup
+workstation-input-source@local  EN/RU/UA, Caps, unlock-dialog EN
+```
 
-1. snapshot;
-2. установить extension;
-3. logout/login или reload session;
-4. проверить Overview, Dock, Quick Settings и idle responsiveness;
-5. оставить только если функция действительно нужна.
+`Window Monitor Pro`, если остаётся установленным после старых экспериментов,
+не является зависимостью текущего keyboard/Touch Bar baseline.
+
+Новые extensions по-прежнему добавлять только по одной, после snapshot и с
+проверкой GNOME session responsiveness.
 
 ---
 
 # 6. Keyboard / shortcuts
 
-Через `Settings → Keyboard → Keyboard Shortcuts` настроить только реальные пользовательские shortcuts.
+Keyboard layer **завершён и является частью baseline**. Не дублировать его
+через `Settings -> Keyboard -> Keyboard Shortcuts`, `xdotool` или `xbindkeys`.
 
-Возможные кандидаты:
+Source of truth:
 
-- terminal;
-- screenshot;
-- lock;
-- workspace navigation;
-- application launcher.
+```text
+docs/keyboard.md
+config/keyboard/
+bin/ws-keyboard*
+gnome/extensions/workstation-input-source@local/
+gnome/extensions/workstation-smart-popup@local/
+```
 
-Не дублировать shortcuts через `xdotool`/`xbindkeys`, пока GNOME умеет сделать это штатно.
+Текущие правила:
 
-Touch Bar здесь не менять: текущий F1–F12 + Fn media baseline уже готов.
+```text
+CapsLock             EN <-> RU; UA -> EN
+Fn+CapsLock          UA
+Control+Space        EN -> RU -> UA -> EN
+GDM/login            EN
+GNOME lock screen    EN
+```
+
+Tiling, Tile Editing Mode, Always on Top и Smart Popup также входят в
+зафиксированный keyboard baseline.
+
+Touch Bar здесь отдельно не перенастраивать: текущий renderer — `tiny-dfr`,
+обычный слой F1..F12, удержание Fn — media/brightness.
+
+Полная проверка:
+
+```console
+ws-workstation-verify --strict
+```
 
 ---
 

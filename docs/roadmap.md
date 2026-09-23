@@ -1,6 +1,6 @@
 title: ws-roadmap
 section: 1
-date: 2026-09-21
+date: 2026-09-23
 source: Workstation
 volume: User Commands
 
@@ -20,11 +20,15 @@ volume: User Commands
 - Intel UHD 630 как primary GPU + AMD dGPU offload;
 - рабочий `deep/S3` suspend/resume;
 - ASPM `force` + `powersave`;
-- штатный Touch Bar через `hid_appletb_kbd`:
+- Touch Bar через `tiny-dfr`:
   - F1…F12 по умолчанию;
   - media/brightness при удержании Fn;
-  - autodim/auto-off;
-- `Window Monitor Pro` остаётся установленным;
+  - `DoublePressSwitchLayers = 0`;
+- финальный macOS-style keyboard layer:
+  - EN/RU/UA;
+  - CapsLock EN/RU и Fn+CapsLock -> UA;
+  - GDM/login EN и GNOME lock screen EN;
+  - Tiling Assistant, Tile Editing Mode, Always on Top и Smart Popup;
 - development/toolchains не должны расползаться по host;
 - не использовать `powertop --auto-tune`, TLP, auto-cpufreq и агрессивный USB runtime PM для Touch Bar.
 
@@ -32,25 +36,25 @@ volume: User Commands
 
 Работы разбиты по независимым категориям:
 
-1. `helpws plan-t2`  
+1. `helpws plan-t2`
    Touch ID, fan policy, battery audit, optional hibernate/suspend-then-hibernate.
 
-2. `helpws plan-gnome`  
-   Финальная доводка штатного GNOME: Retina scale, Qt integration, shortcuts, toolkit smoke-test.
+2. `helpws plan-gnome`
+   Финальная доводка штатного GNOME: Retina scale, Qt integration и toolkit smoke-test. Keyboard layer уже зафиксирован как baseline.
 
-3. `helpws plan-flatpak`  
+3. `helpws plan-flatpak`
    Flatpak application layer, permissions, portals, lifecycle и maintenance.
 
-4. `helpws plan-dev`  
+4. `helpws plan-dev`
    Постоянный dev box, Python/uv, Node/Rust, VS Code и специализированные boxes.
 
-5. `helpws plan-windows`  
+5. `helpws plan-windows`
    Per-app Wine environments, launchers, Steam/Proton, optional GE-Proton.
 
-6. `helpws plan-virt`  
+6. `helpws plan-virt`
    KVM/libvirt/virt-manager и user-managed Unreal Engine.
 
-7. `helpws plan-final`  
+7. `helpws plan-final`
    Инвентаризация, backups, snapshots, restore checkpoints и финальный smoke-test.
 
 ## Рекомендуемый порядок

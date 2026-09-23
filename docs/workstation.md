@@ -1,12 +1,12 @@
 title: ws-workstation
 section: 1
-date: 2026-09-21
+date: 2026-09-23
 source: Workstation
 volume: User Commands
 
 # UBUNTU T2 WORKSTATION — CURRENT BASELINE
 
-**Дата:** 2026-09-21  
+**Дата:** 2026-09-23
 **Платформа:** MacBook Pro 16" 2019 (`MacBookPro16,1`, Intel/T2)
 
 > Этот документ описывает текущее рабочее состояние workstation.
@@ -78,19 +78,23 @@ Wayland
 - PipeWire / WirePlumber;
 - XWayland для legacy applications.
 
-Сторонняя extension, оставшаяся после экспериментов:
+Extensions, являющиеся частью текущего workstation baseline:
 
 ```text
-Window Monitor Pro
+xremap@k0kubun.com
+window-control@carlo9890.github.io
+Tiling Assistant
+workstation-smart-popup@local
+workstation-input-source@local
 ```
 
-Она остаётся установленной и может быть использована позже для определения активного окна.
+`Window Monitor Pro` не является зависимостью текущего keyboard/Touch Bar baseline.
 
 ---
 
 # KEYBOARD / SHORTCUTS
 
-Используется единый macOS-style semantic profile для Apple и PC keyboards:
+Используется финальный macOS-style semantic profile для Apple и PC keyboards:
 
 ```text
 Apple Command = PC Win = Super
@@ -98,24 +102,65 @@ Apple Option  = PC Alt = Alt
 Apple Control = PC Ctrl = Ctrl
 ```
 
-Системные shortcuts обслуживаются GNOME/Mutter, application shortcuts —
-`xremap`, а Ghostty имеет отдельный terminal-safe Super layer.
+Архитектура:
+
+```text
+GNOME/Mutter                    system shortcuts
+xremap                          application/Fn/Nautilus mappings
+workstation-input-source@local  EN/RU/UA + Caps + unlock-dialog EN
+workstation-smart-popup@local   Smart Tiling Popup
+Window Control                  application/window actions
+Tiling Assistant                tiling backend
+Ghostty                         terminal-safe Super layer
+```
+
+Подтверждённые input-source rules:
+
+```text
+CapsLock             EN <-> RU; UA -> EN
+Fn+CapsLock          UA
+Control+Space        EN -> RU -> UA -> EN
+Control+Alt+Space    reverse cycle
+GDM/login            EN only
+GNOME lock screen    EN only
+```
 
 Source of truth:
 
 ```text
-config/keyboard/settings.conf
-config/keyboard/xremap.yml
-systemd/user/xremap.service
+config/keyboard/
+config/ghostty/
+config/tiny-dfr/config.toml
+
 bin/ws-keyboard*
+bin/ws-xremap
+bin/ws-window
+bin/ws-nautilus-current
+bin/ws-input-source
+bin/ws-caps-led
+bin/ws-tiling-apply
+bin/ws-workstation-verify
+
+gnome/extensions/workstation-input-source@local/
+gnome/extensions/workstation-smart-popup@local/
+
+systemd/user/xremap.service
+system/udev/99-workstation-uinput.rules
 ```
 
-Runtime конфиги не копируются: вне repository используются только symlink'и
-и system state. Проверка:
+Generated `gschemas.compiled`, `state/` и `runtime/` не являются source files и
+не коммитятся.
+
+Полный справочник:
 
 ```console
 helpws keyboard
-ws-keyboard status
+```
+
+Полная проверка:
+
+```console
+ws-workstation-verify --strict
 ```
 
 ---
@@ -174,46 +219,52 @@ pcie_aspm.policy=powersave
 
 # TOUCH BAR
 
-После экспериментов система возвращена к штатному T2 kernel driver:
+Текущий renderer:
 
 ```text
-hid_appletb_kbd
-hid_appletb_bl
+tiny-dfr
 ```
 
-Не используются `react-drm`, `mac-touchbar-plus`, `tiny-dfr` и отдельный userspace renderer.
-
-## Текущий режим
+Source config:
 
 ```text
-обычный режим:
-F1 ... F12
-
-удержание Fn:
-media / brightness controls
-
-отпускание Fn:
-F1 ... F12
+config/tiny-dfr/config.toml
 ```
 
-Включены autodim и auto-off.
-
-Конфигурация:
+Runtime config:
 
 ```text
-/etc/modprobe.d/tb.conf
+/etc/tiny-dfr/config.toml
 ```
 
-Параметры:
+Текущий режим:
 
 ```text
-options hid_appletb-kbd mode=1 fntoggle=1 autodim=1 dim_timeout=30 idle_timeout=15 double_press_switch_time=300
+normal       F1..F12
+hold Fn      media / brightness
+release Fn   F1..F12
 ```
 
-Применение после изменения:
+Ключевые параметры:
 
-```sh
-sudo update-initramfs -u -k "$(uname -r)"
+```text
+MediaLayerDefault = false
+DoublePressSwitchLayers = 0
+```
+
+xremap пропускает `KEY_FN` (`skip_key_event: false`) и одновременно использует
+Fn для своего Apple `apple_fn` mode. tiny-dfr получает Fn через
+`workstation-xremap`.
+
+Старый `ws-touchbar-fn.service` и `/usr/local/libexec/ws-touchbar-fn` удалены.
+
+Исторические `react-drm`, `mac-touchbar-plus` и firmware-only
+`hid_appletb_kbd` mode не являются current baseline.
+
+Подробности:
+
+```console
+helpws touchbar
 ```
 
 ---
@@ -477,54 +528,69 @@ Shebang:
 ~/.local/share/workstation-config
 ```
 
-Структура:
+Актуальная структура включает:
 
 ```text
 workstation-config/
 ├── bin/
 │   ├── dotgit
 │   ├── helpws
-│   └── ws-doc-build
+│   ├── ws-doc-build
+│   ├── ws-keyboard
+│   ├── ws-keyboard-apply
+│   ├── ws-keyboard-status
+│   ├── ws-keyboard-install-extensions
+│   ├── ws-keyboard-system-apply
+│   ├── ws-workstation-verify
+│   ├── ws-xremap
+│   ├── ws-window
+│   ├── ws-nautilus-current
+│   ├── ws-input-source
+│   ├── ws-caps-led
+│   └── ws-tiling-apply
 ├── config/
 │   ├── fish/
 │   ├── ghostty/
 │   ├── keyboard/
-│   └── micro-help/
+│   ├── micro-help/
+│   └── tiny-dfr/
+├── gnome/extensions/
+│   ├── workstation-input-source@local/
+│   └── workstation-smart-popup@local/
+├── system/
+│   └── udev/99-workstation-uinput.rules
 ├── systemd/user/
 │   └── xremap.service
 ├── docs/
-│   ├── keyboard.md
-│   ├── terminal.md
-│   └── workstation.md
 └── man/man1/
-    ├── ws-terminal.1
-    └── ws-workstation.1
 ```
 
-Рабочие пути `~/.config/...`, `~/.local/bin/...` и `~/.local/share/man/...` используют symlink'и на repository.
+Runtime helper paths в `~/.local/bin` используют symlink на repository.
+GNOME extension runtime copies являются реальными directories в
+`~/.local/share/gnome-shell/extensions/`.
 
-Wrapper:
+Generated/runtime state:
 
 ```text
-~/.local/bin/dotgit
+state/
+runtime/
+gnome/extensions/*/schemas/gschemas.compiled
 ```
 
-`dotgit` выполняет Git непосредственно в repository:
+не коммитится.
+
+Перед commit используется:
 
 ```console
-git -C ~/.local/share/workstation-config ...
+ws-workstation-verify
+git status --short
+git diff --check
+git diff --cached --check
+git diff --cached
 ```
 
-Примеры:
-
-```console
-dotgit status
-dotgit diff
-dotgit add config/fish/completions/helpws.fish
-dotgit commit -m "Update terminal help"
-```
-
-Старый bare repository `~/.local/share/dotfiles.git` больше не является текущей архитектурой; до окончательной проверки новой схемы его можно сохранять как резервную копию.
+Не используется `git add .` для workstation cleanup: source files добавляются
+явно.
 
 ---
 
@@ -534,8 +600,8 @@ dotgit commit -m "Update terminal help"
 
 - `react-drm`;
 - `mac-touchbar-plus`;
-- `tiny-dfr`;
-- отдельный Touch Bar userspace renderer;
+- старый `ws-touchbar-fn.service`;
+- отдельный custom Touch Bar bridge поверх `hid_appletb_kbd`;
 - `powertop --auto-tune`;
 - TLP;
 - auto-cpufreq;
@@ -548,6 +614,8 @@ dotgit commit -m "Update terminal help"
 - Oh My Fish;
 - Fisher как обязательный framework;
 - Neovim как часть terminal setup.
+
+`tiny-dfr` **используется** и является текущим Touch Bar baseline.
 
 ---
 
@@ -563,14 +631,20 @@ Ubuntu 26.04.1 LTS
     ├── Camera
     ├── deep / S3 suspend
     ├── Btrfs + snapshots architecture
-    ├── stock T2 Touch Bar
+    ├── tiny-dfr Touch Bar
+    │   ├── F1..F12 default
+    │   └── hold Fn -> media/brightness
     ├── macOS-style keyboard layer
-    │   ├── GNOME system shortcuts
-    │   ├── xremap GUI shortcuts
-    │   └── Apple + PC semantic modifiers
+    │   ├── GNOME/Mutter system shortcuts
+    │   ├── xremap GUI/Fn/Nautilus mappings
+    │   ├── EN/RU/UA + Caps LED
+    │   ├── GDM/login EN
+    │   ├── unlock-dialog EN
+    │   ├── Tiling Assistant / Tile Editing Mode
+    │   └── Smart Popup / Window Control
     └── terminal environment
-        ├── Ghostty 1.3.0 / Desert / opacity 0.90
-        ├── Fish 4.9.3
+        ├── Ghostty
+        ├── Fish
         ├── fzf / zoxide / eza
         ├── helpws + Micro
         └── workstation-config Git repository

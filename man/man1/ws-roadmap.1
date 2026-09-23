@@ -1,5 +1,5 @@
 .\" -*- mode: troff; coding: utf-8 -*-
-.TH "ws-roadmap" "1" "2026-09-21" "Workstation" "User Commands"
+.TH "ws-roadmap" "1" "2026-09-23" "Workstation" "User Commands"
 .SH UBUNTU T2 WORKSTATION — ROADMAP
 .LP
 Этот набор продолжает уже реализованный baseline и \fBне повторяет\fR законченные работы.
@@ -56,7 +56,7 @@ ASPM \f(CRforce\fR + \f(CRpowersave\fR;
 .if t \
 .sp -0.25v
 .IP "\(bu" 3
-штатный Touch Bar через \f(CRhid_appletb_kbd\fR:
+Touch Bar через \f(CRtiny-dfr\fR:
 .RS
 .IP "\(bu" 3
 F1…F12 по умолчанию;
@@ -71,14 +71,36 @@ media/brightness при удержании Fn;
 .if t \
 .sp -0.25v
 .IP "\(bu" 3
-autodim/auto-off;
+\f(CRDoublePressSwitchLayers = 0\fR;
 .RE
 .if n \
 .sp -1
 .if t \
 .sp -0.25v
 .IP "\(bu" 3
-\f(CRWindow Monitor Pro\fR остаётся установленным;
+финальный macOS-style keyboard layer:
+.RS
+.IP "\(bu" 3
+EN/RU/UA;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+CapsLock EN/RU и Fn+CapsLock -> UA;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+GDM/login EN и GNOME lock screen EN;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Tiling Assistant, Tile Editing Mode, Always on Top и Smart Popup;
+.RE
 .if n \
 .sp -1
 .if t \
@@ -97,31 +119,24 @@ development/toolchains не должны расползаться по host;
 Работы разбиты по независимым категориям:
 .IP "1." 3
 \f(CRhelpws plan-t2\fR
-.br
 Touch ID, fan policy, battery audit, optional hibernate/suspend-then-hibernate.
 .IP "2." 3
 \f(CRhelpws plan-gnome\fR
-.br
-Финальная доводка штатного GNOME: Retina scale, Qt integration, shortcuts, toolkit smoke-test.
+Финальная доводка штатного GNOME: Retina scale, Qt integration и toolkit smoke-test. Keyboard layer уже зафиксирован как baseline.
 .IP "3." 3
 \f(CRhelpws plan-flatpak\fR
-.br
 Flatpak application layer, permissions, portals, lifecycle и maintenance.
 .IP "4." 3
 \f(CRhelpws plan-dev\fR
-.br
 Постоянный dev box, Python/uv, Node/Rust, VS Code и специализированные boxes.
 .IP "5." 3
 \f(CRhelpws plan-windows\fR
-.br
 Per-app Wine environments, launchers, Steam/Proton, optional GE-Proton.
 .IP "6." 3
 \f(CRhelpws plan-virt\fR
-.br
 KVM/libvirt/virt-manager и user-managed Unreal Engine.
 .IP "7." 3
 \f(CRhelpws plan-final\fR
-.br
 Инвентаризация, backups, snapshots, restore checkpoints и финальный smoke-test.
 .SS
 Рекомендуемый порядок

@@ -1,0 +1,203 @@
+#!/usr/bin/env python3
+
+import ast
+import json
+import os
+import shutil
+import subprocess
+import sys
+
+DEST = "org.gnome.Shell"
+PATH = "/org/gnome/Shell/Extensions/WindowControl"
+IFACE = "org.gnome.Shell.Extensions.WindowControl"
+
+
+def fail(message, code=1):
+    print(f"ws-window: {message}", file=sys.stderr)
+    raise SystemExit(code)
+
+
+def dbus(method, *args):
+    cmd = [
+        "gdbus", "call",
+        "--session",
+        "--dest", DEST,
+        "--object-path", PATH,
+        "--method", f"{IFACE}.{method}",
+        *[str(arg) for arg in args],
+    ]
+
+    try:
+        return subprocess.check_output(
+            cmd,
+            text=True,
+            stderr=subprocess.PIPE,
+        ).strip()
+    except FileNotFoundError:
+        fail("gdbus is not installed")
+    except subprocess.CalledProcessError as exc:
+        detail = (exc.stderr or "").strip()
+        fail(
+            "Window Control D-Bus call failed"
+            + (f": {detail}" if detail else "")
+        )
+
+
+def windows():
+    raw = dbus("ListDetailed")
+
+    try:
+        value = ast.literal_eval(raw)
+        payload = value[0]
+        data = json.loads(payload)
+    except (ValueError, SyntaxError, IndexError, TypeError, json.JSONDecodeError) as exc:
+        fail(f"cannot parse Window Control ListDetailed reply: {exc}")
+
+    if not isinstance(data, list):
+        fail("Window Control ListDetailed did not return a JSON array")
+
+    return data
+
+
+def focused_window(items):
+    for item in items:
+        if item.get("has_focus"):
+            return item
+
+    for item in items:
+        if item.get("appears_focused"):
+            return item
+
+    fail("no focused normal window")
+
+
+def app_key(item):
+    for field in ("sandboxed_app_id", "gtk_application_id", "wm_class"):
+        value = item.get(field)
+        if isinstance(value, str) and value:
+            return (field, value)
+
+    pid = item.get("pid")
+    if isinstance(pid, int) and pid > 0:
+        return ("pid", pid)
+
+    return ("window", item.get("id"))
+
+
+def call_window(method, window_id):
+    if not isinstance(window_id, int):
+        fail(f"invalid window id: {window_id!r}")
+
+    dbus(method, window_id)
+
+
+def current_app_windows(items):
+    focused = focused_window(items)
+    key = app_key(focused)
+    return focused, [item for item in items if app_key(item) == key]
+
+
+def minimize_current():
+    items = windows()
+    _focused, targets = current_app_windows(items)
+
+    for item in targets:
+        if not item.get("is_minimized"):
+            call_window("Minimize", item["id"])
+
+
+def minimize_others():
+    items = windows()
+    focused = focused_window(items)
+    keep = app_key(focused)
+
+    for item in items:
+        if app_key(item) != keep and not item.get("is_minimized"):
+            call_window("Minimize", item["id"])
+
+
+def close_current():
+    items = windows()
+    focused, targets = current_app_windows(items)
+
+    focused_id = focused.get("id")
+    targets.sort(key=lambda item: item.get("id") == focused_id)
+
+    for item in targets:
+        call_window("Close", item["id"])
+
+
+def task_manager():
+    exe = shutil.which("gnome-system-monitor")
+    if exe:
+        subprocess.Popen(
+            [exe],
+            start_new_session=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        return
+
+    flatpak = shutil.which("flatpak")
+    if flatpak:
+        check = subprocess.run(
+            [flatpak, "info", "org.gnome.SystemMonitor"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        if check.returncode == 0:
+            subprocess.Popen(
+                [flatpak, "run", "org.gnome.SystemMonitor"],
+                start_new_session=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            return
+
+    fail(
+        "GNOME System Monitor is not installed; "
+        "install package 'gnome-system-monitor'"
+    )
+
+
+def logout(no_prompt=False):
+    exe = shutil.which("gnome-session-quit")
+    if not exe:
+        fail("gnome-session-quit is not installed")
+
+    cmd = [exe, "--logout"]
+    if no_prompt:
+        cmd.append("--no-prompt")
+
+    os.execv(exe, cmd)
+
+
+def main():
+    if len(sys.argv) != 2:
+        fail(
+            "usage: ws-window "
+            "{task-manager|hide-current|hide-others|"
+            "minimize-current|close-current|logout|logout-now}",
+            2,
+        )
+
+    action = sys.argv[1]
+
+    if action == "task-manager":
+        task_manager()
+    elif action in ("hide-current", "minimize-current"):
+        minimize_current()
+    elif action == "hide-others":
+        minimize_others()
+    elif action == "close-current":
+        close_current()
+    elif action == "logout":
+        logout(False)
+    elif action == "logout-now":
+        logout(True)
+    else:
+        fail(f"unknown action: {action}", 2)
+
+
+if __name__ == "__main__":
+    main()

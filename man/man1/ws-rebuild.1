@@ -1,5 +1,5 @@
 .\" -*- mode: troff; coding: utf-8 -*-
-.TH "ws-rebuild" "1" "2026-09-21" "Workstation" "User Commands"
+.TH "ws-rebuild" "1" "2026-09-23" "Workstation" "User Commands"
 .SH UBUNTU T2 WORKSTATION — REBUILD TO CURRENT BASELINE
 .SH 0. До удаления рабочей системы
 .LP
@@ -231,6 +231,61 @@ systemctl --user is-active wireplumber
 .EE
 .PP
 Не ставить SwayNC/SwayOSD/swaylock/swayidle и не заменять штатные GNOME components.
+.SH 6.1. Keyboard / shortcuts
+.LP
+После clone \f(CRworkstation-config\fR восстановить system-level keyboard state:
+.LP
+.EX
+\(ti/.local/share/workstation-config/bin/ws-keyboard-system-apply
+.EE
+.PP
+Он устанавливает:
+.LP
+.EX
+/etc/udev/rules.d/99-workstation-uinput.rules
+GDM/login layout = US only
+/etc/tiny-dfr/config.toml (если tiny-dfr уже установлен)
+.EE
+.PP
+Затем установить наши GNOME extensions:
+.LP
+.EX
+\(ti/.local/share/workstation-config/bin/ws-keyboard-install-extensions
+.EE
+.PP
+После первой установки extensions на Wayland выполнить logout/login.
+.PP
+Затем:
+.LP
+.EX
+\(ti/.local/share/workstation-config/bin/ws-tiling-apply
+\(ti/.local/share/workstation-config/bin/ws-keyboard-apply
+.EE
+.PP
+Целевые input sources:
+.LP
+.EX
+us
+ru
+ua
+.EE
+.PP
+Проверить:
+.LP
+.EX
+ws-input-source status
+ws-workstation-verify
+.EE
+.PP
+Ожидаемое поведение:
+.LP
+.EX
+CapsLock             EN <-> RU; UA -> EN
+Fn+CapsLock          UA
+Control+Space        EN -> RU -> UA -> EN
+GDM/login            EN
+GNOME lock screen    EN
+.EE
 .SH 7. Графика
 .LP
 Целевое состояние:
@@ -298,83 +353,76 @@ auto-cpufreq
 Touch Bar USB runtime PM специально не оптимизировать.
 .SH 9. Touch Bar
 .LP
-Используется только штатный kernel stack:
+Текущий baseline — \f(CRtiny-dfr\fR, а не firmware-only \f(CRhid_appletb_kbd\fR.
+.PP
+Установить пакет из используемого T2 repository:
 .LP
 .EX
-hid_appletb_kbd
-hid_appletb_bl
+sudo apt install tiny-dfr
 .EE
 .PP
-Не устанавливать:
+Затем повторно применить system-level workstation config:
 .LP
 .EX
-react-drm
-mac-touchbar-plus
-tiny-dfr
+ws-keyboard-system-apply
 .EE
 .PP
-Текущий config:
+Source/runtime config:
 .LP
 .EX
-/etc/modprobe.d/tb.conf
-.EE
-.LP
-.EX
-options hid-appletb-kbd mode=1 fntoggle=1 autodim=1 dim_timeout=30 idle_timeout=15 double_press_switch_time=300
-.EE
-.PP
-После создания/восстановления файла обязательно:
-.LP
-.EX
-sudo update-initramfs -u -k \(dq$(uname -r)\(dq
-sudo reboot
+config/tiny-dfr/config.toml
+/etc/tiny-dfr/config.toml
 .EE
 .PP
 Целевое поведение:
 .LP
 .EX
-обычно          → F1…F12
-держим Fn       → media / brightness
-отпускаем Fn    → F1…F12
-30 s idle       → dim
-ещё 15 s        → off
+обычно          -> F1..F12
+держим Fn       -> media / brightness
+отпускаем Fn    -> F1..F12
+double Fn       -> layer не фиксируется
 .EE
 .PP
-После reboot проверить параметры:
+Проверить:
 .LP
 .EX
-for p in mode fntoggle autodim dim_timeout idle_timeout double_press_switch_time; do
-    printf '%-28s = ' \(dq$p\(dq
-    cat \(dq/sys/module/hid_appletb_kbd/parameters/$p\(dq 2>/dev/null || echo N/A
-done
+systemctl is-active tiny-dfr.service
+grep -E '\(ha(MediaLayerDefault|DoublePressSwitchLayers)'   /etc/tiny-dfr/config.toml
 .EE
-.SH 10. Window Monitor Pro
-.LP
-GNOME extension \f(CRWindow Monitor Pro\fR остаётся установленной.
 .PP
-State collector сохраняет:
-.IP "\(bu" 3
-список enabled extensions;
-.if n \
-.sp -1
-.if t \
-.sp -0.25v
-.IP "\(bu" 3
-GNOME dconf dump;
-.if n \
-.sp -1
-.if t \
-.sp -0.25v
-.IP "\(bu" 3
-пользовательские GNOME extension directories.
+Не устанавливать одновременно другие Touch Bar renderer/daemon.
 .LP
-После reinstall сначала загрузить чистый GNOME baseline, затем вернуть extension и проверить совместимость с текущей GNOME 50 build.
+\l'2i'
+.SH 10. GNOME extensions текущего baseline
+.LP
+Для keyboard/window/tiling layer используются:
+.LP
+.EX
+xremap@k0kubun.com
+window-control@carlo9890.github.io
+Tiling Assistant (Ubuntu UUID либо upstream fallback)
+workstation-smart-popup@local
+workstation-input-source@local
+.EE
+.PP
+\f(CRworkstation-*\fR sources находятся в \f(CRworkstation-config\fR и устанавливаются
+командой:
+.LP
+.EX
+ws-keyboard-install-extensions
+.EE
+.PP
+После изменения \f(CRextension.js\fR на Wayland выполнить logout/login.
+.PP
+\f(CRWindow Monitor Pro\fR не является зависимостью текущего keyboard baseline.
+.LP
+\l'2i'
 .SH 11. Финальная проверка
 .LP
 Запустить:
 .LP
 .EX
-\&./scripts/verify-current-baseline.sh
+ws-workstation-verify --strict
 .EE
 .PP
 Затем вручную проверить:
@@ -427,12 +475,24 @@ Intel primary / AMD offload;
 .if t \
 .sp -0.25v
 .IP "\(bu" 3
-F1…F12 / Fn-media / Touch Bar auto-off;
+tiny-dfr F1…F12 / hold-Fn media;
 .if n \
 .sp -1
 .if t \
 .sp -0.25v
 .IP "\(bu" 3
-GNOME Overview / Dock / Quick Settings / Nautilus.
+GNOME Overview / Dock / Quick Settings / Nautilus;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+keyboard profile: Caps/UA/GDM/lock behavior;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Smart Popup / tiling / Window Control.
 .LP
 После этого установка считается восстановленной до текущего baseline.

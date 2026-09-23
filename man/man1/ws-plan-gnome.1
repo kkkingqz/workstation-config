@@ -1,5 +1,5 @@
 .\" -*- mode: troff; coding: utf-8 -*-
-.TH "ws-plan-gnome" "1" "2026-09-21" "Workstation" "User Commands"
+.TH "ws-plan-gnome" "1" "2026-09-23" "Workstation" "User Commands"
 .SH PLAN — GNOME VISUAL / INPUT / PORTALS
 .SS
 Цель
@@ -191,78 +191,69 @@ startup applications;
 \l'2i'
 .SH 5. Extensions policy
 .LP
-Текущий известный non-default extension:
+Текущий extension set для workstation является осознанной частью baseline:
 .LP
 .EX
-Window Monitor Pro
+xremap@k0kubun.com
+window-control@carlo9890.github.io
+Tiling Assistant
+workstation-smart-popup@local
+workstation-input-source@local
 .EE
 .PP
-Его оставить.
+Назначение:
+.LP
+.EX
+xremap@k0kubun.com              application awareness для xremap/Wayland
+Window Control                  application/window actions
+Tiling Assistant                tiling backend
+workstation-smart-popup@local   Smart Tiling Popup
+workstation-input-source@local  EN/RU/UA, Caps, unlock-dialog EN
+.EE
 .PP
-Новые extensions добавлять по одному:
-.IP "1." 3
-snapshot;
-.if n \
-.sp -1
-.if t \
-.sp -0.25v
-.IP "2." 3
-установить extension;
-.if n \
-.sp -1
-.if t \
-.sp -0.25v
-.IP "3." 3
-logout/login или reload session;
-.if n \
-.sp -1
-.if t \
-.sp -0.25v
-.IP "4." 3
-проверить Overview, Dock, Quick Settings и idle responsiveness;
-.if n \
-.sp -1
-.if t \
-.sp -0.25v
-.IP "5." 3
-оставить только если функция действительно нужна.
+\f(CRWindow Monitor Pro\fR, если остаётся установленным после старых экспериментов,
+не является зависимостью текущего keyboard/Touch Bar baseline.
+.PP
+Новые extensions по-прежнему добавлять только по одной, после snapshot и с
+проверкой GNOME session responsiveness.
 .LP
 \l'2i'
 .SH 6. Keyboard / shortcuts
 .LP
-Через \f(CRSettings → Keyboard → Keyboard Shortcuts\fR настроить только реальные пользовательские shortcuts.
+Keyboard layer \fBзавершён и является частью baseline\fR. Не дублировать его
+через \f(CRSettings -> Keyboard -> Keyboard Shortcuts\fR, \f(CRxdotool\fR или \f(CRxbindkeys\fR.
 .PP
-Возможные кандидаты:
-.IP "\(bu" 3
-terminal;
-.if n \
-.sp -1
-.if t \
-.sp -0.25v
-.IP "\(bu" 3
-screenshot;
-.if n \
-.sp -1
-.if t \
-.sp -0.25v
-.IP "\(bu" 3
-lock;
-.if n \
-.sp -1
-.if t \
-.sp -0.25v
-.IP "\(bu" 3
-workspace navigation;
-.if n \
-.sp -1
-.if t \
-.sp -0.25v
-.IP "\(bu" 3
-application launcher.
+Source of truth:
 .LP
-Не дублировать shortcuts через \f(CRxdotool\fR/\f(CRxbindkeys\fR, пока GNOME умеет сделать это штатно.
+.EX
+docs/keyboard.md
+config/keyboard/
+bin/ws-keyboard*
+gnome/extensions/workstation-input-source@local/
+gnome/extensions/workstation-smart-popup@local/
+.EE
 .PP
-Touch Bar здесь не менять: текущий F1–F12 + Fn media baseline уже готов.
+Текущие правила:
+.LP
+.EX
+CapsLock             EN <-> RU; UA -> EN
+Fn+CapsLock          UA
+Control+Space        EN -> RU -> UA -> EN
+GDM/login            EN
+GNOME lock screen    EN
+.EE
+.PP
+Tiling, Tile Editing Mode, Always on Top и Smart Popup также входят в
+зафиксированный keyboard baseline.
+.PP
+Touch Bar здесь отдельно не перенастраивать: текущий renderer — \f(CRtiny-dfr\fR,
+обычный слой F1..F12, удержание Fn — media/brightness.
+.PP
+Полная проверка:
+.LP
+.EX
+ws-workstation-verify --strict
+.EE
 .LP
 \l'2i'
 .SH 7. Toolkit smoke-test

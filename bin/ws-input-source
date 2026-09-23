@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+dest="org.gnome.Shell"
+path="/org/gnome/Shell/Extensions/WorkstationInputSource"
+iface="org.gnome.Shell.Extensions.WorkstationInputSource"
+
+usage() {
+    echo "usage: ws-input-source caps|en|ru|ua|next|prev|status" >&2
+    exit 2
+}
+
+cmd="${1:-}"
+
+case "$cmd" in
+    caps)
+        gdbus call --session \
+            --dest "$dest" \
+            --object-path "$path" \
+            --method "$iface.ToggleCaps" >/dev/null
+        ;;
+
+    en|ru|ua)
+        gdbus call --session \
+            --dest "$dest" \
+            --object-path "$path" \
+            --method "$iface.Select" "$cmd" >/dev/null
+        ;;
+
+    next|prev)
+        gdbus call --session \
+            --dest "$dest" \
+            --object-path "$path" \
+            --method "$iface.Cycle" "$cmd" >/dev/null
+        ;;
+
+    status)
+        gdbus call --session \
+            --dest "$dest" \
+            --object-path "$path" \
+            --method "$iface.GetState"
+        ;;
+
+    *)
+        usage
+        ;;
+esac

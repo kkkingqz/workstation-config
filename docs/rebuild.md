@@ -1,6 +1,6 @@
 title: ws-rebuild
 section: 1
-date: 2026-09-21
+date: 2026-09-23
 source: Workstation
 volume: User Commands
 
@@ -183,6 +183,62 @@ systemctl --user is-active wireplumber
 
 Не ставить SwayNC/SwayOSD/swaylock/swayidle и не заменять штатные GNOME components.
 
+# 6.1. Keyboard / shortcuts
+
+После clone `workstation-config` восстановить system-level keyboard state:
+
+```console
+~/.local/share/workstation-config/bin/ws-keyboard-system-apply
+```
+
+Он устанавливает:
+
+```text
+/etc/udev/rules.d/99-workstation-uinput.rules
+GDM/login layout = US only
+/etc/tiny-dfr/config.toml (если tiny-dfr уже установлен)
+```
+
+Затем установить наши GNOME extensions:
+
+```console
+~/.local/share/workstation-config/bin/ws-keyboard-install-extensions
+```
+
+После первой установки extensions на Wayland выполнить logout/login.
+
+Затем:
+
+```console
+~/.local/share/workstation-config/bin/ws-tiling-apply
+~/.local/share/workstation-config/bin/ws-keyboard-apply
+```
+
+Целевые input sources:
+
+```text
+us
+ru
+ua
+```
+
+Проверить:
+
+```console
+ws-input-source status
+ws-workstation-verify
+```
+
+Ожидаемое поведение:
+
+```text
+CapsLock             EN <-> RU; UA -> EN
+Fn+CapsLock          UA
+Control+Space        EN -> RU -> UA -> EN
+GDM/login            EN
+GNOME lock screen    EN
+```
+
 # 7. Графика
 
 Целевое состояние:
@@ -237,75 +293,78 @@ Touch Bar USB runtime PM специально не оптимизировать.
 
 # 9. Touch Bar
 
-Используется только штатный kernel stack:
+Текущий baseline — `tiny-dfr`, а не firmware-only `hid_appletb_kbd`.
 
-```text
-hid_appletb_kbd
-hid_appletb_bl
+Установить пакет из используемого T2 repository:
+
+```console
+sudo apt install tiny-dfr
 ```
 
-Не устанавливать:
+Затем повторно применить system-level workstation config:
 
-```text
-react-drm
-mac-touchbar-plus
-tiny-dfr
+```console
+ws-keyboard-system-apply
 ```
 
-Текущий config:
+Source/runtime config:
 
 ```text
-/etc/modprobe.d/tb.conf
-```
-
-```text
-options hid-appletb-kbd mode=1 fntoggle=1 autodim=1 dim_timeout=30 idle_timeout=15 double_press_switch_time=300
-```
-
-После создания/восстановления файла обязательно:
-
-```bash
-sudo update-initramfs -u -k "$(uname -r)"
-sudo reboot
+config/tiny-dfr/config.toml
+/etc/tiny-dfr/config.toml
 ```
 
 Целевое поведение:
 
 ```text
-обычно          → F1…F12
-держим Fn       → media / brightness
-отпускаем Fn    → F1…F12
-30 s idle       → dim
-ещё 15 s        → off
+обычно          -> F1..F12
+держим Fn       -> media / brightness
+отпускаем Fn    -> F1..F12
+double Fn       -> layer не фиксируется
 ```
 
-После reboot проверить параметры:
+Проверить:
 
-```bash
-for p in mode fntoggle autodim dim_timeout idle_timeout double_press_switch_time; do
-    printf '%-28s = ' "$p"
-    cat "/sys/module/hid_appletb_kbd/parameters/$p" 2>/dev/null || echo N/A
-done
+```console
+systemctl is-active tiny-dfr.service
+grep -E '^(MediaLayerDefault|DoublePressSwitchLayers)'   /etc/tiny-dfr/config.toml
 ```
 
-# 10. Window Monitor Pro
+Не устанавливать одновременно другие Touch Bar renderer/daemon.
 
-GNOME extension `Window Monitor Pro` остаётся установленной.
+---
 
-State collector сохраняет:
+# 10. GNOME extensions текущего baseline
 
-- список enabled extensions;
-- GNOME dconf dump;
-- пользовательские GNOME extension directories.
+Для keyboard/window/tiling layer используются:
 
-После reinstall сначала загрузить чистый GNOME baseline, затем вернуть extension и проверить совместимость с текущей GNOME 50 build.
+```text
+xremap@k0kubun.com
+window-control@carlo9890.github.io
+Tiling Assistant (Ubuntu UUID либо upstream fallback)
+workstation-smart-popup@local
+workstation-input-source@local
+```
+
+`workstation-*` sources находятся в `workstation-config` и устанавливаются
+командой:
+
+```console
+ws-keyboard-install-extensions
+```
+
+После изменения `extension.js` на Wayland выполнить logout/login.
+
+`Window Monitor Pro` не является зависимостью текущего keyboard baseline.
+
+---
 
 # 11. Финальная проверка
 
 Запустить:
 
 ```bash
-./scripts/verify-current-baseline.sh
+ws-workstation-verify --strict
 ```
 
 Затем вручную проверить:
@@ -318,7 +377,9 @@ State collector сохраняет:
 - camera;
 - Intel primary / AMD offload;
 - `deep/S3` suspend;
-- F1…F12 / Fn-media / Touch Bar auto-off;
-- GNOME Overview / Dock / Quick Settings / Nautilus.
+- tiny-dfr F1…F12 / hold-Fn media;
+- GNOME Overview / Dock / Quick Settings / Nautilus;
+- keyboard profile: Caps/UA/GDM/lock behavior;
+- Smart Popup / tiling / Window Control.
 
 После этого установка считается восстановленной до текущего baseline.

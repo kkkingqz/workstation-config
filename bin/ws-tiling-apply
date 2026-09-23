@@ -1,0 +1,62 @@
+#!/usr/bin/env python3
+
+import ast
+import subprocess
+
+SCHEMA = "org.gnome.shell.extensions.tiling-assistant"
+
+BINDINGS = {
+    "tile-left-half": "<Control><Alt><Super>F13",
+    "tile-right-half": "<Control><Alt><Super>F14",
+    "tile-top-half": "<Control><Alt><Super>F15",
+    "tile-bottom-half": "<Control><Alt><Super>F16",
+    "tile-maximize": "<Control><Alt><Super>F17",
+    "center-window": "<Control><Alt><Super>F18",
+    "restore-window": "<Control><Alt><Super>F19",
+}
+
+
+def run(*args):
+    return subprocess.check_output(args, text=True).strip()
+
+
+def parse_array(raw):
+    raw = raw.strip()
+    if raw.startswith("@as "):
+        raw = raw[4:].strip()
+
+    value = ast.literal_eval(raw)
+    if not isinstance(value, list):
+        raise ValueError(f"expected string array, got: {raw}")
+
+    return value
+
+
+def main():
+    keys = set(run("gsettings", "list-keys", SCHEMA).splitlines())
+    missing = [key for key in BINDINGS if key not in keys]
+    if missing:
+        raise SystemExit(
+            "ws-tiling-apply: missing Tiling Assistant keys: "
+            + ", ".join(missing)
+        )
+
+    for key, private_binding in BINDINGS.items():
+        raw = run("gsettings", "get", SCHEMA, key)
+        current = parse_array(raw)
+
+        if private_binding not in current:
+            current.append(private_binding)
+
+        subprocess.run(
+            ["gsettings", "set", SCHEMA, key, repr(current)],
+            check=True,
+        )
+
+    print("Tiling Assistant private bindings:")
+    for key in BINDINGS:
+        print(f"  {key}: {run('gsettings', 'get', SCHEMA, key)}")
+
+
+if __name__ == "__main__":
+    main()

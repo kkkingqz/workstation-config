@@ -1,0 +1,14 @@
+{
+  "uuid": "workstation-input-source@local",
+  "name": "Workstation Input Source",
+  "description": "Direct EN/RU/UA input-source selection and logical CapsLock state.",
+  "shell-version": [
+    "50"
+  ],
+  "settings-schema": "org.gnome.shell.extensions.workstation-input-source",
+  "version": 5,
+  "session-modes": [
+    "user",
+    "unlock-dialog"
+  ]
+}

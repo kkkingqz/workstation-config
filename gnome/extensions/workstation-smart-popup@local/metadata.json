@@ -1,0 +1,10 @@
+{
+  "uuid": "workstation-smart-popup@local",
+  "name": "Workstation Smart Tiling Popup",
+  "description": "Smart free-space selector using Tiling Assistant's native popup and tiling engine.",
+  "shell-version": [
+    "50"
+  ],
+  "settings-schema": "org.gnome.shell.extensions.workstation-smart-popup",
+  "version": 2
+}

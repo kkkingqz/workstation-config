@@ -1,0 +1,1277 @@
+#!/usr/bin/env bash
+set -u
+set -o pipefail
+
+# Full read-only audit for the workstation-config repository and the currently
+# installed GNOME/Wayland macOS-style keyboard/workstation layer.
+#
+# Nothing is deleted, modified, staged, committed, enabled or restarted.
+# Exit codes:
+#   0 = no FAIL (warnings allowed)
+#   1 = one or more FAIL
+#   2 = warnings in --strict mode, but no FAIL
+
+repo="${WORKSTATION_CONFIG:-$HOME/.local/share/workstation-config}"
+strict=false
+
+usage() {
+    cat <<'USAGE'
+Usage:
+  ws-workstation-verify-v4.sh [--strict] [--repo PATH]
+  ws-workstation-verify-v4.sh [PATH]          # compatibility shorthand
+
+Options:
+  --strict       WARN also makes the final result non-zero (exit 2)
+  --repo PATH    repository to inspect
+  -h, --help     show this help
+
+The script is read-only. It does not run git add/commit, does not delete files,
+and does not change GNOME/systemd settings.
+USAGE
+}
+
+while (($#)); do
+    case "$1" in
+        --strict)
+            strict=true
+            shift
+            ;;
+        --repo)
+            [[ $# -ge 2 ]] || { echo "--repo requires PATH" >&2; exit 64; }
+            repo="$2"
+            shift 2
+            ;;
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        --*)
+            echo "Unknown option: $1" >&2
+            usage >&2
+            exit 64
+            ;;
+        *)
+            repo="$1"
+            shift
+            ;;
+    esac
+done
+
+repo="${repo%/}"
+
+pass_n=0
+warn_n=0
+fail_n=0
+info_n=0
+cleanup_n=0
+
+declare -a cleanup_items=()
+declare -a git_add_candidates=()
+declare -a git_remove_candidates=()
+
+pass() { ((pass_n++)); printf '  PASS  %s\n' "$*"; }
+warn() { ((warn_n++)); printf '  WARN  %s\n' "$*"; }
+fail() { ((fail_n++)); printf '  FAIL  %s\n' "$*"; }
+info() { ((info_n++)); printf '  INFO  %s\n' "$*"; }
+declare -A cleanup_seen=()
+
+cleanup() {
+    local item="$*"
+    if [[ -n "${cleanup_seen[$item]:-}" ]]; then
+        return
+    fi
+    cleanup_seen["$item"]=1
+    ((cleanup_n++))
+    cleanup_items+=("$item")
+    printf '  CLEAN %s\n' "$item"
+}
+
+section() {
+    echo
+    echo "$1"
+    printf '%s\n' '------------------------------------------------------------------------'
+}
+
+have() { command -v "$1" >/dev/null 2>&1; }
+
+q() { printf '%q' "$1"; }
+
+contains() {
+    local file="$1" regex="$2" label="$3"
+    if [[ -r "$file" ]] && grep -Eq -- "$regex" "$file"; then
+        pass "$label"
+    else
+        fail "$label"
+    fi
+}
+
+contains_literal() {
+    local file="$1" literal="$2" label="$3"
+    if [[ -r "$file" ]] && grep -Fq -- "$literal" "$file"; then
+        pass "$label"
+    else
+        fail "$label"
+    fi
+}
+
+is_tracked() {
+    git -C "$repo" ls-files --error-unmatch -- "$1" >/dev/null 2>&1
+}
+
+tracked() {
+    local path="$1" label="${2:-$1}"
+    if is_tracked "$path"; then
+        pass "tracked: $label"
+    elif [[ -e "$repo/$path" || -L "$repo/$path" ]]; then
+        warn "exists locally but is NOT tracked: $label"
+        git_add_candidates+=("$path")
+    else
+        fail "missing from repo: $label"
+    fi
+}
+
+check_exec_tracked() {
+    local path="$1"
+    if [[ -e "$repo/$path" ]]; then
+        [[ -x "$repo/$path" ]] \
+            && pass "executable bit present: $path" \
+            || fail "not executable: $path"
+    fi
+    if is_tracked "$path"; then
+        local mode
+        mode="$(git -C "$repo" ls-files -s -- "$path" | awk 'NR==1{print $1}')"
+        [[ "$mode" == "100755" ]] \
+            && pass "Git executable mode 100755: $path" \
+            || fail "Git mode for $path is ${mode:-unknown}, expected 100755"
+    fi
+}
+
+check_symlink_target() {
+    local link="$1" expected="$2" label="$3"
+    if [[ -L "$link" ]]; then
+        local got exp
+        got="$(readlink -f -- "$link" 2>/dev/null || true)"
+        exp="$(readlink -f -- "$expected" 2>/dev/null || true)"
+        [[ -n "$got" && -n "$exp" && "$got" == "$exp" ]] \
+            && pass "$label" \
+            || fail "$label — got $(q "$got"), expected $(q "$exp")"
+    elif [[ -e "$link" ]]; then
+        fail "$label — path exists but is not a symlink"
+    else
+        fail "$label — missing"
+    fi
+}
+
+gget() {
+    gsettings get "$1" "$2" 2>/dev/null || true
+}
+
+gcontains() {
+    local schema="$1" key="$2" needle="$3" label="$4"
+    local value
+    value="$(gget "$schema" "$key")"
+    if [[ "$value" == *"$needle"* ]]; then
+        pass "$label"
+    else
+        fail "$label — got: ${value:-MISSING}"
+    fi
+}
+
+extension_active() {
+    local uuid="$1" label="$2" out
+    if ! have gnome-extensions; then
+        fail "gnome-extensions binary missing; cannot check $label"
+        return
+    fi
+    out="$(gnome-extensions info "$uuid" 2>/dev/null || true)"
+    if grep -Eq 'State:[[:space:]]+ACTIVE|Enabled:[[:space:]]+Yes' <<<"$out"; then
+        pass "$label ($uuid)"
+    else
+        fail "$label ($uuid) not active"
+    fi
+}
+
+locale1_prop() {
+    busctl get-property \
+        org.freedesktop.locale1 \
+        /org/freedesktop/locale1 \
+        org.freedesktop.locale1 \
+        "$1" 2>/dev/null \
+      | sed -E 's/^s "(.*)"$/\1/'
+}
+
+check_runtime_helper() {
+    local name="$1"
+    local source="$repo/bin/$name"
+    local runtime="$HOME/.local/bin/$name"
+
+    tracked "bin/$name" "bin/$name"
+    [[ -e "$source" ]] && check_exec_tracked "bin/$name"
+
+    if have "$name"; then
+        pass "runtime helper resolves: $name -> $(command -v "$name")"
+    else
+        fail "runtime helper missing from PATH: $name"
+    fi
+
+    if [[ -e "$source" ]]; then
+        check_symlink_target "$runtime" "$source" "~/.local/bin/$name points into repo"
+    fi
+}
+
+compare_file() {
+    local source="$1" runtime="$2" label="$3"
+    if [[ ! -r "$source" ]]; then
+        fail "$label — repo source missing: $source"
+    elif [[ ! -r "$runtime" ]]; then
+        fail "$label — runtime file missing: $runtime"
+    elif cmp -s -- "$source" "$runtime"; then
+        pass "$label"
+    else
+        warn "$label — runtime differs from repo source"
+    fi
+}
+
+print_cmd_array() {
+    local prefix="$1"; shift
+    printf '  %s' "$prefix"
+    local x
+    for x in "$@"; do
+        printf ' %q' "$x"
+    done
+    printf '\n'
+}
+
+echo "Workstation full verification v4"
+echo "Repo: $repo"
+echo "Time: $(date --iso-8601=seconds 2>/dev/null || date)"
+echo "Mode: READ-ONLY"
+
+section "1. Host / session"
+
+model="$(cat /sys/class/dmi/id/product_name 2>/dev/null || true)"
+[[ "$model" == "MacBookPro16,1" ]] \
+    && pass "hardware: $model" \
+    || warn "hardware: ${model:-unknown} (expected MacBookPro16,1 for this workstation)"
+
+desktop="${XDG_CURRENT_DESKTOP:-unknown}"
+[[ "$desktop" == *GNOME* ]] && pass "desktop: $desktop" || fail "desktop is not GNOME: $desktop"
+
+session="${XDG_SESSION_TYPE:-unknown}"
+[[ "$session" == "wayland" ]] && pass "session: Wayland" || warn "session: $session"
+
+if have gnome-shell; then
+    gv="$(gnome-shell --version 2>/dev/null || true)"
+    [[ -n "$gv" ]] && info "GNOME: $gv" || warn "unable to read GNOME Shell version"
+else
+    fail "gnome-shell binary missing"
+fi
+
+kernel="$(uname -r)"
+[[ "$kernel" == *t2* ]] && pass "T2 kernel: $kernel" || warn "kernel is not T2-labelled: $kernel"
+
+section "2. Repository identity / Git integrity"
+
+if ! git -C "$repo" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    fail "not a Git repository: $repo"
+    echo
+    echo "RESULT: FAILED"
+    exit 1
+fi
+pass "Git repository exists"
+
+branch="$(git -C "$repo" branch --show-current 2>/dev/null || true)"
+[[ "$branch" == "main" ]] && pass "branch: main" || warn "branch: ${branch:-detached}"
+
+origin="$(git -C "$repo" remote get-url origin 2>/dev/null || true)"
+[[ "$origin" == *"kkkingqz/workstation-config"* ]] \
+    && pass "origin: $origin" \
+    || warn "unexpected origin: ${origin:-none}"
+
+head="$(git -C "$repo" rev-parse HEAD 2>/dev/null || true)"
+info "HEAD: ${head:-unknown}"
+
+if git -C "$repo" diff --check >/dev/null 2>&1; then
+    pass "git diff --check"
+else
+    fail "git diff --check found whitespace errors"
+fi
+
+if git -C "$repo" diff --cached --check >/dev/null 2>&1; then
+    pass "git diff --cached --check"
+else
+    fail "git diff --cached --check found whitespace errors"
+fi
+
+if git -C "$repo" fsck --no-progress --full >/dev/null 2>&1; then
+    pass "git fsck --full"
+else
+    fail "git fsck reports repository object errors"
+fi
+
+status_porcelain="$(git -C "$repo" status --porcelain=v1 --untracked-files=all 2>/dev/null || true)"
+if [[ -z "$status_porcelain" ]]; then
+    pass "working tree clean"
+else
+    warn "working tree has staged/modified/untracked files"
+    printf '%s\n' "$status_porcelain" | sed 's/^/        /'
+fi
+
+upstream="$(git -C "$repo" rev-parse '@{u}' 2>/dev/null || true)"
+if [[ -n "$upstream" ]]; then
+    if [[ "$head" == "$upstream" ]]; then
+        pass "HEAD matches local upstream-tracking ref"
+    else
+        local_counts="$(git -C "$repo" rev-list --left-right --count HEAD...@{u} 2>/dev/null || echo '? ?')"
+        warn "HEAD differs from local upstream-tracking ref (HEAD...upstream = $local_counts)"
+    fi
+else
+    warn "branch has no upstream-tracking ref"
+fi
+
+if [[ -n "$origin" && "$branch" == "main" ]] && have timeout; then
+    remote_head="$(timeout 10 git -C "$repo" ls-remote --heads origin refs/heads/main 2>/dev/null | awk 'NR==1{print $1}')"
+    if [[ -n "$remote_head" ]]; then
+        info "origin/main live SHA: $remote_head"
+        [[ "$remote_head" == "$head" ]] \
+            && pass "local HEAD exactly matches live origin/main" \
+            || warn "local HEAD does not exactly match live origin/main"
+    else
+        warn "could not query live origin/main (network/auth unavailable?)"
+    fi
+fi
+
+section "3. Repository hygiene / junk detection"
+
+weird_found=false
+while IFS= read -r -d '' path; do
+    bad=false
+    reason=""
+
+    if [[ "$path" == *$'\n'* || "$path" == *$'\r'* || "$path" == *$'\t'* ]]; then
+        bad=true; reason="contains control whitespace"
+    elif [[ "$path" =~ (^|/)[[:space:]] || "$path" =~ [[:space:]]$ ]]; then
+        bad=true; reason="leading/trailing whitespace"
+    elif [[ "$path" == *'\\'* ]]; then
+        bad=true; reason="contains backslash"
+    fi
+
+    if [[ "$bad" == true ]]; then
+        weird_found=true
+        cleanup "tracked suspicious filename ($(q "$path")): $reason"
+        git_remove_candidates+=("$path")
+    fi
+done < <(git -C "$repo" ls-files -z)
+[[ "$weird_found" == false ]] && pass "no tracked filenames with control/trailing whitespace/backslashes"
+
+zero_found=false
+while IFS= read -r -d '' path; do
+    full="$repo/$path"
+    if [[ -f "$full" && ! -s "$full" ]]; then
+        zero_found=true
+        cleanup "tracked zero-byte file: $(q "$path")"
+        git_remove_candidates+=("$path")
+    fi
+done < <(git -C "$repo" ls-files -z)
+[[ "$zero_found" == false ]] && pass "no tracked zero-byte regular files"
+
+junk_found=false
+while IFS= read -r -d '' path; do
+    base="${path##*/}"
+    case "$base" in
+        *~|*.bak|*.backup|*.orig|*.rej|*.swp|*.swo|*.tmp|*.temp|.DS_Store|Thumbs.db|*.pyc)
+            junk_found=true
+            cleanup "tracked backup/editor/temp candidate: $(q "$path")"
+            git_remove_candidates+=("$path")
+            ;;
+    esac
+    case "$path" in
+        fix-keyboard-layer-v*.sh|*/fix-keyboard-layer-v*.sh|rollback-keyboard-layer-v*.sh|*/rollback-keyboard-layer-v*.sh)
+            junk_found=true
+            cleanup "tracked one-shot migration/fix script candidate: $(q "$path")"
+            ;;
+    esac
+done < <(git -C "$repo" ls-files -z)
+[[ "$junk_found" == false ]] && pass "no obvious tracked editor/backup/one-shot junk"
+
+runtime_tracked=false
+for p in state runtime config/micro-help/buffers; do
+    if git -C "$repo" ls-files -- "$p" | grep -q .; then
+        runtime_tracked=true
+        fail "generated/runtime path is tracked: $p"
+    fi
+done
+[[ "$runtime_tracked" == false ]] && pass "runtime/generated directories are not tracked"
+
+for ignored in state/probe runtime/probe config/micro-help/buffers/probe gnome/extensions/workstation-input-source@local/schemas/gschemas.compiled gnome/extensions/workstation-smart-popup@local/schemas/gschemas.compiled; do
+    if git -C "$repo" check-ignore -q -- "$ignored"; then
+        pass ".gitignore covers: $ignored"
+    else
+        warn ".gitignore does not cover expected runtime path: $ignored"
+    fi
+done
+
+broken_link=false
+while IFS= read -r -d '' p; do
+    if [[ -L "$p" && ! -e "$p" ]]; then
+        broken_link=true
+        fail "broken symlink in repo tree: $(q "${p#$repo/}") -> $(q "$(readlink "$p")")"
+    fi
+done < <(find "$repo" -path "$repo/.git" -prune -o -type l -print0 2>/dev/null)
+[[ "$broken_link" == false ]] && pass "no broken symlinks inside repository tree"
+
+large_found=false
+while IFS= read -r -d '' path; do
+    full="$repo/$path"
+    [[ -f "$full" ]] || continue
+    size="$(stat -c %s "$full" 2>/dev/null || echo 0)"
+    if (( size > 5 * 1024 * 1024 )); then
+        large_found=true
+        warn "tracked file >5 MiB: $path ($size bytes)"
+    fi
+done < <(git -C "$repo" ls-files -z)
+[[ "$large_found" == false ]] && pass "no tracked files larger than 5 MiB"
+
+if git -C "$repo" grep -nEI -- \
+    '-----BEGIN (RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----|AKIA[0-9A-Z]{16}|github_pat_[A-Za-z0-9_]{20,}|gh[pousr]_[A-Za-z0-9]{20,}' \
+    -- . ':(exclude)docs/*.md' >/tmp/ws-verify-secret.$$ 2>/dev/null; then
+    warn "possible secret/private-key marker in tracked files (inspect manually):"
+    sed 's/^/        /' /tmp/ws-verify-secret.$$
+else
+    pass "no obvious private-key/GitHub/AWS secret markers in tracked non-doc files"
+fi
+rm -f /tmp/ws-verify-secret.$$
+
+expected_input_helper="$repo/bin/ws-input-source"
+input_helper_paths="$(grep -oE '"/[^"]*/ws-input-source"' "$repo/config/keyboard/xremap.yml" 2>/dev/null | tr -d '"' | sort -u || true)"
+if [[ -z "$input_helper_paths" ]]; then
+    fail "xremap contains no absolute ws-input-source launch path"
+else
+    bad_input_path=false
+    while IFS= read -r p; do
+        [[ -n "$p" ]] || continue
+        if [[ "$p" != "$expected_input_helper" ]]; then
+            bad_input_path=true
+            warn "xremap ws-input-source path mismatch: $(q "$p"), expected $(q "$expected_input_helper")"
+        fi
+    done <<<"$input_helper_paths"
+    [[ "$bad_input_path" == false ]] && pass "xremap absolute ws-input-source path matches current repo"
+fi
+
+expected_led_helper="$repo/bin/ws-caps-led"
+led_helper_literal="$(sed -n 's/^const LED_HELPER = "\([^"]*\)";$/\1/p' "$repo/gnome/extensions/workstation-input-source@local/extension.js" | head -n1)"
+if [[ "$led_helper_literal" == "$expected_led_helper" ]]; then
+    pass "Input Source LED helper absolute path matches current repo"
+else
+    fail "Input Source LED helper path mismatch: ${led_helper_literal:-MISSING}; expected $expected_led_helper"
+fi
+
+current_home_prefix="${HOME%/}/"
+other_hardcoded_home="$(git -C "$repo" grep -nF "$current_home_prefix" -- \
+    ':!docs/**' \
+    ':!man/**' \
+    ':!config/keyboard/xremap.yml' \
+    ':!bin/ws-workstation-verify' \
+    ':!gnome/extensions/workstation-input-source@local/extension.js' \
+    2>/dev/null || true)"
+if [[ -n "$other_hardcoded_home" ]]; then
+    warn "unexpected hard-coded current HOME paths found outside validated helper locations:"
+    printf '%s\n' "$other_hardcoded_home" | sed 's/^/        /'
+else
+    pass "no unexpected hard-coded current HOME paths outside validated helper locations"
+fi
+
+conflict_hits="$(git -C "$repo" grep -nE '^(<<<<<<<|=======|>>>>>>>)' -- . 2>/dev/null || true)"
+[[ -z "$conflict_hits" ]] \
+    && pass "no merge-conflict markers in tracked files" \
+    || { fail "merge-conflict markers found"; printf '%s\n' "$conflict_hits" | sed 's/^/        /'; }
+
+crlf_found=false
+while IFS= read -r -d '' path; do
+    full="$repo/$path"
+    [[ -f "$full" ]] || continue
+    case "$path" in
+        *.sh|*.fish|*.yml|*.yaml|*.toml|*.service|*.rules|*.md|*.ghostty|*.json)
+            if LC_ALL=C grep -q $'\r$' "$full" 2>/dev/null; then
+                crlf_found=true
+                warn "CRLF line endings: $path"
+            fi
+            ;;
+    esac
+done < <(git -C "$repo" ls-files -z)
+[[ "$crlf_found" == false ]] && pass "no CRLF in tracked config/script/docs files"
+
+section "4. Required source-of-truth / reproducibility"
+
+for path in \
+    .gitignore \
+    config/keyboard/settings.conf \
+    config/keyboard/xremap.yml \
+    config/ghostty/config.ghostty \
+    config/ghostty/keybinds.ghostty \
+    config/ghostty/shell-keys.ghostty \
+    bin/ws-keyboard \
+    bin/ws-keyboard-apply \
+    bin/ws-keyboard-status \
+    bin/ws-xremap \
+    systemd/user/xremap.service \
+    system/udev/99-workstation-uinput.rules \
+    docs/keyboard.md \
+    docs/touchbar.md
+do
+    tracked "$path" "$path"
+done
+
+for name in ws-keyboard ws-keyboard-apply ws-keyboard-status ws-xremap; do
+    [[ -e "$repo/bin/$name" ]] && check_exec_tracked "bin/$name"
+done
+
+# These were added during the final macOS-style workstation work and must be
+# source-controlled for a clean-clone rebuild to be complete.
+for path in \
+    bin/ws-window \
+    bin/ws-nautilus-current \
+    bin/ws-input-source \
+    bin/ws-caps-led \
+    bin/ws-tiling-apply \
+    bin/ws-keyboard-install-extensions \
+    bin/ws-keyboard-system-apply \
+    bin/ws-workstation-verify \
+    config/tiny-dfr/config.toml \
+    gnome/extensions/workstation-smart-popup@local/metadata.json \
+    gnome/extensions/workstation-smart-popup@local/extension.js \
+    gnome/extensions/workstation-smart-popup@local/schemas/org.gnome.shell.extensions.workstation-smart-popup.gschema.xml \
+    gnome/extensions/workstation-input-source@local/metadata.json \
+    gnome/extensions/workstation-input-source@local/extension.js \
+    gnome/extensions/workstation-input-source@local/schemas/org.gnome.shell.extensions.workstation-input-source.gschema.xml
+do
+    tracked "$path" "$path"
+done
+
+section "5. Apply reproducibility"
+
+apply="$repo/bin/ws-keyboard-apply"
+contains_literal "$apply" 'bin/ws-window' "apply installs ws-window runtime link"
+contains_literal "$apply" 'bin/ws-nautilus-current' "apply installs ws-nautilus-current runtime link"
+contains_literal "$apply" 'bin/ws-input-source' "apply installs ws-input-source runtime link"
+contains_literal "$apply" 'bin/ws-tiling-apply' "apply installs ws-tiling-apply runtime link"
+contains_literal "$apply" 'ws-keyboard-install-extensions' "apply installs/reuses local GNOME extension sources"
+contains_literal "$apply" 'ws-tiling-apply' "apply reapplies Tiling Assistant private bindings"
+[[ -x "$repo/bin/ws-keyboard-system-apply" ]] \
+    && pass "system-level keyboard/uinput/tiny-dfr apply helper is executable" \
+    || fail "bin/ws-keyboard-system-apply missing/not executable"
+
+section "6. Script / config syntax"
+
+bash_bad=false
+while IFS= read -r -d '' path; do
+    full="$repo/$path"
+    [[ -f "$full" ]] || continue
+    if head -n1 "$full" 2>/dev/null | grep -Eq '^#!.*\b(bash|sh)([[:space:]]|$)'; then
+        if bash -n "$full" 2>/dev/null; then
+            pass "bash syntax: $path"
+        else
+            bash_bad=true
+            fail "bash syntax error: $path"
+        fi
+    fi
+done < <(git -C "$repo" ls-files -z)
+[[ "$bash_bad" == false ]] || true
+
+if have fish; then
+    fish_bad=false
+    while IFS= read -r -d '' path; do
+        [[ "$path" == *.fish ]] || continue
+        if fish -n "$repo/$path" >/dev/null 2>&1; then
+            pass "fish syntax: $path"
+        else
+            fish_bad=true
+            fail "fish syntax error: $path"
+        fi
+    done < <(git -C "$repo" ls-files -z)
+else
+    warn "fish not installed; Fish syntax checks skipped"
+fi
+
+json_bad=false
+while IFS= read -r -d '' path; do
+    [[ "$path" == *.json ]] || continue
+    if python3 -m json.tool "$repo/$path" >/dev/null 2>&1; then
+        pass "JSON syntax: $path"
+    else
+        json_bad=true
+        fail "JSON syntax error: $path"
+    fi
+done < <(git -C "$repo" ls-files -z)
+
+if [[ -r "$repo/config/tiny-dfr/config.toml" ]]; then
+    if python3 - "$repo/config/tiny-dfr/config.toml" >/dev/null 2>&1 <<'PY'
+import pathlib, sys
+try:
+    import tomllib
+except Exception:
+    raise SystemExit(2)
+with open(sys.argv[1], 'rb') as f:
+    tomllib.load(f)
+PY
+    then
+        pass "TOML syntax: config/tiny-dfr/config.toml"
+    else
+        warn "could not validate config/tiny-dfr/config.toml with Python tomllib"
+    fi
+fi
+
+if have shellcheck; then
+    shellcheck_files=()
+    while IFS= read -r -d '' path; do
+        full="$repo/$path"
+        [[ -f "$full" ]] || continue
+        if head -n1 "$full" 2>/dev/null | grep -Eq '^#!.*\b(bash|sh)([[:space:]]|$)'; then
+            shellcheck_files+=("$full")
+        fi
+    done < <(git -C "$repo" ls-files -z)
+    if ((${#shellcheck_files[@]})); then
+        if shellcheck -S warning "${shellcheck_files[@]}" >/tmp/ws-verify-shellcheck.$$ 2>&1; then
+            pass "shellcheck -S warning"
+        else
+            warn "shellcheck reported issues:"
+            sed 's/^/        /' /tmp/ws-verify-shellcheck.$$
+        fi
+        rm -f /tmp/ws-verify-shellcheck.$$
+    fi
+else
+    info "shellcheck not installed; optional lint skipped"
+fi
+
+section "7. Runtime links / xremap"
+
+if have xremap; then
+    pass "xremap binary: $(command -v xremap)"
+    info "xremap version: $(xremap --version 2>/dev/null || echo unknown)"
+else
+    fail "xremap binary missing"
+fi
+
+id -nG | tr ' ' '\n' | grep -Fxq input \
+    && pass "user belongs to input group" \
+    || fail "user not in input group"
+
+[[ -e /dev/uinput && -w /dev/uinput ]] \
+    && pass "/dev/uinput exists and is writable" \
+    || fail "/dev/uinput missing/not writable"
+
+systemctl --user is-active --quiet xremap.service 2>/dev/null \
+    && pass "xremap.service active" \
+    || fail "xremap.service not active"
+
+systemctl --user is-enabled --quiet xremap.service 2>/dev/null \
+    && pass "xremap.service enabled" \
+    || warn "xremap.service not enabled"
+
+check_symlink_target \
+    "$HOME/.config/systemd/user/xremap.service" \
+    "$repo/systemd/user/xremap.service" \
+    "xremap user-service link points into repo"
+
+for name in ws-keyboard ws-keyboard-apply ws-keyboard-status ws-xremap; do
+    [[ -e "$repo/bin/$name" ]] && check_symlink_target \
+        "$HOME/.local/bin/$name" "$repo/bin/$name" \
+        "~/.local/bin/$name points into repo"
+done
+
+if [[ -e "$repo/bin/ws-workstation-verify" ]]; then
+    check_symlink_target \
+        "$HOME/.local/bin/ws-workstation-verify" \
+        "$repo/bin/ws-workstation-verify" \
+        "~/.local/bin/ws-workstation-verify points into repo"
+fi
+
+if [[ -e "$repo/bin/ws-keyboard-install-extensions" ]]; then
+    check_symlink_target \
+        "$HOME/.local/bin/ws-keyboard-install-extensions" \
+        "$repo/bin/ws-keyboard-install-extensions" \
+        "~/.local/bin/ws-keyboard-install-extensions points into repo"
+fi
+
+if [[ -e "$repo/bin/ws-keyboard-system-apply" ]]; then
+    check_symlink_target \
+        "$HOME/.local/bin/ws-keyboard-system-apply" \
+        "$repo/bin/ws-keyboard-system-apply" \
+        "~/.local/bin/ws-keyboard-system-apply points into repo"
+fi
+
+for name in ws-window ws-nautilus-current ws-input-source ws-tiling-apply; do
+    check_runtime_helper "$name"
+done
+
+tracked "bin/ws-caps-led" "bin/ws-caps-led"
+if [[ -x "$repo/bin/ws-caps-led" ]]; then
+    check_exec_tracked "bin/ws-caps-led"
+    pass "ws-caps-led is an internal executable helper (PATH symlink not required)"
+else
+    fail "internal Caps LED helper missing/not executable: bin/ws-caps-led"
+fi
+
+if have busctl && busctl --user call \
+    org.gnome.Shell \
+    /com/k0kubun/Xremap \
+    com.k0kubun.Xremap \
+    WMClasses >/dev/null 2>&1; then
+    pass "xremap GNOME Wayland bridge responds"
+else
+    fail "xremap GNOME Wayland bridge unavailable"
+fi
+
+contains_literal "$repo/bin/ws-xremap" \
+    'Dynamic Function Row Virtual Input Device' \
+    "xremap excludes tiny-dfr virtual keyboard"
+contains_literal "$repo/bin/ws-xremap" \
+    '--output-device-name workstation-xremap' \
+    "xremap output device has stable name"
+
+virtual_found=false
+for input_name in /sys/class/input/event*/device/name /sys/class/input/input*/name; do
+    [[ -r "$input_name" ]] || continue
+    if grep -Fxq 'workstation-xremap' "$input_name" 2>/dev/null; then
+        virtual_found=true
+        break
+    fi
+done
+[[ "$virtual_found" == true ]] \
+    && pass "virtual input device workstation-xremap present" \
+    || warn "virtual input device workstation-xremap not found in /sys/class/input"
+
+section "8. xremap semantic mappings"
+
+xcfg="$repo/config/keyboard/xremap.yml"
+
+contains "$xcfg" 'skip_key_event:[[:space:]]*false' "Apple Fn event is passed through"
+contains "$xcfg" 'Ctrl-Home:[[:space:]]*Shift-Ctrl-Alt-Super-Left' "Fn+Ctrl+Left tiling"
+contains "$xcfg" 'Ctrl-End:[[:space:]]*Shift-Ctrl-Alt-Super-Right' "Fn+Ctrl+Right tiling"
+contains "$xcfg" 'Ctrl-PageUp:[[:space:]]*Shift-Ctrl-Alt-Super-Up' "Fn+Ctrl+Up tiling"
+contains "$xcfg" 'Ctrl-PageDown:[[:space:]]*Shift-Ctrl-Alt-Super-Down' "Fn+Ctrl+Down tiling"
+contains "$xcfg" 'Alt-E:[[:space:]]*Shift-Ctrl-Alt-Super-E' "Fn+Option+E Tile Editing Mode"
+contains "$xcfg" 'Alt-T:[[:space:]]*Shift-Ctrl-Alt-Super-T' "Fn+Option+T Always on Top"
+contains "$xcfg" 'ALT_R-SUPER_R:[[:space:]]*Shift-Ctrl-Alt-Super-Space' "Right modifiers Smart Popup"
+
+contains "$xcfg" 'CapsLock:.*ws-input-source.*"caps"' "CapsLock routes to EN/RU selector"
+contains "$xcfg" 'CapsLock:.*ws-input-source.*"ua"' "Fn/Alt+CapsLock routes to UA"
+contains "$xcfg" 'Ctrl-Space:.*ws-input-source.*"next"' "Ctrl+Space deterministic next source"
+contains "$xcfg" 'Ctrl-Alt-Space:.*ws-input-source.*"prev"' "Ctrl+Alt+Space deterministic previous source"
+
+contains "$xcfg" 'Super-H:.*ws-window.*hide-current' "Cmd/Win+H hide current app"
+contains "$xcfg" 'Alt-Super-H:.*ws-window.*hide-others' "Option+Cmd/Alt+Win+H hide others"
+contains "$xcfg" 'Alt-Super-W:.*ws-window.*close-current' "Option+Cmd/Alt+Win+W close current app"
+contains "$xcfg" 'Alt-Super-M:.*ws-window.*minimize-current' "Option+Cmd/Alt+Win+M minimize current app"
+
+contains "$xcfg" 'ws-nautilus-current.*computer' "Nautilus current-window Computer helper"
+contains "$xcfg" 'ws-nautilus-current.*documents' "Nautilus current-window Documents helper"
+contains "$xcfg" 'ws-nautilus-current.*desktop' "Nautilus current-window Desktop helper"
+
+contains "$xcfg" 'Super-Left:[[:space:]]*Ctrl-A' "terminal Super+Left -> Ctrl-A"
+contains "$xcfg" 'Super-Right:[[:space:]]*Ctrl-E' "terminal Super+Right -> Ctrl-E"
+contains "$xcfg" 'Super-Backspace:[[:space:]]*Ctrl-U' "terminal Super+Backspace -> Ctrl-U"
+contains "$xcfg" 'Alt-Left:[[:space:]]*Alt-B' "terminal Option+Left -> Alt-B"
+contains "$xcfg" 'Alt-Right:[[:space:]]*Alt-F' "terminal Option+Right -> Alt-F"
+
+section "9. GNOME core bindings"
+
+if have gsettings; then
+    gcontains org.gnome.desktop.wm.keybindings switch-applications '<Super>Tab' "Cmd/Win+Tab app switch"
+    same_app="$(gget org.gnome.desktop.wm.keybindings switch-group)"
+    if [[ "$same_app" == *"<Super>Above_Tab"* && "$same_app" == *"<Control>Down"* ]]; then
+        pass "same-app window switch (<Super>Above_Tab + <Control>Down)"
+    else
+        fail "same-app window switch — got: ${same_app:-MISSING}"
+    fi
+    gcontains org.gnome.desktop.wm.keybindings minimize '<Super>m' "Cmd/Win+M minimize"
+    gcontains org.gnome.desktop.wm.keybindings toggle-fullscreen '<Control><Super>f' "Ctrl+Cmd/Win+F fullscreen"
+    gcontains org.gnome.desktop.wm.keybindings show-desktop 'F11' "F11 show desktop"
+    gcontains org.gnome.shell.keybindings toggle-overview '<Super>space' "Cmd/Win+Space overview"
+    gcontains org.gnome.settings-daemon.plugins.media-keys screensaver '<Control><Super>q' "Ctrl+Cmd/Win+Q lock"
+
+    overlay="$(gget org.gnome.mutter overlay-key)"
+    [[ "$overlay" == "''" ]] \
+        && pass "single Super/Command disabled" \
+        || fail "single Super/Command not disabled: $overlay"
+
+    numeric_ok=true
+    for n in $(seq 1 9); do
+        v="$(gget org.gnome.shell.keybindings "switch-to-application-$n")"
+        [[ "$v" == "@as []" || "$v" == "[]" ]] || numeric_ok=false
+    done
+    [[ "$numeric_ok" == true ]] \
+        && pass "GNOME Super+1..9 launcher bindings disabled" \
+        || fail "one or more GNOME Super+1..9 bindings are enabled"
+
+    if gsettings range org.gnome.shell.extensions.dash-to-dock hot-keys >/dev/null 2>&1; then
+        dock="$(gget org.gnome.shell.extensions.dash-to-dock hot-keys)"
+        [[ "$dock" == "false" ]] \
+            && pass "Ubuntu Dock numeric hotkeys disabled" \
+            || fail "Ubuntu Dock numeric hotkeys enabled"
+    fi
+else
+    fail "gsettings binary missing"
+fi
+
+section "10. GNOME extensions / D-Bus"
+
+extension_active xremap@k0kubun.com "xremap GNOME extension"
+extension_active window-control@carlo9890.github.io "Window Control"
+extension_active workstation-smart-popup@local "Smart Popup"
+extension_active workstation-input-source@local "Input Source helper"
+
+if have gnome-extensions && gnome-extensions info tiling-assistant@ubuntu.com 2>/dev/null | grep -Eq 'State:[[:space:]]+ACTIVE|Enabled:[[:space:]]+Yes'; then
+    pass "Tiling Assistant active: tiling-assistant@ubuntu.com"
+elif have gnome-extensions && gnome-extensions info tiling-assistant@leleat-on-github 2>/dev/null | grep -Eq 'State:[[:space:]]+ACTIVE|Enabled:[[:space:]]+Yes'; then
+    pass "Tiling Assistant active: tiling-assistant@leleat-on-github"
+else
+    fail "Tiling Assistant not active"
+fi
+
+if have gdbus && gdbus call --session \
+    --dest org.gnome.Shell \
+    --object-path /org/gnome/Shell/Extensions/WorkstationInputSource \
+    --method org.gnome.Shell.Extensions.WorkstationInputSource.GetState \
+    >/dev/null 2>&1; then
+    pass "Input Source D-Bus API responds"
+else
+    fail "Input Source D-Bus API unavailable"
+fi
+
+for uuid in workstation-smart-popup@local workstation-input-source@local; do
+    for file in metadata.json extension.js; do
+        src="$repo/gnome/extensions/$uuid/$file"
+        dst="$HOME/.local/share/gnome-shell/extensions/$uuid/$file"
+        [[ -r "$src" ]] && compare_file "$src" "$dst" "$uuid/$file runtime matches repo"
+    done
+done
+
+smart="$repo/gnome/extensions/workstation-smart-popup@local/extension.js"
+[[ -r "$smart" ]] && {
+    contains "$smart" 'tiling-assistant@ubuntu\.com' "Smart Popup knows Ubuntu Tiling Assistant UUID"
+    contains "$smart" 'tiling-assistant@leleat-on-github' "Smart Popup has upstream Tiling Assistant fallback"
+}
+
+input_ext="$repo/gnome/extensions/workstation-input-source@local/extension.js"
+[[ -r "$input_ext" ]] && {
+    contains "$input_ext" 'Cycle\(direction\)' "Input Source extension has deterministic Cycle()"
+    contains "$input_ext" 'UA/unknown -> EN' "Caps semantics include UA -> EN"
+    contains_literal "$input_ext" "'locked-changed'" "v25.3 uses ScreenShield locked-changed"
+    contains "$input_ext" '_isUnlockDialog\(\)' "v25.3 unlock-dialog policy present"
+    contains "$input_ext" '_onCurrentSourceChanged\(\)' "v25.3 re-enforces EN after input-source reload"
+    contains "$input_ext" '_syncLockScreenEnglish\(\)' "lock-screen EN enforcement hook present"
+    contains "$input_ext" "this\._activate\('en'\)" "lock-screen hook activates EN"
+
+    if grep -Fq -- "'notify::locked'" "$input_ext"; then
+        fail "obsolete notify::locked remains in Input Source extension"
+    else
+        pass "obsolete notify::locked is absent"
+    fi
+
+    if python3 - "$input_ext" >/dev/null 2>&1 <<'PY'
+import re, sys
+s=open(sys.argv[1], encoding='utf-8').read()
+m=re.search(r'_syncLockScreenEnglish\(\) \{(.*?)\n    \}', s, re.S)
+if not m:
+    raise SystemExit(1)
+raise SystemExit(1 if 'caps-binary-state' in m.group(1) else 0)
+PY
+    then
+        pass "lock-screen EN does not overwrite remembered Caps EN/RU state"
+    else
+        fail "lock-screen hook still modifies caps-binary-state"
+    fi
+}
+
+section "11. Tiling Assistant private bindings"
+
+ta_schema="org.gnome.shell.extensions.tiling-assistant"
+if have gsettings && gsettings list-keys "$ta_schema" >/dev/null 2>&1; then
+    pass "Tiling Assistant GSettings schema present"
+    gcontains "$ta_schema" tile-left-half '<Shift><Control><Alt><Super>Left' "private tile-left"
+    gcontains "$ta_schema" tile-right-half '<Shift><Control><Alt><Super>Right' "private tile-right"
+    gcontains "$ta_schema" tile-top-half '<Shift><Control><Alt><Super>Up' "private tile-top"
+    gcontains "$ta_schema" tile-bottom-half '<Shift><Control><Alt><Super>Down' "private tile-bottom"
+    gcontains "$ta_schema" tile-maximize '<Shift><Control><Alt><Super>f' "private Fill"
+    gcontains "$ta_schema" center-window '<Shift><Control><Alt><Super>c' "private Center"
+    gcontains "$ta_schema" restore-window '<Shift><Control><Alt><Super>r' "private Restore"
+    gcontains "$ta_schema" tile-edit-mode '<Shift><Control><Alt><Super>e' "private Tile Editing Mode"
+    gcontains "$ta_schema" toggle-always-on-top '<Shift><Control><Alt><Super>t' "private Always on Top"
+else
+    fail "Tiling Assistant GSettings schema missing"
+fi
+
+section "12. Input sources / Caps behavior / login"
+
+sources="$(gget org.gnome.desktop.input-sources sources)"
+mru_sources="$(gget org.gnome.desktop.input-sources mru-sources)"
+info "sources: $sources"
+info "mru-sources: $mru_sources"
+
+for code in us ru ua; do
+    [[ "$sources" == *"'$code'"* ]] \
+        && pass "input source configured: $code" \
+        || fail "input source missing: $code"
+    [[ "$mru_sources" == *"'$code'"* ]] \
+        && pass "MRU source contains: $code" \
+        || warn "MRU source missing: $code"
+done
+
+if have ws-input-source; then
+    state_out="$(ws-input-source status 2>/dev/null || true)"
+    [[ -n "$state_out" ]] \
+        && pass "ws-input-source status works: $state_out" \
+        || fail "ws-input-source status failed"
+fi
+
+if have busctl; then
+    sys_layout="$(locale1_prop X11Layout)"
+    [[ "$sys_layout" == "us" ]] \
+        && pass "GDM/login system X11 layout forced to US" \
+        || fail "GDM/login X11 layout is '${sys_layout:-unknown}', expected us"
+fi
+
+meta="$repo/gnome/extensions/workstation-input-source@local/metadata.json"
+if [[ -r "$meta" ]] && python3 - "$meta" >/dev/null 2>&1 <<'PY'
+import json, sys
+with open(sys.argv[1], encoding='utf-8') as f:
+    d=json.load(f)
+m=d.get("session-modes", [])
+raise SystemExit(0 if "user" in m and "unlock-dialog" in m else 1)
+PY
+then
+    pass "Input Source extension enabled for unlock-dialog"
+elif [[ -r "$meta" ]]; then
+    fail "Input Source extension metadata lacks user/unlock-dialog session modes"
+fi
+
+section "13. Ghostty frozen keyboard layer"
+
+ghost="$repo/config/ghostty/keybinds.ghostty"
+for literal in \
+    'keybind = super+KeyC=copy_to_clipboard' \
+    'keybind = super+KeyV=paste_from_clipboard' \
+    'keybind = super+KeyA=select_all' \
+    'keybind = super+KeyF=start_search' \
+    'keybind = super+KeyT=new_tab' \
+    'keybind = super+KeyN=new_window' \
+    'keybind = super+KeyW=close_surface' \
+    'keybind = all:super+KeyQ=close_window' \
+    'keybind = super+comma=open_config' \
+    'keybind = super+equal=increase_font_size:1' \
+    'keybind = super+minus=decrease_font_size:1' \
+    'keybind = super+Digit0=reset_font_size'
+do
+    if grep -Fqx -- "$literal" "$ghost" 2>/dev/null; then
+        pass "Ghostty frozen: $literal"
+    else
+        fail "Ghostty frozen binding missing: $literal"
+    fi
+done
+
+section "14. Touch Bar / tiny-dfr / udev"
+
+systemctl is-active --quiet tiny-dfr.service 2>/dev/null \
+    && pass "tiny-dfr.service active" \
+    || fail "tiny-dfr.service not active"
+
+if have dpkg-query && dpkg-query -W -f='${Version}' tiny-dfr >/dev/null 2>&1; then
+    pass "tiny-dfr package installed: $(dpkg-query -W -f='${Version}' tiny-dfr)"
+else
+    fail "tiny-dfr package not installed via dpkg"
+fi
+
+tiny_runtime="/etc/tiny-dfr/config.toml"
+[[ -r "$tiny_runtime" ]] && pass "$tiny_runtime present" || fail "$tiny_runtime missing"
+
+grep -Eq '^[[:space:]]*MediaLayerDefault[[:space:]]*=[[:space:]]*false' "$tiny_runtime" 2>/dev/null \
+    && pass "tiny-dfr normal layer is F1..F12" \
+    || fail "tiny-dfr MediaLayerDefault is not false"
+
+grep -Eq '^[[:space:]]*DoublePressSwitchLayers[[:space:]]*=[[:space:]]*0' "$tiny_runtime" 2>/dev/null \
+    && pass "tiny-dfr double-Fn layer lock disabled" \
+    || fail "tiny-dfr DoublePressSwitchLayers is not 0"
+
+[[ -r "$repo/config/tiny-dfr/config.toml" ]] \
+    && compare_file "$repo/config/tiny-dfr/config.toml" "$tiny_runtime" "runtime tiny-dfr config matches repo source"
+
+udev_runtime="/etc/udev/rules.d/99-workstation-uinput.rules"
+if [[ -r "$udev_runtime" ]]; then
+    compare_file "$repo/system/udev/99-workstation-uinput.rules" "$udev_runtime" "runtime 99-workstation-uinput.rules matches repo"
+else
+    fail "installed uinput rule missing: $udev_runtime"
+fi
+
+if [[ -e "$repo/system/udev/70-workstation-uinput.rules" ]]; then
+    fail "obsolete repo udev rule still exists: system/udev/70-workstation-uinput.rules"
+else
+    pass "obsolete repo 70-workstation-uinput.rules absent"
+fi
+
+if [[ -e /etc/udev/rules.d/70-workstation-uinput.rules ]]; then
+    warn "obsolete runtime /etc/udev/rules.d/70-workstation-uinput.rules still exists"
+else
+    pass "obsolete runtime 70-workstation-uinput.rules absent"
+fi
+
+section "15. Extension schema source / generated files"
+
+for uuid in workstation-smart-popup@local workstation-input-source@local; do
+    schema_dir="$repo/gnome/extensions/$uuid/schemas"
+    if [[ -d "$schema_dir" ]]; then
+        xml_count="$(find "$schema_dir" -maxdepth 1 -type f -name '*.gschema.xml' | wc -l)"
+        if (( xml_count > 0 )); then
+            pass "$uuid has GSettings schema source"
+        else
+            fail "$uuid has no *.gschema.xml source"
+        fi
+
+        if is_tracked "gnome/extensions/$uuid/schemas/gschemas.compiled"; then
+            fail "$uuid generated gschemas.compiled is tracked"
+        elif git -C "$repo" check-ignore -q -- "gnome/extensions/$uuid/schemas/gschemas.compiled"; then
+            pass "$uuid generated gschemas.compiled is ignored"
+        else
+            warn "$uuid generated gschemas.compiled is not ignored"
+        fi
+
+        if have glib-compile-schemas; then
+            schema_tmp="$(mktemp -d)"
+            cp -a "$schema_dir/." "$schema_tmp/"
+            rm -f "$schema_tmp/gschemas.compiled"
+            if glib-compile-schemas "$schema_tmp" >/dev/null 2>&1; then
+                pass "$uuid schema compiles"
+            else
+                fail "$uuid schema compilation failed"
+            fi
+            rm -rf -- "$schema_tmp"
+        fi
+    else
+        fail "$uuid schemas directory missing"
+    fi
+done
+
+section "16. Documentation consistency"
+
+kdoc="$repo/docs/keyboard.md"
+tdoc="$repo/docs/touchbar.md"
+
+missing=()
+for concept in "Always on Top" "Smart Popup" "CapsLock" "Tile Editing Mode" "tiny-dfr" "unlock-dialog" "GDM/login" "EN -> RU -> UA -> EN"; do
+    grep -Fqi -- "$concept" "$kdoc" 2>/dev/null || missing+=("$concept")
+done
+if ((${#missing[@]} == 0)); then
+    pass "docs/keyboard.md includes final keyboard concepts"
+else
+    warn "docs/keyboard.md missing concepts: ${missing[*]}"
+fi
+
+if [[ -r "$tdoc" ]]; then
+    if grep -Fqi 'Текущий Touch Bar renderer — **tiny-dfr**' "$tdoc" \
+       && grep -Fqi 'DoublePressSwitchLayers = 0' "$tdoc"; then
+        pass "docs/touchbar.md reflects tiny-dfr baseline"
+    else
+        fail "docs/touchbar.md does not describe the current tiny-dfr baseline"
+    fi
+else
+    fail "docs/touchbar.md missing"
+fi
+
+for doc in docs/workstation.md docs/rebuild.md docs/roadmap.md; do
+    if [[ -r "$repo/$doc" ]]; then
+        if grep -Eqi 'Не (используются|устанавливать).*tiny-dfr|штатн(ый|ого).*Touch Bar.*hid[_-]?appletb' "$repo/$doc"; then
+            fail "$doc still contains obsolete current-baseline claims about tiny-dfr/hid_appletb"
+        else
+            pass "$doc has no obsolete tiny-dfr/hid_appletb baseline claim"
+        fi
+    else
+        fail "$doc missing"
+    fi
+done
+
+grep -Fqi 'workstation-input-source@local' "$repo/docs/workstation.md" \
+    && pass "docs/workstation.md includes final input-source extension" \
+    || fail "docs/workstation.md misses final input-source extension"
+
+grep -Fqi 'workstation-smart-popup@local' "$repo/docs/workstation.md" \
+    && pass "docs/workstation.md includes Smart Popup extension" \
+    || fail "docs/workstation.md misses Smart Popup extension"
+
+if [[ -r "$repo/docs/plans/gnome.md" ]]; then
+    grep -Fqi 'Keyboard layer **завершён и является частью baseline**' "$repo/docs/plans/gnome.md" \
+        && pass "docs/plans/gnome.md marks keyboard layer as completed baseline" \
+        || fail "docs/plans/gnome.md still treats keyboard shortcuts as unfinished"
+
+    grep -Fqi 'workstation-input-source@local' "$repo/docs/plans/gnome.md" \
+        && grep -Fqi 'workstation-smart-popup@local' "$repo/docs/plans/gnome.md" \
+        && pass "docs/plans/gnome.md lists current local extensions" \
+        || fail "docs/plans/gnome.md does not list current local extensions"
+else
+    fail "docs/plans/gnome.md missing"
+fi
+
+if [[ -x "$repo/bin/ws-doc-build" ]] && have lowdown; then
+    doc_tmp="$(mktemp -d)"
+    mkdir -p "$doc_tmp/docs" "$doc_tmp/bin" "$doc_tmp/man/man1"
+    cp -a "$repo/docs/." "$doc_tmp/docs/"
+    cp -a "$repo/bin/ws-doc-build" "$doc_tmp/bin/ws-doc-build"
+
+    if WORKSTATION_CONFIG="$doc_tmp" "$doc_tmp/bin/ws-doc-build" >"$doc_tmp/build.log" 2>&1; then
+        doc_diff=false
+        shopt -s nullglob
+        for generated in "$doc_tmp"/man/man1/*.1; do
+            name="${generated##*/}"
+            if [[ ! -f "$repo/man/man1/$name" ]]; then
+                doc_diff=true
+                warn "generated man page missing from repo: man/man1/$name"
+            elif ! cmp -s "$generated" "$repo/man/man1/$name"; then
+                doc_diff=true
+                warn "generated man page differs from repo: man/man1/$name"
+            fi
+        done
+        shopt -u nullglob
+        [[ "$doc_diff" == false ]] && pass "documentation/man generation reproducible in temporary copy"
+    else
+        warn "ws-doc-build failed in temporary copy:"
+        sed 's/^/        /' "$doc_tmp/build.log"
+    fi
+    rm -rf -- "$doc_tmp"
+elif [[ ! -x "$repo/bin/ws-doc-build" ]]; then
+    info "ws-doc-build unavailable; doc-generation check skipped"
+else
+    info "lowdown unavailable; doc-generation check skipped"
+fi
+
+section "17. Legacy artifacts that should be gone"
+
+legacy_repo_paths=(
+    bin/ws-nautilus-go
+    systemd/user/ws-touchbar-fn.service
+    system/udev/70-workstation-uinput.rules
+)
+for path in "${legacy_repo_paths[@]}"; do
+    if is_tracked "$path"; then
+        cleanup "obsolete tracked artifact: $(q "$path")"
+        git_remove_candidates+=("$path")
+    elif [[ -e "$repo/$path" || -L "$repo/$path" ]]; then
+        cleanup "obsolete untracked artifact in repo: $(q "$path")"
+    else
+        pass "legacy artifact absent: $path"
+    fi
+done
+
+if [[ -e /usr/local/libexec/ws-touchbar-fn || -L /usr/local/libexec/ws-touchbar-fn ]]; then
+    warn "obsolete runtime helper still exists: /usr/local/libexec/ws-touchbar-fn"
+else
+    pass "obsolete /usr/local/libexec/ws-touchbar-fn absent"
+fi
+
+if systemctl list-unit-files ws-touchbar-fn.service >/dev/null 2>&1 \
+   && systemctl list-unit-files ws-touchbar-fn.service 2>/dev/null | grep -q '^ws-touchbar-fn\.service'; then
+    warn "obsolete ws-touchbar-fn.service still installed"
+else
+    pass "obsolete ws-touchbar-fn.service not installed"
+fi
+
+section "18. Untracked files / cleanup candidates"
+
+untracked_any=false
+while IFS= read -r -d '' path; do
+    untracked_any=true
+    base="${path##*/}"
+    case "$base" in
+        *~|*.bak|*.backup|*.orig|*.rej|*.swp|*.swo|*.tmp|*.temp|.DS_Store|Thumbs.db|*.pyc)
+            cleanup "untracked backup/editor/temp candidate: $(q "$path")"
+            ;;
+        *)
+            case "$path" in
+                state/*|runtime/*|config/micro-help/buffers/*|*/schemas/gschemas.compiled)
+                    info "ignored/generated untracked file: $(q "$path")"
+                    ;;
+                fix-keyboard-layer-v*.sh|*/fix-keyboard-layer-v*.sh|rollback-keyboard-layer-v*.sh|*/rollback-keyboard-layer-v*.sh)
+                    cleanup "untracked one-shot migration/fix script candidate: $(q "$path")"
+                    ;;
+                *)
+                    info "untracked: $(q "$path")"
+                    ;;
+            esac
+            ;;
+    esac
+done < <(git -C "$repo" ls-files --others --exclude-standard -z)
+[[ "$untracked_any" == false ]] && pass "no non-ignored untracked files"
+
+# Detect tracked files deleted locally: those need git rm / git add -u, not git add .
+while IFS= read -r line; do
+    [[ -n "$line" ]] || continue
+    xy="${line:0:2}"
+    path="${line:3}"
+    if [[ "$xy" == *D* ]]; then
+        git_remove_candidates+=("$path")
+    fi
+done <<<"$status_porcelain"
+
+section "19. Safe Git plan (NO commands executed)"
+
+if ((${#git_add_candidates[@]})); then
+    # Deduplicate while preserving user-readable order.
+    mapfile -t git_add_candidates < <(printf '%s\n' "${git_add_candidates[@]}" | awk '!seen[$0]++')
+    echo "  Files that exist locally but are missing from Git and belong to the source-of-truth:"
+    for p in "${git_add_candidates[@]}"; do printf '        %q\n' "$p"; done
+    echo
+    print_cmd_array "git -C $(q "$repo") add --" "${git_add_candidates[@]}"
+else
+    pass "no required source files are waiting to be added"
+fi
+
+if ((${#git_remove_candidates[@]})); then
+    mapfile -t git_remove_candidates < <(printf '%s\n' "${git_remove_candidates[@]}" | awk '!seen[$0]++')
+    echo
+    echo "  Paths that look like tracked junk/deletions (REVIEW before removal):"
+    for p in "${git_remove_candidates[@]}"; do printf '        %q\n' "$p"; done
+    echo
+    echo "  After manual review, remove a confirmed tracked junk file with:"
+    echo "        git -C $(q "$repo") rm -- <exact-path>"
+fi
+
+cat <<EOF2
+
+  Final review commands (safe/read-only):
+        git -C $(q "$repo") status --short
+        git -C $(q "$repo") diff --check
+        git -C $(q "$repo") diff
+        git -C $(q "$repo") diff --cached
+        git -C $(q "$repo") ls-files -s
+
+  Do NOT use 'git add .' for this cleanup. Add only reviewed source files explicitly.
+EOF2
+
+section "20. Final summary"
+
+printf '  PASS:    %d\n' "$pass_n"
+printf '  WARN:    %d\n' "$warn_n"
+printf '  FAIL:    %d\n' "$fail_n"
+printf '  INFO:    %d\n' "$info_n"
+printf '  CLEANUP: %d candidate(s)\n' "$cleanup_n"
+
+echo
+if ((${#cleanup_items[@]})); then
+    echo "Cleanup candidates detected (nothing was removed):"
+    for item in "${cleanup_items[@]}"; do
+        printf '  - %s\n' "$item"
+    done
+    echo
+fi
+
+if ((fail_n > 0)); then
+    echo "RESULT: FAILED"
+    exit 1
+elif [[ "$strict" == true && $warn_n -gt 0 ]]; then
+    echo "RESULT: WARNINGS (--strict)"
+    exit 2
+elif ((warn_n > 0)); then
+    echo "RESULT: PASSED WITH WARNINGS"
+    exit 0
+else
+    echo "RESULT: PASSED"
+    exit 0
+fi

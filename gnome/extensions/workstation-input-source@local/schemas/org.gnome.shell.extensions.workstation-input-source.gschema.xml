@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema id="org.gnome.shell.extensions.workstation-input-source"
+          path="/org/gnome/shell/extensions/workstation-input-source/">
+    <key name="caps-binary-state" type="s">
+      <default>'en'</default>
+      <summary>Logical CapsLock EN/RU state</summary>
+      <description>
+        en means logical CapsLock OFF; ru means logical CapsLock ON.
+        UA is a temporary third state and does not overwrite this value.
+      </description>
+    </key>
+  </schema>
+</schemalist>

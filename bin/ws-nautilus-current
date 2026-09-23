@@ -1,0 +1,150 @@
+#!/usr/bin/env python3
+
+# Populate the focused Nautilus location entry.
+# Confirmation (Enter) is deliberately emitted by xremap through uinput,
+# because AT-SPI keyboard synthesis is unreliable on GNOME Wayland.
+
+from pathlib import Path
+import subprocess
+import sys
+import time
+
+import gi
+
+gi.require_version("Atspi", "2.0")
+from gi.repository import Atspi
+
+
+TARGETS = {"computer", "documents", "desktop"}
+
+
+def xdg_user_dir(name: str, fallback: Path) -> Path:
+    try:
+        value = subprocess.check_output(
+            ["xdg-user-dir", name],
+            text=True,
+            stderr=subprocess.DEVNULL,
+        ).strip()
+        if value:
+            return Path(value)
+    except (OSError, subprocess.CalledProcessError):
+        pass
+
+    return fallback
+
+
+def resolve_target(name: str) -> str:
+    home = Path.home()
+
+    if name == "computer":
+        return "/"
+    if name == "documents":
+        return str(xdg_user_dir("DOCUMENTS", home / "Documents"))
+    if name == "desktop":
+        return str(xdg_user_dir("DESKTOP", home / "Desktop"))
+
+    raise ValueError(f"unknown target: {name}")
+
+
+def process_comm(pid: int) -> str:
+    try:
+        return Path(f"/proc/{pid}/comm").read_text().strip().casefold()
+    except (OSError, ValueError):
+        return ""
+
+
+def nautilus_apps():
+    desktop = Atspi.get_desktop(0)
+
+    try:
+        count = desktop.get_child_count()
+    except Exception:
+        return []
+
+    result = []
+
+    for index in range(count):
+        try:
+            app = desktop.get_child_at_index(index)
+            pid = app.get_process_id()
+        except Exception:
+            continue
+
+        if "nautilus" in process_comm(pid):
+            result.append(app)
+
+    return result
+
+
+def iter_accessibles(root):
+    stack = [root]
+    visited = 0
+
+    while stack and visited < 8000:
+        obj = stack.pop()
+        visited += 1
+        yield obj
+
+        try:
+            count = obj.get_child_count()
+        except Exception:
+            continue
+
+        for index in range(count - 1, -1, -1):
+            try:
+                child = obj.get_child_at_index(index)
+            except Exception:
+                continue
+
+            if child is not None:
+                stack.append(child)
+
+
+def set_current_location_text(text: str) -> bool:
+    for app in nautilus_apps():
+        for obj in iter_accessibles(app):
+            try:
+                states = obj.get_state_set()
+
+                if not states.contains(Atspi.StateType.FOCUSED):
+                    continue
+
+                editable = obj.get_editable_text_iface()
+
+                if editable is None:
+                    continue
+
+                result = editable.set_text_contents(text)
+                return result is not False
+            except Exception:
+                continue
+
+    return False
+
+
+def main() -> int:
+    if len(sys.argv) != 2 or sys.argv[1] not in TARGETS:
+        print(
+            "usage: ws-nautilus-current {computer|documents|desktop}",
+            file=sys.stderr,
+        )
+        return 2
+
+    target = resolve_target(sys.argv[1])
+
+    Atspi.init()
+
+    # Ctrl+L is emitted by xremap just before this helper starts.
+    deadline = time.monotonic() + 0.8
+
+    while time.monotonic() < deadline:
+        if set_current_location_text(target):
+            return 0
+
+        time.sleep(0.01)
+
+    return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

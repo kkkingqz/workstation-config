@@ -1,14 +1,16 @@
 title: ws-keyboard
 section: 1
-date: 2026-09-21
+date: 2026-09-23
 source: Workstation
 volume: User Commands
 
-# KEYBOARD — macOS-STYLE SHORTCUTS ON GNOME
+# KEYBOARD — FINAL macOS-STYLE PROFILE ON GNOME
 
-## Цель
+## Назначение
 
-Единая семантика для встроенной Apple keyboard и обычной PC/Windows keyboard:
+Текущий профиль воспроизводит привычную macOS-семантику на встроенной
+Apple/T2 keyboard и на обычной PC/Windows keyboard, не меняя физический смысл
+модификаторов глобально:
 
 ```text
 Apple Command   = PC Win   = Linux Super
@@ -16,416 +18,325 @@ Apple Option    = PC Alt   = Linux Alt
 Apple Control   = PC Ctrl  = Linux Ctrl
 ```
 
-Физические modifier keys глобально не меняются местами. Ctrl остаётся Ctrl,
-чтобы не ломать terminal/TUI semantics.
+`Ctrl` остаётся настоящим `Ctrl`, поэтому terminal/TUI shortcuts не ломаются.
+
+Текущие параметры профиля:
 
 ```text
 PROFILE=macos
 PC_MODIFIER_LAYOUT=semantic
+XREMAP_DESKTOP=gnome
+XREMAP_WATCH=config,device
 ```
 
-# ARCHITECTURE
+## Архитектура
 
 ```text
 physical keyboard
       │
-      ├── GNOME / Mutter   system shortcuts
-      ├── xremap           macOS application shortcuts
-      └── Ghostty          terminal-safe Super shortcuts
+      ├── GNOME / Mutter
+      │     system shortcuts, workspaces, lock, screenshots
+      │
+      ├── xremap
+      │     application shortcuts, Apple Fn mode,
+      │     Nautilus/Finder layer, tiling normalization,
+      │     layout helper launches
+      │
+      ├── workstation-input-source@local
+      │     deterministic EN/RU/UA selection,
+      │     logical Caps state, lock-screen EN
+      │
+      ├── workstation-smart-popup@local
+      │     Smart Tiling Popup
+      │
+      ├── Window Control
+      │     application/window actions
+      │
+      ├── Tiling Assistant
+      │     tiling backend and private accelerators
+      │
+      └── Ghostty
+            terminal-safe native Super bindings
 ```
 
-Все поддерживаемые вручную файлы находятся в
-`~/.local/share/workstation-config/`. Вне repository создаются только runtime
-symlink'и и system state.
-
-# APPLE И PC KEYBOARD
+xremap запускается как systemd user service и создаёт virtual input device:
 
 ```text
-Function             Apple keyboard       PC keyboard
-Copy                 Command+C            Win+C
-Paste                Command+V            Win+V
-Switch application   Command+Tab          Win+Tab
-Search / Overview    Command+Space        Win+Space
-Previous workspace   Control+Left         Ctrl+Left
-Word left            Option+Left          Alt+Left
+workstation-xremap
 ```
 
-# SYSTEM SHORTCUTS — GNOME
+`Dynamic Function Row Virtual Input Device` исключён из xremap, чтобы не
+создавать цикл между xremap и Touch Bar.
+
+## Основные системные shortcuts
 
 ```text
-Super+Tab                 next application
-Shift+Super+Tab           previous application
-Super+`                   windows of current application
-Ctrl+Down                 windows of current application
+Command/Win+Tab              next application
+Shift+Command/Win+Tab        previous application
+Command/Win+Above_Tab        windows of current application
+Control+Down                 windows of current application
 
-Super+Space               Overview / search
-Ctrl+Up                   Overview
+Command/Win+Space            Overview / search
+Control+Up                   Overview
 
-Ctrl+Left                 previous workspace
-Ctrl+Right                next workspace
+Control+Left                 previous workspace
+Control+Right                next workspace
 
-Super+M                   minimize
-Ctrl+Super+F              fullscreen
-F11                       show desktop
+Command/Win+M                minimize
+Control+Command/Win+F        fullscreen
+F11                          show desktop
 
-Ctrl+Space                previous input source
-Ctrl+Alt+Space            next input source
+Control+Command/Win+Q        lock screen
 
-Ctrl+Super+Q              lock screen
-
-Shift+Super+3             screenshot
-Shift+Super+4             screenshot UI
-Shift+Super+5             screenshot / recording UI
+Shift+Command/Win+3          screenshot
+Shift+Command/Win+4          screenshot UI
+Shift+Command/Win+5          screenshot / recording UI
 ```
 
-Workspace navigation uses private GNOME chords internally:
+Внутренне workspace navigation проходит через private chords:
 
 ```text
-Ctrl+Left   -> Ctrl+Alt+Super+Left
-Ctrl+Right  -> Ctrl+Alt+Super+Right
+Control+Left   -> Control+Alt+Super+Left
+Control+Right  -> Control+Alt+Super+Right
 ```
 
-# APPLICATION SHORTCUTS — XREMAP
-
-```text
-Super+C / V / X           copy / paste / cut
-Super+A                   select all
-Super+Z                   undo
-Shift+Super+Z             redo
-Super+S / O / P           save / open / print
-Super+F                   find
-Super+N / T               new / new tab
-Super+W                   close
-Super+Q                   quit where Ctrl+Q is supported
-Super+,                   preferences where Ctrl+, is supported
-
-Super+Left/Right          line start/end
-Super+Up/Down             document start/end
-Alt+Left/Right            previous/next word
-Shift+Alt+Left/Right      select by word
-Alt+Backspace             delete previous word
-```
-
-`exact_match: true` prevents system combinations such as Ctrl+Super+F from
-being swallowed by the generic Super+F mapping.
-
-# TERMINALS
-
-Generic GUI translation excludes terminal application classes. A small
-terminal-specific xremap block handles navigation that GNOME would otherwise
-consume before Ghostty can see it:
-
-```text
-Super+Left                 Ctrl+A / shell line start
-Super+Right                Ctrl+E / shell line end
-Super+Backspace            Ctrl+U / delete to shell line start
-Alt+Left                   Alt+B / previous word
-Alt+Right                  Alt+F / next word
-```
-
-Ghostty itself keeps native Super bindings for clipboard, tabs, windows and
-search:
-
-```text
-Super+C / V               copy / paste
-Super+A                   select all
-Super+F                   search
-Super+T                   new tab
-Super+N                   new window
-Super+W                   close surface
-Super+Q                   close all Ghostty windows
-Super+,                   open config
-Super+= / - / 0           font larger / smaller / reset
-```
-
-Therefore Ctrl+C remains terminal interrupt, while Command+C / Win+C is copy.
-
-# FILES
-
-```text
-config/keyboard/settings.conf
-config/keyboard/xremap.yml
-systemd/user/xremap.service
-bin/ws-keyboard
-bin/ws-keyboard-apply
-bin/ws-keyboard-status
-bin/ws-xremap
-config/ghostty/keybinds.ghostty
-```
-
-Runtime service path is only a symlink:
-
-```text
-~/.config/systemd/user/xremap.service
-  -> ~/.local/share/workstation-config/systemd/user/xremap.service
-```
-
-Original GSettings values are stored in:
-
-```text
-~/.local/share/workstation-config/state/keyboard/gsettings-backup.tsv
-```
-
-`state/keyboard/` is ignored by Git.
-
-# XREMAP PREREQUISITES
-
-xremap runs as the logged-in user, never through sudo. Required:
-
-1. full xremap binary in PATH;
-2. access to keyboard evdev devices;
-3. write access to `/dev/uinput`;
-4. GNOME extension `xremap@k0kubun.com` installed and enabled.
-
-The upstream extension currently declares GNOME Shell 50 support.
-
-The service wrapper refuses to start on GNOME Wayland if the extension D-Bus
-bridge is unavailable. This is deliberate: terminal exclusions are a safety
-requirement.
-
-# APPLY / STATUS
-
-First apply can be run directly from repository:
-
-```console
-~/.local/share/workstation-config/bin/ws-keyboard-apply
-```
-
-Then:
-
-```console
-ws-keyboard apply
-ws-keyboard status
-```
-
-Apply performs a full runtime preflight first. If xremap, input permissions,
-/uinput access or the GNOME bridge are missing, no GNOME shortcut is changed.
-Only repository-backed runtime symlinks may have been created.
-
-# SERVICE
-
-```console
-ws-keyboard start
-ws-keyboard stop
-ws-keyboard restart
-ws-keyboard logs
-```
-
-xremap uses `--watch=config,device`, so newly attached keyboards and config
-changes are detected automatically.
-
-# RESTORE
-
-```console
-ws-keyboard restore
-```
-
-The initial GNOME shortcut backup is never overwritten by later apply runs.
-
-# KNOWN DIFFERENCES FROM macOS
-
-- GNOME has no exact App Exposé clone; Ctrl+Down uses the current-application
-  window switcher.
-- Option+Command+Esc is intentionally not mapped to a synthetic kill command.
-- Shift+Command+4 opens GNOME screenshot UI; the exact macOS follow-up Space
-  sequence is not reproduced.
-- Super+Q maps to application Ctrl+Q; applications without Ctrl+Q cannot be
-  quit generically.
-
-# DIAGNOSTICS
-
-```console
-ws-keyboard status
-ws-keyboard devices
-ws-keyboard gnome-apps
-systemctl --user status xremap.service
-journalctl --user -u xremap.service
-```
-
----
-
-## GNOME RESERVED SUPER KEYS
-
-GNOME Shell has several global `Super+letter` shortcuts that conflict with
-macOS-style application commands. The workstation profile disables these Shell
-bindings so the event can reach xremap/Ghostty:
-
-```text
-Super+A        Show Applications    -> disabled; application gets Command+A
-Super+V        notification list    -> disabled; application gets Command+V
-Super+M        notification list    -> disabled; GNOME minimize owns Super+M
-Super+S        Quick Settings       -> disabled; application gets Command+S
-Super+N        focus notification   -> disabled; application gets Command+N
-```
-
-The original values are kept in
-`state/keyboard/gsettings-backup.tsv` and restored by `ws-keyboard restore`.
----
-
-## GNOME / UBUNTU DOCK NUMBER KEYS
-
-Ubuntu Dock and GNOME Shell reserve `Super+1..9`; Ubuntu Dock also
-uses `Shift+Super+1..9`. These conflict with macOS-style screenshots
-such as `Shift+Command+3/4/5`.
-
-The workstation profile therefore:
-
-- clears `org.gnome.shell.keybindings switch-to-application-1..9`;
-- sets `org.gnome.shell.extensions.dash-to-dock hot-keys` to `false`
-  when Ubuntu Dock is installed;
-- keeps the original values in `state/keyboard/gsettings-backup.tsv`.
-
-The dock itself and pinned applications are not removed or otherwise
-changed; only their Super-number keyboard launcher shortcuts are disabled.
-
----
-
-## MUTTER OVERLAY KEY
-
-GNOME normally treats a standalone `Super_L` press as the Activities/Overview
-trigger. That conflicts with macOS semantics, where Command by itself does
-nothing, and it can also cause accidental Overview activation after remapped
-`Command+Arrow` sequences.
-
-The workstation profile therefore sets:
+Standalone `Super` отключён как Mutter overlay key:
 
 ```text
 org.gnome.mutter overlay-key = ''
 ```
 
-`Super` remains fully usable as a modifier. Overview remains available through
-`Command/Win+Space` and `Control+Up`.
+Поэтому Command/Win без второй клавиши ничего не открывает.
 
-The original value is kept in `state/keyboard/gsettings-backup.tsv` and restored
-by `ws-keyboard restore`.
+GNOME Shell `Super+1..9` и Ubuntu Dock numeric hotkeys отключены, чтобы
+`Shift+Command/Win+3/4/5` и application `Command/Win+number` не перехватывались
+Shell/Dock.
 
----
+## EN / RU / UA
 
-## NAUTILUS / FINDER LAYER
-
-When GNOME Files (`org.gnome.Nautilus`) is active, xremap applies a Finder-like
-override before the generic GUI mappings.
+Пользовательская сессия содержит ровно три XKB source:
 
 ```text
-Command/Win+Up             parent folder
-Command/Win+Down           open selected item
-Command/Win+[              back
-Command/Win+]              forward
-
-Command/Win+I              Properties
-Command/Win+Backspace      Move to Trash
-Shift+Command/Win+N        New Folder
-
-Shift+Command/Win+G        Go to Folder / location entry
-Command/Win+K              Network / Connect to Server view
-Shift+Command/Win+.        show/hide hidden files
-
-Space                      Quick Look via GNOME Sushi
+EN = us
+RU = ru
+UA = ua
 ```
 
-Back/Forward use Nautilus supported Back/Forward input events rather than
-Alt+Left/Right.
+Переключение выполняет локальный GNOME extension
+`workstation-input-source@local`. xremap только вызывает `ws-input-source`.
 
-`Command/Win+K` opens Nautilus `x-network-view:///`, which exposes the
-dedicated network server address bar for GVfs URIs such as `smb://`,
-`sftp://`, `ssh://`, `nfs://`, and `dav://`.
-
-Deletion:
+### CapsLock
 
 ```text
-Command/Win+Backspace      macOS-style Move to Trash
-Delete                     Nautilus native Move to Trash
-Shift+Delete               Nautilus native permanent delete
-Fn+Delete on Apple         normally emits forward Delete
+CapsLock:
+EN -> RU
+RU -> EN
+UA -> EN
 ```
 
-The bare Apple key labelled `delete` normally emits Backspace. It is not
-globally changed to Delete because that would break Backspace while editing
-the Nautilus location/search fields.
+CapsLock физически не используется как letter-case modifier. Он хранит
+логическое binary state EN/RU.
 
-Empty Trash is intentionally not mapped.
+### Ukrainian override
 
----
-
-## KEYBOARD LAYOUT DEPENDENCE
-
-The workstation xremap triggers are based on evdev physical key codes, so
-trigger matching itself is independent of EN/UA/RU layout.
-
-The receiving application can still make a remap layout-dependent when the
-output is a printable shortcut such as `Ctrl+N`. For that reason:
-
-- Nautilus `Shift+Command/Win+N -> Ctrl+Shift+N` is intentionally retained and
-  is currently considered EN-layout-only.
-- No Nautilus Python extension or other plugin is installed for this shortcut.
-- Generic GUI mappings (`Command+C -> Ctrl+C`, etc.) remain native application
-  shortcuts. Their non-Latin behavior depends on the application's toolkit.
-- Ghostty does not use xremap-generated Ctrl-letter sequences. It uses physical
-  W3C key codes and explicit terminal control bytes/ESC sequences, so terminal
-  controls and macOS-style shell navigation are layout-independent.
-- Ghostty punctuation bindings use physical `Comma`, `Equal`, `Minus`, and
-  `Digit0` key codes.
-
-If a specific GUI application fails to honor its native Ctrl shortcut on a
-non-Latin layout, add an application-specific solution instead of globally
-switching keyboard layouts inside xremap.
-
----
-
-## MACOS APP WINDOW ACTIONS
-
-Application-level window operations use the third-party GNOME Shell extension
-Window Control (`window-control@carlo9890.github.io`) through its D-Bus API.
-No workstation-owned GNOME Shell extension is used.
+На встроенной Apple keyboard:
 
 ```text
-Option+Command/Win+Esc       GNOME System Monitor
-Command/Win+H                minimize all windows of current app
-Option+Command/Win+H         minimize all windows except current app
-Option+Command/Win+W         close all windows of current app
-Option+Command/Win+M         minimize all windows of current app
-
-Shift+Command/Win+Q          logout with confirmation
-Option+Shift+Command/Win+Q   logout immediately
+Fn+CapsLock        -> UA
+Option+CapsLock    -> UA
 ```
 
-`ws-window` gets the complete window list from Window Control's
-`ListDetailed` D-Bus method. It identifies the focused application using, in
-order, `sandboxed_app_id`, `gtk_application_id`, and `wm_class`.
-
-`Close All` calls Window Control's polite `Close` method for every window of
-the current application, so applications can still present save/confirm
-dialogs.
-
-`Option+Command/Win+Esc` deliberately does not force-kill anything. It opens
-GNOME System Monitor, where the process/application can be inspected and
-terminated manually.
-
-Dependency:
+На PC keyboard:
 
 ```text
-GNOME Shell extension: window-control@carlo9890.github.io
+Alt+CapsLock       -> UA
 ```
 
----
+UA является третьим override-state и не заменяет запомненное binary EN/RU
+состояние. При обычном `CapsLock` из UA выполняется переход в EN.
 
-## FINDER EXTRA SHORTCUTS
-
-Additional Finder-style mappings in GNOME Files:
+### Deterministic cycle
 
 ```text
-Command/Win+1             Grid / icon view
-Command/Win+2             List view
-Command/Win+F             Search current folder (existing generic mapping)
+Control+Space:
+EN -> RU -> UA -> EN
+
+Control+Alt+Space:
+EN <- RU <- UA <- EN
+```
+
+Порядок не зависит от MRU GNOME.
+
+### Caps LED
+
+```text
+EN       LED off
+RU       LED on
+UA       LED on
+lock     LED off
+```
+
+Внутренний helper:
+
+```text
+bin/ws-caps-led
+```
+
+вызывается GNOME extension по абсолютному repository path. Он не является
+обычной пользовательской CLI-командой и не обязан находиться в `$PATH`.
+
+## GDM login и GNOME lock screen
+
+Это два разных механизма.
+
+### GDM/login
+
+Системная keyboard configuration задаёт только US layout:
+
+```text
+XKBLAYOUT="us"
+XKBVARIANT=""
+```
+
+Group-switching `grp:*` и `grp_led:*` options для login screen не используются.
+
+Итог:
+
+```text
+GDM/login -> EN only
+```
+
+### Lock screen / unlock-dialog
+
+Lock screen относится к текущей пользовательской GNOME Shell session, поэтому
+его обслуживает `workstation-input-source@local`.
+
+Extension загружается в session modes:
+
+```text
+user
+unlock-dialog
+```
+
+При входе в `unlock-dialog` действует invariant:
+
+```text
+current input source = EN
+```
+
+GNOME Shell может reload'ить `InputSourceManager` при переходе password entry
+в password input purpose. Поэтому extension повторно принудительно ставит EN
+на каждом `current-source-changed`, пока активен `unlock-dialog`.
+
+Используется GNOME Shell 50 signal:
+
+```text
+locked-changed
+```
+
+Старый ошибочный вариант `notify::locked` не используется.
+
+Важно: lock screen **не изменяет** сохранённый `caps-binary-state`. После
+unlock обычная EN/RU/UA логика продолжает работать.
+
+Итог:
+
+```text
+GDM/login                 EN
+GNOME lock/unlock         EN
+unlocked user session     EN / RU / UA
+```
+
+## Application shortcuts — xremap
+
+Generic GUI applications:
+
+```text
+Command/Win+C / V / X        copy / paste / cut
+Command/Win+A                select all
+Command/Win+Z                undo
+Shift+Command/Win+Z          redo
+Command/Win+S / O / P        save / open / print
+Command/Win+F                find
+Command/Win+N / T            new / new tab
+Command/Win+W                close
+Command/Win+Q                Ctrl+Q where supported
+Command/Win+,                preferences where Ctrl+, is supported
+
+Command/Win+Left/Right       line start/end
+Command/Win+Up/Down          document start/end
+Option/Alt+Left/Right        previous/next word
+Shift+Option/Alt+Left/Right  select by word
+Option/Alt+Backspace         delete previous word
+```
+
+`exact_match: true` не даёт generic mappings поглощать более длинные system
+combinations.
+
+## Terminal layer
+
+Terminal classes исключены из generic GUI mapping.
+
+xremap выполняет только navigation, которую GNOME иначе перехватил бы:
+
+```text
+Command/Win+Left          Ctrl+A
+Command/Win+Right         Ctrl+E
+Command/Win+Backspace     Ctrl+U
+Option/Alt+Left           Alt+B
+Option/Alt+Right          Alt+F
+```
+
+Ghostty имеет собственные native bindings:
+
+```text
+Command/Win+C / V         copy / paste
+Command/Win+A             select all
+Command/Win+F             search
+Command/Win+T             new tab
+Command/Win+N             new window
+Command/Win+W             close surface
+Command/Win+Q             close all Ghostty windows
+Command/Win+,             open config
+Command/Win+= / - / 0     font larger / smaller / reset
+```
+
+Физический `Ctrl+C` остаётся terminal interrupt.
+
+## Nautilus / Finder layer
+
+Когда активен GNOME Files / Nautilus:
+
+```text
+Command/Win+1             grid / icon view
+Command/Win+2             list view
+
+Command/Win+Up            parent directory
+Command/Win+Down          open selected item
+Command/Win+[             back
+Command/Win+]             forward
+
+Command/Win+I             Properties
+Command/Win+Backspace     Move to Trash
+Shift+Command/Win+N       New Folder
+
+Shift+Command/Win+G       location entry / Go to Folder
+Command/Win+K             Network view
+Shift+Command/Win+.       show/hide hidden files
+Space                     Quick Look through GNOME Sushi
 
 Shift+Command/Win+H       Home
-Shift+Command/Win+C       Computer equivalent: filesystem root /
-Shift+Command/Win+O       XDG Documents
-Shift+Command/Win+D       XDG Desktop
+Shift+Command/Win+C       Computer /
+Shift+Command/Win+O       Documents
+Shift+Command/Win+D       Desktop
 ```
 
-The following Finder shortcuts are intentionally left unmapped because
-Nautilus 50 has no direct native equivalent suitable for this keyboard layer:
+`ws-nautilus-current` меняет location именно текущего Nautilus window/tab.
+
+`Shift+Command/Win+N -> Ctrl+Shift+N` остаётся EN-layout-dependent, потому что
+это printable Ctrl-letter shortcut приложения.
+
+Не реализованы Finder features без прямого Nautilus equivalent:
 
 ```text
 Command/Win+3             Column View
@@ -436,35 +347,59 @@ Command/Win+E             Eject
 Shift+Command/Win+U       Utilities
 ```
 
-Existing Nautilus/Finder mappings remain unchanged:
+## Application/window actions
+
+Используется GNOME extension:
 
 ```text
-Command/Win+Up            parent folder
-Command/Win+Down          open selection
-Command/Win+[ / ]         back / forward
-Command/Win+I             Properties
-Command/Win+Backspace     Move to Trash
-Delete                    Move to Trash
-Shift+Delete              Delete permanently
-Shift+Command/Win+N       New Folder (EN layout only)
-Shift+Command/Win+G       Go to Folder / location entry
-Command/Win+K             Network / Connect to Server
-Shift+Command/Win+.       show/hide hidden files
-Space                     Quick Look
+window-control@carlo9890.github.io
 ```
 
----
+через helper `ws-window`.
 
-## MACOS TILING
+```text
+Option+Command/Win+Esc       GNOME System Monitor
+Command/Win+H                minimize windows of current app
+Option+Command/Win+H         minimize all other applications
+Option+Command/Win+W         politely close windows of current app
+Option+Command/Win+M         minimize windows of current app
 
-Ubuntu Tiling Assistant is the tiling backend.
+Shift+Command/Win+Q          logout with confirmation
+Option+Shift+Command/Win+Q   logout immediately
+```
+
+Force-kill по shortcut не выполняется.
+
+## Tiling Assistant
+
+Backend:
+
+```text
+Tiling Assistant
+preferred UUID: tiling-assistant@ubuntu.com
+fallback UUID:  tiling-assistant@leleat-on-github
+```
+
+Private accelerators:
+
+```text
+Shift+Ctrl+Alt+Super+Left    tile left
+Shift+Ctrl+Alt+Super+Right   tile right
+Shift+Ctrl+Alt+Super+Up      tile top
+Shift+Ctrl+Alt+Super+Down    tile bottom
+Shift+Ctrl+Alt+Super+F       Fill
+Shift+Ctrl+Alt+Super+C       Center
+Shift+Ctrl+Alt+Super+R       Restore previous size
+Shift+Ctrl+Alt+Super+E       Tile Editing Mode
+Shift+Ctrl+Alt+Super+T       Always on Top
+Shift+Ctrl+Alt+Super+Space   Smart Popup
+```
+
+Пользователь напрямую private chords не нажимает.
 
 ### Apple keyboard
 
-The internal Apple/T2 keyboard exposes `KEY_FN`. xremap keeps that event and
-uses Fn press/release only to enable an internal `apple_fn` mode.
-
-The Apple HID layer converts Fn+arrows before xremap sees the arrow key:
+Apple HID превращает Fn+arrows до xremap:
 
 ```text
 Fn+Left   -> Home
@@ -473,88 +408,259 @@ Fn+Up     -> PageUp
 Fn+Down   -> PageDown
 ```
 
-Therefore the actual xremap triggers are Ctrl+Home/End/PageUp/PageDown while
-`apple_fn` mode is active.
-
-User-facing shortcuts:
+Поэтому user-facing shortcuts:
 
 ```text
-Fn+Control+Left       tile left half
-Fn+Control+Right      tile right half
-Fn+Control+Up         tile top half
-Fn+Control+Down       tile bottom half
+Fn+Control+Left/Right/Up/Down   tile half
+Fn+Control+F                    Fill
+Fn+Control+C                    Center
+Fn+Control+R                    Restore
 
-Fn+Control+F          Fill
-Fn+Control+C          Center
-Fn+Control+R          Return to Previous Size
+Fn+Option+Left/Right/Up/Down    spatial focus
+Fn+Option+E                     Tile Editing Mode
+Fn+Option+T                     Always on Top
 ```
 
-The private Tiling Assistant accelerators use ordinary keys rather than
-F13-F19:
-
-```text
-Shift+Ctrl+Alt+Super+Left/Right/Up/Down
-Shift+Ctrl+Alt+Super+F
-Shift+Ctrl+Alt+Super+C
-Shift+Ctrl+Alt+Super+R
-```
+Spatial focus кратковременно включает Tile Editing Mode, передаёт arrow и
+подтверждает выбор `Enter`.
 
 ### PC keyboard
 
 ```text
-Control+Win+Left      tile left half
-Control+Win+Right     tile right half
-Control+Win+Up        tile top half
-Control+Win+Down      tile bottom half
+Control+Win+Left/Right/Up/Down  tile half
+
+Alt+Win+Left/Right/Up/Down      spatial focus
+Alt+Win+E                       Tile Editing Mode
+Alt+Win+T                       Always on Top
 ```
 
-They normalize to the same private directional accelerators.
+## Smart Popup
 
-### Touch Bar
+Локальный GNOME extension:
 
-Touch Bar rendering and button handling are provided by `tiny-dfr`.
+```text
+workstation-smart-popup@local
+```
 
-The old `ws-touchbar-fn.service` bridge that mirrored `KEY_FN` into
-`hid_appletb_kbd` mode 1/2 has been removed.
+Trigger:
 
-xremap still keeps its Apple Fn mode for the macOS-style tiling shortcuts,
-but `KEY_FN` is passed through (`skip_key_event: false`). tiny-dfr listens
-to seat0 through libinput, so it can receive the Fn event from the
-`workstation-xremap` virtual keyboard.
+```text
+Apple: Right Option + Right Command
+PC:    Right Alt + Right Win
+```
 
-Configuration source:
+Оба порядка нажатия правых modifiers поддерживаются.
+
+Extension использует Tiling Assistant как backend:
+
+1. получает текущую tile group;
+2. вычисляет свободные rectangles на текущем monitor;
+3. при нескольких областях показывает selector и позволяет выбрать область
+   стрелками;
+4. открывает Tiling Assistant popup со списком доступных windows;
+5. выбранное окно добавляется в tile group.
+
+Если свободная область одна, промежуточный selector пропускается.
+
+## Touch Bar / Fn
+
+Текущий Touch Bar renderer:
+
+```text
+tiny-dfr
+```
+
+Source config:
 
 ```text
 config/tiny-dfr/config.toml
 ```
 
-Installed runtime copy:
+Runtime config:
 
 ```text
 /etc/tiny-dfr/config.toml
 ```
 
-Current layer behavior:
+Поведение:
 
 ```text
 normal       F1..F12
-hold Fn      media / brightness layer
+hold Fn      media / brightness
+release Fn   F1..F12
 ```
 
-The tiny-dfr package owns the system service and Touch Bar DRM/uinput setup.
+`DoublePressSwitchLayers = 0`, поэтому double-Fn не фиксирует другой layer.
 
-### Finder-style fixed locations
+Старый `ws-touchbar-fn.service` удалён.
 
-These shortcuts navigate the currently focused Nautilus window/tab; they do
-not launch a new Nautilus window:
+xremap для Apple Fn использует:
 
 ```text
-Shift+Command/Win+H    Home
-Shift+Command/Win+C    Computer (/)
-Shift+Command/Win+O    Documents
-Shift+Command/Win+D    Desktop
+skip_key_event: false
 ```
 
-`H` uses Nautilus' native `Alt+Home`. `C/O/D` use the current window's
-`Ctrl+L` location entry through `ws-nautilus-current`.
+поэтому KEY_FN остаётся видимым tiny-dfr через virtual keyboard
+`workstation-xremap`.
 
+## Source of truth
+
+Repository:
+
+```text
+config/keyboard/settings.conf
+config/keyboard/xremap.yml
+
+bin/ws-keyboard
+bin/ws-keyboard-apply
+bin/ws-keyboard-status
+bin/ws-xremap
+bin/ws-window
+bin/ws-nautilus-current
+bin/ws-input-source
+bin/ws-caps-led
+bin/ws-tiling-apply
+bin/ws-keyboard-install-extensions
+bin/ws-keyboard-system-apply
+bin/ws-workstation-verify
+
+systemd/user/xremap.service
+system/udev/99-workstation-uinput.rules
+
+config/tiny-dfr/config.toml
+
+gnome/extensions/workstation-smart-popup@local/
+  extension.js
+  metadata.json
+  schemas/org.gnome.shell.extensions.workstation-smart-popup.gschema.xml
+
+gnome/extensions/workstation-input-source@local/
+  extension.js
+  metadata.json
+  schemas/org.gnome.shell.extensions.workstation-input-source.gschema.xml
+```
+
+Generated files are not source-of-truth:
+
+```text
+gnome/extensions/*/schemas/gschemas.compiled
+state/
+runtime/
+```
+
+`state/` содержит machine-local backups и rollback data и целиком игнорируется
+Git.
+
+## Runtime installation
+
+Command helpers устанавливаются в `~/.local/bin` как symlink на repository.
+
+xremap service:
+
+```text
+~/.config/systemd/user/xremap.service
+  -> ~/.local/share/workstation-config/systemd/user/xremap.service
+```
+
+Наши GNOME extensions устанавливаются как реальные directories в:
+
+```text
+~/.local/share/gnome-shell/extensions/
+```
+
+`gschemas.compiled` генерируется в runtime copy через `glib-compile-schemas`.
+
+После изменения `extension.js` на Wayland требуется logout/login для
+гарантированной загрузки нового ES module.
+
+## Apply
+
+Основной профиль:
+
+```console
+ws-keyboard apply
+```
+
+Tiling private bindings хранятся и применяются через:
+
+```console
+ws-tiling-apply
+```
+
+Extension sources устанавливаются через:
+
+```console
+ws-keyboard-install-extensions
+```
+
+System-level baseline (udev, GDM EN, tiny-dfr runtime config) применяется
+отдельно, потому что требует `sudo`:
+
+```console
+ws-keyboard-system-apply
+```
+
+`ws-keyboard-apply` выполняет runtime preflight до изменения GNOME shortcuts.
+Если xremap, `/dev/uinput`, GNOME xremap bridge или обязательные extensions не
+готовы, GNOME bindings не должны оставаться частично применёнными.
+
+## Restore
+
+```console
+ws-keyboard restore
+```
+
+восстанавливает исходный snapshot GNOME shortcuts и останавливает xremap.
+
+Он не удаляет Tiling Assistant, Window Control, tiny-dfr или локальные GNOME
+extensions. Их lifecycle управляется отдельно.
+
+## Проверка
+
+Полная read-only проверка:
+
+```console
+ws-workstation-verify --strict
+```
+
+Основные ручные diagnostics:
+
+```console
+ws-keyboard status
+ws-keyboard devices
+ws-keyboard gnome-apps
+ws-input-source status
+
+systemctl --user status xremap.service
+journalctl --user -u xremap.service
+
+gnome-extensions info xremap@k0kubun.com
+gnome-extensions info window-control@carlo9890.github.io
+gnome-extensions info workstation-smart-popup@local
+gnome-extensions info workstation-input-source@local
+
+systemctl status tiny-dfr.service
+```
+
+## Подтверждённый baseline
+
+На текущем `MacBookPro16,1`, GNOME 50.1 / Wayland подтверждены:
+
+```text
+Apple + PC semantic modifiers        OK
+GNOME system shortcuts               OK
+GUI application mappings             OK
+Ghostty terminal-safe layer           OK
+Nautilus / Finder layer               OK
+Window Control actions                OK
+Tiling Assistant mappings             OK
+Tile Editing Mode / spatial focus     OK
+Always on Top                         OK
+Smart Popup                           OK
+EN / RU / UA                          OK
+CapsLock logic + LED                  OK
+GDM/login EN                          OK
+GNOME unlock-dialog EN                OK
+tiny-dfr F1/Fn media                  OK
+xremap service / uinput               OK
+```

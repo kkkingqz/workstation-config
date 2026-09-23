@@ -1,0 +1,109 @@
+#!/usr/bin/env python3
+import glob
+import os
+import struct
+import sys
+
+EV_SYN = 0x00
+EV_LED = 0x11
+SYN_REPORT = 0
+LED_CAPSL = 0x01
+
+EXCLUDE_NAMES = (
+    "workstation-xremap",
+    "dynamic function row virtual input device",
+)
+
+def usage():
+    print("usage: ws-caps-led on|off|status", file=sys.stderr)
+    raise SystemExit(2)
+
+def led_capable_events():
+    for cap_path in sorted(glob.glob("/sys/class/input/event*/device/capabilities/led")):
+        event = cap_path.split("/")[-4]
+        name_path = f"/sys/class/input/{event}/device/name"
+
+        try:
+            name = open(name_path, "r", encoding="utf-8").read().strip()
+            raw = open(cap_path, "r", encoding="ascii").read().strip()
+        except OSError:
+            continue
+
+        lname = name.lower()
+        if any(x in lname for x in EXCLUDE_NAMES):
+            continue
+
+        words = raw.split()
+        if not words:
+            continue
+
+        try:
+            low_word = int(words[-1], 16)
+        except ValueError:
+            continue
+
+        if not (low_word & (1 << LED_CAPSL)):
+            continue
+
+        yield event, name
+
+def write_led(dev_path, value):
+    # Linux x86_64 struct input_event:
+    # struct timeval { long tv_sec; long tv_usec; };
+    # unsigned short type, code; signed int value.
+    event = struct.pack("llHHi", 0, 0, EV_LED, LED_CAPSL, int(value))
+    sync = struct.pack("llHHi", 0, 0, EV_SYN, SYN_REPORT, 0)
+
+    fd = os.open(dev_path, os.O_WRONLY | os.O_NONBLOCK)
+    try:
+        os.write(fd, event)
+        os.write(fd, sync)
+    finally:
+        os.close(fd)
+
+def main():
+    if len(sys.argv) != 2:
+        usage()
+
+    action = sys.argv[1].lower()
+
+    if action == "status":
+        found = list(led_capable_events())
+        if not found:
+            print("no physical CapsLock LED-capable input devices found")
+            return 1
+
+        for event, name in found:
+            print(f"/dev/input/{event}: {name}")
+        return 0
+
+    if action not in ("on", "off"):
+        usage()
+
+    value = action == "on"
+    success = 0
+    errors = []
+
+    for event, name in led_capable_events():
+        dev = f"/dev/input/{event}"
+        try:
+            write_led(dev, value)
+            success += 1
+        except OSError as exc:
+            errors.append(f"{dev} ({name}): {exc}")
+
+    if success == 0:
+        # LED failure must not break input-source switching.
+        if errors:
+            print("ws-caps-led: unable to write CapsLock LED:", file=sys.stderr)
+            for error in errors:
+                print(f"  {error}", file=sys.stderr)
+        else:
+            print("ws-caps-led: no CapsLock LED-capable physical keyboard found",
+                  file=sys.stderr)
+        return 1
+
+    return 0
+
+if __name__ == "__main__":
+    raise SystemExit(main())

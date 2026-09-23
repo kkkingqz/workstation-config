@@ -1,0 +1,96 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo="${WORKSTATION_CONFIG:-$HOME/.local/share/workstation-config}"
+
+die() {
+    echo "ws-keyboard-install-extensions: $*" >&2
+    exit 1
+}
+
+for cmd in python3 gsettings glib-compile-schemas; do
+    command -v "$cmd" >/dev/null 2>&1 || die "$cmd not found"
+done
+
+ensure_enabled() {
+    local uuid="$1"
+
+    python3 - "$uuid" <<'PY'
+import ast
+import subprocess
+import sys
+
+uuid = sys.argv[1]
+raw = subprocess.check_output(
+    ["gsettings", "get", "org.gnome.shell", "enabled-extensions"],
+    text=True,
+).strip()
+
+items = ast.literal_eval(raw)
+if uuid not in items:
+    items.append(uuid)
+
+value = "[" + ", ".join(repr(x) for x in items) + "]"
+subprocess.check_call([
+    "gsettings", "set",
+    "org.gnome.shell", "enabled-extensions",
+    value,
+])
+PY
+}
+
+install_extension() {
+    local uuid="$1"
+    local src="$repo/gnome/extensions/$uuid"
+    local dst="$HOME/.local/share/gnome-shell/extensions/$uuid"
+    local schema_dir="$src/schemas"
+
+    [[ -f "$src/metadata.json" ]] || die "missing $src/metadata.json"
+    [[ -f "$src/extension.js" ]] || die "missing $src/extension.js"
+    compgen -G "$schema_dir/*.gschema.xml" >/dev/null \
+        || die "missing schema source in $schema_dir"
+
+    python3 - "$src/metadata.json" "$uuid" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+data = json.loads(Path(sys.argv[1]).read_text())
+assert data.get("uuid") == sys.argv[2], (data.get("uuid"), sys.argv[2])
+assert "50" in data.get("shell-version", []), data.get("shell-version")
+PY
+
+    mkdir -p "$dst/schemas"
+
+    install -m0644 "$src/metadata.json" "$dst/metadata.json"
+    install -m0644 "$src/extension.js" "$dst/extension.js"
+
+    find "$dst/schemas" -maxdepth 1 -type f \
+        \( -name '*.gschema.xml' -o -name 'gschemas.compiled' \) \
+        -delete
+
+    local schema
+    for schema in "$schema_dir"/*.gschema.xml; do
+        install -m0644 "$schema" "$dst/schemas/${schema##*/}"
+    done
+
+    glib-compile-schemas "$dst/schemas"
+    [[ -f "$dst/schemas/gschemas.compiled" ]] \
+        || die "schema compilation did not create $dst/schemas/gschemas.compiled"
+
+    ensure_enabled "$uuid"
+
+    cmp -s "$src/metadata.json" "$dst/metadata.json" \
+        || die "$uuid metadata runtime mismatch"
+    cmp -s "$src/extension.js" "$dst/extension.js" \
+        || die "$uuid extension runtime mismatch"
+
+    echo "installed: $uuid"
+}
+
+install_extension workstation-smart-popup@local
+install_extension workstation-input-source@local
+
+echo
+echo "GNOME extension sources installed and enabled for the next/current shell session."
+echo "If extension.js changed, log out and log back in on Wayland before relying on it."
