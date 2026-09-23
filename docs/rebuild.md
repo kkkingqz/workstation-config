@@ -408,6 +408,7 @@ xremap@k0kubun.com
 window-control@carlo9890.github.io
 Tiling Assistant (Ubuntu UUID либо upstream fallback)
 workstation-smart-popup@local
+workstation-dock-spring@local
 workstation-input-source@local
 ```
 
@@ -421,6 +422,47 @@ ws-keyboard-install-extensions
 После изменения `extension.js` на Wayland выполнить logout/login.
 
 `Window Monitor Pro` не является зависимостью текущего keyboard baseline.
+
+`workstation-dock-spring@local` schema не использует. Общий installer должен
+установить его runtime copy так же, как остальные local extensions.
+
+После logout/login проверить:
+
+```text
+running Dock app + external file drag + 1.3 s hover
+    -> existing window comes forward
+
+closed Dock app + external file drag + long hover
+    -> nothing happens
+```
+
+
+---
+
+# 10.1. GNOME final verification
+
+After restoring the GNOME host layer:
+
+```console
+ws-gnome test
+```
+
+Expected automatic result:
+
+```text
+RESULT: AUTOMATED CHECKS PASSED
+```
+
+Then manually verify Dock Spring:
+
+```text
+running/minimized app + file hover ~1.3 s -> existing window appears
+closed pinned app + long file hover       -> application stays closed
+Nautilus -> application window drop       -> works
+```
+
+`tiny-dfr` is validated separately in the Touch Bar/T2 layer and does not block
+the GNOME plan.
 
 ---
 
@@ -446,5 +488,7 @@ ws-workstation-verify --strict
 - GNOME Overview / Dock / Quick Settings / Nautilus;
 - keyboard profile: Caps/UA/GDM/lock behavior;
 - Smart Popup / tiling / Window Control.
+- Dock Spring: running app activates after ~1.3 s hover;
+- Dock Spring: closed app remains closed on hover.
 
 После этого установка считается восстановленной до текущего baseline.

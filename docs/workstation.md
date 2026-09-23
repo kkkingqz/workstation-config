@@ -85,6 +85,7 @@ xremap@k0kubun.com
 window-control@carlo9890.github.io
 Tiling Assistant
 workstation-smart-popup@local
+workstation-dock-spring@local
 workstation-input-source@local
 ```
 
@@ -165,6 +166,44 @@ Qt5 и Qt6 автоматически используют native Wayland и GNO
 
 ---
 
+## Dock spring loading
+
+При внешнем file drag (например, из Nautilus) используется локальный extension:
+
+```text
+workstation-dock-spring@local
+```
+
+Поведение:
+
+```text
+hover running Dock app  1300 ms -> existing window comes forward
+minimized app            existing window restores/focuses
+other workspace          existing window/workspace activates
+closed app               nothing happens; application is not launched
+```
+
+Extension не перехватывает сам drop и не патчит Ubuntu Dock или Desktop Icons
+NG.
+
+GNOME host layer was finalized and fully smoke-tested on 2026-09-23.
+
+Final GNOME-specific additions include:
+
+```text
+managed Yaru / Ubuntu Dock profile
+host Qt5/Qt6 native Wayland integration
+explicit required-extension policy
+workstation-dock-spring@local
+```
+
+Dock Spring behavior:
+
+```text
+running/minimized app + external file hover ~1.3 s -> existing window focuses
+closed app + hover                              -> no action
+```
+
 # KEYBOARD / SHORTCUTS
 
 Используется финальный macOS-style semantic profile для Apple и PC keyboards:
@@ -216,6 +255,7 @@ bin/ws-workstation-verify
 
 gnome/extensions/workstation-input-source@local/
 gnome/extensions/workstation-smart-popup@local/
+gnome/extensions/workstation-dock-spring@local/
 
 systemd/user/xremap.service
 system/udev/99-workstation-uinput.rules

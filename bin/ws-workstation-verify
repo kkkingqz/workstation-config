@@ -540,12 +540,16 @@ for path in \
     bin/ws-gnome \
     bin/ws-gnome-apply \
     bin/ws-gnome-status \
+    bin/ws-gnome-test \
+    config/fish/completions/ws-gnome-test.fish \
     config/gnome/settings.conf \
     config/fish/completions/ws-gnome.fish \
     docs/gnome.md \
     config/tiny-dfr/config.toml \
     gnome/extensions/workstation-smart-popup@local/metadata.json \
     gnome/extensions/workstation-smart-popup@local/extension.js \
+    gnome/extensions/workstation-dock-spring@local/metadata.json \
+    gnome/extensions/workstation-dock-spring@local/extension.js \
     gnome/extensions/workstation-smart-popup@local/schemas/org.gnome.shell.extensions.workstation-smart-popup.gschema.xml \
     gnome/extensions/workstation-input-source@local/metadata.json \
     gnome/extensions/workstation-input-source@local/extension.js \
@@ -556,7 +560,7 @@ done
 
 
 # GNOME desktop helpers are part of the reproducible user runtime layer.
-for name in ws-gnome ws-gnome-apply ws-gnome-status; do
+for name in ws-gnome ws-gnome-apply ws-gnome-status ws-gnome-test; do
     check_runtime_helper "$name"
 done
 
@@ -891,6 +895,7 @@ section "10. GNOME extensions / D-Bus"
 extension_active xremap@k0kubun.com "xremap GNOME extension"
 extension_active window-control@carlo9890.github.io "Window Control"
 extension_active workstation-smart-popup@local "Smart Popup"
+extension_active workstation-dock-spring@local "Dock Spring"
 extension_active workstation-input-source@local "Input Source helper"
 
 if have gnome-extensions && gnome-extensions info tiling-assistant@ubuntu.com 2>/dev/null | grep -Eq 'State:[[:space:]]+ACTIVE|Enabled:[[:space:]]+Yes'; then
@@ -911,7 +916,7 @@ else
     fail "Input Source D-Bus API unavailable"
 fi
 
-for uuid in workstation-smart-popup@local workstation-input-source@local; do
+for uuid in workstation-smart-popup@local workstation-input-source@local workstation-dock-spring@local; do
     for file in metadata.json extension.js; do
         src="$repo/gnome/extensions/$uuid/$file"
         dst="$HOME/.local/share/gnome-shell/extensions/$uuid/$file"
@@ -955,6 +960,81 @@ PY
         fail "lock-screen hook still modifies caps-binary-state"
     fi
 }
+
+
+section "10.1 GNOME extension policy"
+
+required_gnome_extensions=(
+    ding@rastersoft.com
+    snapd-prompting@canonical.com
+    snapd-search-provider@canonical.com
+    tiling-assistant@ubuntu.com
+    ubuntu-appindicators@ubuntu.com
+    ubuntu-dock@ubuntu.com
+    web-search-provider@ubuntu.com
+    window-control@carlo9890.github.io
+    workstation-input-source@local
+    workstation-smart-popup@local
+    workstation-dock-spring@local
+    xremap@k0kubun.com
+)
+
+if have gnome-extensions; then
+    enabled_gnome_extensions="$(gnome-extensions list --enabled 2>/dev/null || true)"
+    installed_gnome_extensions="$(gnome-extensions list 2>/dev/null || true)"
+
+    for uuid in "${required_gnome_extensions[@]}"; do
+        if grep -Fxq "$uuid" <<<"$enabled_gnome_extensions"; then
+            pass "required GNOME extension enabled: $uuid"
+        else
+            fail "required GNOME extension missing/disabled: $uuid"
+        fi
+    done
+
+    legacy_uuid="window-monitor-pro@muhammed.hussien2030.gmail.com"
+    if grep -Fxq "$legacy_uuid" <<<"$installed_gnome_extensions"; then
+        fail "legacy Window Monitor Pro should be absent"
+    else
+        pass "legacy Window Monitor Pro absent"
+    fi
+
+    extra_extensions=()
+    while IFS= read -r uuid; do
+        [[ -n "$uuid" ]] || continue
+        known=false
+        for required_uuid in "${required_gnome_extensions[@]}"; do
+            if [[ "$uuid" == "$required_uuid" ]]; then
+                known=true
+                break
+            fi
+        done
+        [[ "$known" == true ]] || extra_extensions+=("$uuid")
+    done <<<"$enabled_gnome_extensions"
+
+    if ((${#extra_extensions[@]})); then
+        warn "additional enabled GNOME extension(s): ${extra_extensions[*]}"
+    else
+        pass "enabled GNOME extension set matches policy"
+    fi
+else
+    fail "gnome-extensions binary missing; extension policy cannot be checked"
+fi
+
+
+dock_spring="$repo/gnome/extensions/workstation-dock-spring@local/extension.js"
+if [[ -r "$dock_spring" ]]; then
+    contains_literal "$dock_spring" 'const HOVER_DELAY_MS = 1300;' \
+        "Dock Spring delay frozen at 1300 ms"
+    contains_literal "$dock_spring" 'running-app-only' \
+        "Dock Spring running-app-only policy present"
+
+    if grep -Eq '(^|[^A-Za-z0-9_])app\.activate\(' "$dock_spring" \
+       || grep -Fq '_watchLaunchedApp' "$dock_spring"; then
+        fail "Dock Spring still contains launch-on-hover logic"
+    else
+        pass "Dock Spring never launches a closed application on hover"
+    fi
+fi
 
 section "11. Tiling Assistant private bindings"
 
@@ -1168,6 +1248,11 @@ grep -Fqi 'workstation-input-source@local' "$repo/docs/workstation.md" \
 grep -Fqi 'workstation-smart-popup@local' "$repo/docs/workstation.md" \
     && pass "docs/workstation.md includes Smart Popup extension" \
     || fail "docs/workstation.md misses Smart Popup extension"
+
+
+grep -Fqi 'workstation-dock-spring@local' "$repo/docs/workstation.md" \
+    && pass "docs/workstation.md includes Dock Spring extension" \
+    || fail "docs/workstation.md misses Dock Spring extension"
 
 if [[ -r "$repo/docs/plans/gnome.md" ]]; then
     grep -Fqi 'Keyboard layer **завершён и является частью baseline**' "$repo/docs/plans/gnome.md" \

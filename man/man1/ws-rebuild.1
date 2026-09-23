@@ -461,6 +461,7 @@ xremap@k0kubun.com
 window-control@carlo9890.github.io
 Tiling Assistant (Ubuntu UUID либо upstream fallback)
 workstation-smart-popup@local
+workstation-dock-spring@local
 workstation-input-source@local
 .EE
 .PP
@@ -474,6 +475,45 @@ ws-keyboard-install-extensions
 После изменения \f(CRextension.js\fR на Wayland выполнить logout/login.
 .PP
 \f(CRWindow Monitor Pro\fR не является зависимостью текущего keyboard baseline.
+.PP
+\f(CRworkstation-dock-spring@local\fR schema не использует. Общий installer должен
+установить его runtime copy так же, как остальные local extensions.
+.PP
+После logout/login проверить:
+.LP
+.EX
+running Dock app + external file drag + 1.3 s hover
+    -> existing window comes forward
+
+closed Dock app + external file drag + long hover
+    -> nothing happens
+.EE
+.LP
+\l'2i'
+.SH 10.1. GNOME final verification
+.LP
+After restoring the GNOME host layer:
+.LP
+.EX
+ws-gnome test
+.EE
+.PP
+Expected automatic result:
+.LP
+.EX
+RESULT: AUTOMATED CHECKS PASSED
+.EE
+.PP
+Then manually verify Dock Spring:
+.LP
+.EX
+running/minimized app + file hover \(ti1.3 s -> existing window appears
+closed pinned app + long file hover       -> application stays closed
+Nautilus -> application window drop       -> works
+.EE
+.PP
+\f(CRtiny-dfr\fR is validated separately in the Touch Bar/T2 layer and does not block
+the GNOME plan.
 .LP
 \l'2i'
 .SH 11. Финальная проверка
@@ -553,5 +593,17 @@ keyboard profile: Caps/UA/GDM/lock behavior;
 .sp -0.25v
 .IP "\(bu" 3
 Smart Popup / tiling / Window Control.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Dock Spring: running app activates after \(ti1.3 s hover;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Dock Spring: closed app remains closed on hover.
 .LP
 После этого установка считается восстановленной до текущего baseline.

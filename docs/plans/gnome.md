@@ -1,4 +1,6 @@
 title: ws-plan-gnome
+
+**Status:** DONE — GNOME host layer finalized and verified 2026-09-23.
 section: 1
 date: 2026-09-23
 source: Workstation
@@ -187,23 +189,41 @@ Settings и её разумно хранить как обычный GSettings s
 
 ---
 
-# 8. Extensions policy
+# 8. Extensions policy — DONE
 
-Workstation baseline включает:
+Текущий осознанный enabled set:
+
+Project/workstation:
 
 ```text
 xremap@k0kubun.com
 window-control@carlo9890.github.io
-Tiling Assistant
+tiling-assistant@ubuntu.com
 workstation-smart-popup@local
+workstation-dock-spring@local
 workstation-input-source@local
 ```
 
-`Window Monitor Pro` сейчас установлен и enabled, но не является зависимостью
-текущего keyboard/Touch Bar baseline. Его удаление/отключение рассматриваем как
-отдельный cleanup после проверки отсутствия пользовательской зависимости.
+Ubuntu/GNOME:
 
-Системные Ubuntu extensions не отключаем автоматически.
+```text
+ding@rastersoft.com
+snapd-prompting@canonical.com
+snapd-search-provider@canonical.com
+ubuntu-appindicators@ubuntu.com
+ubuntu-dock@ubuntu.com
+web-search-provider@ubuntu.com
+```
+
+Legacy `window-monitor-pro@muhammed.hussien2030.gmail.com` удалён и не входит в
+baseline.
+
+Policy:
+
+- отсутствие любого перечисленного baseline extension -> FAIL;
+- повторное появление Window Monitor Pro -> FAIL;
+- другой неизвестный enabled extension -> WARN;
+- автоматически ничего не отключаем.
 
 ---
 
@@ -259,6 +279,107 @@ plan-windows
 ```
 
 Wine на host не устанавливается.
+
+---
+
+# 12. Dock spring-loaded drag-and-drop — VERIFIED
+
+Для внешнего file drag добавлен локальный extension:
+
+```text
+workstation-dock-spring@local
+```
+
+Финально проверенная policy:
+
+```text
+hover delay             1300 ms
+target                  Ubuntu Dock app icon
+running/minimized app   activate existing Meta.Window
+app on other workspace  switch/focus existing window
+closed application      NO ACTION
+application launch      forbidden on hover
+drop                    не перехватывается
+```
+
+Практический workflow:
+
+```text
+Nautilus file drag
+    -> hover running app icon ~1.3 s
+    -> existing app window comes forward
+    -> continue the same drag into the window
+    -> drop
+```
+
+Desktop Icons NG остаётся установленным и самостоятельным; Ubuntu Dock не
+патчится.
+
+Task функционально проверен и включён в GNOME source-of-truth.
+
+---
+
+# 13. Final host smoke-test — DONE
+
+Реализован read-only helper:
+
+```console
+ws-gnome test
+```
+
+Он автоматически проверяет:
+
+```text
+GNOME / Wayland / scale 1.5
+Yaru-dark / orange / managed profile
+Ubuntu Dock
+extension policy
+host Qt5/Qt6 integration
+portals
+PipeWire / WirePlumber
+XWayland availability
+GNOME Shell/Mutter crash-level journal
+```
+
+Из теста сознательно исключены:
+
+```text
+tiny-dfr / Touch Bar
+Flatpak
+Distrobox
+Wine
+```
+
+После автоматической части остаётся короткий ручной checklist: Overview/Dock/
+Quick Settings, Nautilus/Settings, window controls, clipboard, drag-and-drop,
+host file chooser и browser ScreenCast chooser.
+
+После успешного выполнения автоматического и ручного smoke-test этот план можно
+пометить DONE.
+
+---
+
+Финальная проверка выполнена 2026-09-23.
+
+Подтверждено:
+
+```text
+GNOME / Wayland / scale 1.5                  PASS
+Yaru appearance + managed Dock profile       PASS
+Qt5/Qt6 QGnomePlatform + native Wayland      PASS
+portals / PipeWire / WirePlumber             PASS
+extension policy                             PASS
+Window Monitor Pro removed                   PASS
+Dock Spring 1300 ms / running-only           PASS
+Nautilus -> application window DnD            PASS
+clipboard / file chooser / ScreenCast         PASS
+manual desktop smoke-test                     PASS
+```
+
+`tiny-dfr` не относится к `plan-gnome` и остаётся отдельным T2/Touch Bar
+вопросом.
+
+**PLAN-GNOME CLOSED.**
 
 ---
 

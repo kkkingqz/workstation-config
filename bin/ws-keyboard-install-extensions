@@ -47,8 +47,11 @@ install_extension() {
 
     [[ -f "$src/metadata.json" ]] || die "missing $src/metadata.json"
     [[ -f "$src/extension.js" ]] || die "missing $src/extension.js"
-    compgen -G "$schema_dir/*.gschema.xml" >/dev/null \
-        || die "missing schema source in $schema_dir"
+
+    local has_schema=false
+    if [[ -d "$schema_dir" ]] && compgen -G "$schema_dir/*.gschema.xml" >/dev/null; then
+        has_schema=true
+    fi
 
     python3 - "$src/metadata.json" "$uuid" <<'PY'
 import json
@@ -60,23 +63,29 @@ assert data.get("uuid") == sys.argv[2], (data.get("uuid"), sys.argv[2])
 assert "50" in data.get("shell-version", []), data.get("shell-version")
 PY
 
-    mkdir -p "$dst/schemas"
+    mkdir -p "$dst"
 
     install -m0644 "$src/metadata.json" "$dst/metadata.json"
     install -m0644 "$src/extension.js" "$dst/extension.js"
 
-    find "$dst/schemas" -maxdepth 1 -type f \
-        \( -name '*.gschema.xml' -o -name 'gschemas.compiled' \) \
-        -delete
+    if [[ "$has_schema" == true ]]; then
+        mkdir -p "$dst/schemas"
 
-    local schema
-    for schema in "$schema_dir"/*.gschema.xml; do
-        install -m0644 "$schema" "$dst/schemas/${schema##*/}"
-    done
+        find "$dst/schemas" -maxdepth 1 -type f \
+            \( -name '*.gschema.xml' -o -name 'gschemas.compiled' \) \
+            -delete
 
-    glib-compile-schemas "$dst/schemas"
-    [[ -f "$dst/schemas/gschemas.compiled" ]] \
-        || die "schema compilation did not create $dst/schemas/gschemas.compiled"
+        local schema
+        for schema in "$schema_dir"/*.gschema.xml; do
+            install -m0644 "$schema" "$dst/schemas/${schema##*/}"
+        done
+
+        glib-compile-schemas "$dst/schemas"
+        [[ -f "$dst/schemas/gschemas.compiled" ]] \
+            || die "schema compilation did not create $dst/schemas/gschemas.compiled"
+    else
+        rm -rf -- "$dst/schemas"
+    fi
 
     ensure_enabled "$uuid"
 
@@ -90,7 +99,8 @@ PY
 
 install_extension workstation-smart-popup@local
 install_extension workstation-input-source@local
+install_extension workstation-dock-spring@local
 
 echo
-echo "GNOME extension sources installed and enabled for the next/current shell session."
+echo "GNOME workstation extension sources installed and enabled for the next/current shell session."
 echo "If extension.js changed, log out and log back in on Wayland before relying on it."

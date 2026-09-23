@@ -197,6 +197,81 @@ org.gnome.shell.extensions.tiling-assistant/*
 .PP
 Таким образом GNOME appearance apply не может случайно переписать display,
 keyboard, Tiling Assistant или extension baseline.
+.SH GNOME extension policy
+.LP
+Обязательный enabled set:
+.LP
+.EX
+ding@rastersoft.com
+snapd-prompting@canonical.com
+snapd-search-provider@canonical.com
+tiling-assistant@ubuntu.com
+ubuntu-appindicators@ubuntu.com
+ubuntu-dock@ubuntu.com
+web-search-provider@ubuntu.com
+window-control@carlo9890.github.io
+workstation-input-source@local
+workstation-smart-popup@local
+xremap@k0kubun.com
+.EE
+.PP
+\f(CRwindow-monitor-pro@muhammed.hussien2030.gmail.com\fR удалён как legacy и в
+baseline не входит.
+.PP
+Неизвестные дополнительные extensions автоматически не отключаются; verifier
+только выдаёт WARN.
+.SH Dock spring-loaded drag-and-drop — VERIFIED
+.LP
+Local extension:
+.LP
+.EX
+workstation-dock-spring@local
+.EE
+.PP
+Проверенное поведение:
+.LP
+.EX
+source drag             external file drag, например Nautilus
+target                  Ubuntu Dock application icon
+hover delay             1300 ms
+already running app     focus/restore existing window
+window other workspace  switch/focus existing window
+closed app              do nothing; never launch
+drop handling           extension does not consume the drop
+.EE
+.PP
+Рабочий сценарий: начать drag файла в Nautilus, удержать его над иконкой уже
+запущенного приложения \(ti1.3 s, после появления окна продолжить тот же drag в
+окно и отпустить файл.
+.PP
+Desktop Icons NG и \f(CRubuntu-dock@ubuntu.com\fR этим extension не патчатся и не
+заменяются.
+.SH GNOME PLAN STATUS — DONE
+.LP
+GNOME host layer finalized 2026-09-23.
+.PP
+Final state includes the managed Yaru/Dock profile, Retina scale checkpoint,
+host Qt5/Qt6 integration, required extension policy, portals/PipeWire and the
+verified \f(CRworkstation-dock-spring@local\fR behavior.
+.PP
+The complete automatic and manual GNOME smoke-test passed.
+.SH Final host smoke-test — VERIFIED
+.LP
+.EX
+ws-gnome test
+.EE
+.LP
+или:
+.LP
+.EX
+ws-gnome-test
+.EE
+.PP
+Автоматическая часть read-only и не проверяет Touch Bar/tiny-dfr, Flatpak,
+Distrobox или Wine.
+.PP
+После неё helper печатает ручной checklist для тех GUI interactions, которые
+нельзя достоверно проверить без действий пользователя.
 .SH Current inventory checkpoint
 .LP
 На рабочей системе 2026-09-23 подтверждено:

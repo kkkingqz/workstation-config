@@ -39,8 +39,8 @@ volume: User Commands
 1. `helpws plan-t2`
    Touch ID, fan policy, battery audit, optional hibernate/suspend-then-hibernate.
 
-2. `helpws plan-gnome`
-   GNOME appearance/Dock source of truth создан; стандартный Yaru сохранён; host Qt5/Qt6 integration завершена через QGnomePlatform + native Wayland. Дальше: extensions cleanup/policy и host toolkit/portal smoke-test. Flatpak/Distrobox/Wine integration выполняется в соответствующих application plans.
+2. `helpws plan-gnome` — **DONE**
+   GNOME host layer завершён 2026-09-23: Retina scale, managed Yaru/Dock profile, host Qt5/Qt6 native Wayland integration, extension policy, portals/PipeWire, Dock Spring и полный smoke-test зафиксированы.
 
 3. `helpws plan-flatpak`
    Flatpak application layer, permissions, portals, lifecycle и maintenance.
@@ -60,8 +60,6 @@ volume: User Commands
 ## Рекомендуемый порядок
 
 ```text
-02 GNOME finalization
-        ↓
 03 Flatpak desktop apps
         ↓
 04 Distrobox development

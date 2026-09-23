@@ -121,8 +121,8 @@ development/toolchains не должны расползаться по host;
 \f(CRhelpws plan-t2\fR
 Touch ID, fan policy, battery audit, optional hibernate/suspend-then-hibernate.
 .IP "2." 3
-\f(CRhelpws plan-gnome\fR
-GNOME appearance/Dock source of truth создан; стандартный Yaru сохранён; host Qt5/Qt6 integration завершена через QGnomePlatform + native Wayland. Дальше: extensions cleanup/policy и host toolkit/portal smoke-test. Flatpak/Distrobox/Wine integration выполняется в соответствующих application plans.
+\f(CRhelpws plan-gnome\fR — \fBDONE\fR
+GNOME host layer завершён 2026-09-23: Retina scale, managed Yaru/Dock profile, host Qt5/Qt6 native Wayland integration, extension policy, portals/PipeWire, Dock Spring и полный smoke-test зафиксированы.
 .IP "3." 3
 \f(CRhelpws plan-flatpak\fR
 Flatpak application layer, permissions, portals, lifecycle и maintenance.
@@ -142,8 +142,6 @@ KVM/libvirt/virt-manager и user-managed Unreal Engine.
 Рекомендуемый порядок
 .LP
 .EX
-02 GNOME finalization
-        ↓
 03 Flatpak desktop apps
         ↓
 04 Distrobox development

@@ -11,15 +11,17 @@ case "$cmd" in
     apply) exec "$repo/bin/ws-gnome-apply" "$@" ;;
     dry-run) exec "$repo/bin/ws-gnome-apply" --dry-run "$@" ;;
     rollback) exec "$repo/bin/ws-gnome-apply" --rollback-last "$@" ;;
+    test) exec "$repo/bin/ws-gnome-test" "$@" ;;
     -h|--help|help)
         cat <<'USAGE'
-Usage: ws-gnome [status|check|apply|dry-run|rollback]
+Usage: ws-gnome [status|check|apply|dry-run|rollback|test]
 
   status     read-only GNOME inventory
   check      compare managed appearance/Dock state with config/gnome/settings.conf
   dry-run    show what apply would change
   apply      apply the managed appearance/Dock profile
   rollback   restore values saved before the last apply
+  test       final read-only GNOME host smoke-test
 USAGE
         ;;
     *)

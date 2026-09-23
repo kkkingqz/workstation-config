@@ -205,6 +205,87 @@ org.gnome.shell.extensions.tiling-assistant/*
 Таким образом GNOME appearance apply не может случайно переписать display,
 keyboard, Tiling Assistant или extension baseline.
 
+
+# GNOME extension policy
+
+Обязательный enabled set:
+
+```text
+ding@rastersoft.com
+snapd-prompting@canonical.com
+snapd-search-provider@canonical.com
+tiling-assistant@ubuntu.com
+ubuntu-appindicators@ubuntu.com
+ubuntu-dock@ubuntu.com
+web-search-provider@ubuntu.com
+window-control@carlo9890.github.io
+workstation-input-source@local
+workstation-smart-popup@local
+xremap@k0kubun.com
+```
+
+`window-monitor-pro@muhammed.hussien2030.gmail.com` удалён как legacy и в
+baseline не входит.
+
+Неизвестные дополнительные extensions автоматически не отключаются; verifier
+только выдаёт WARN.
+
+# Dock spring-loaded drag-and-drop — VERIFIED
+
+Local extension:
+
+```text
+workstation-dock-spring@local
+```
+
+Проверенное поведение:
+
+```text
+source drag             external file drag, например Nautilus
+target                  Ubuntu Dock application icon
+hover delay             1300 ms
+already running app     focus/restore existing window
+window other workspace  switch/focus existing window
+closed app              do nothing; never launch
+drop handling           extension does not consume the drop
+```
+
+Рабочий сценарий: начать drag файла в Nautilus, удержать его над иконкой уже
+запущенного приложения ~1.3 s, после появления окна продолжить тот же drag в
+окно и отпустить файл.
+
+Desktop Icons NG и `ubuntu-dock@ubuntu.com` этим extension не патчатся и не
+заменяются.
+
+# GNOME PLAN STATUS — DONE
+
+GNOME host layer finalized 2026-09-23.
+
+Final state includes the managed Yaru/Dock profile, Retina scale checkpoint,
+host Qt5/Qt6 integration, required extension policy, portals/PipeWire and the
+verified `workstation-dock-spring@local` behavior.
+
+The complete automatic and manual GNOME smoke-test passed.
+
+# Final host smoke-test — VERIFIED
+
+```console
+ws-gnome test
+```
+
+или:
+
+```console
+ws-gnome-test
+```
+
+Автоматическая часть read-only и не проверяет Touch Bar/tiny-dfr, Flatpak,
+Distrobox или Wine.
+
+После неё helper печатает ручной checklist для тех GUI interactions, которые
+нельзя достоверно проверить без действий пользователя.
+
+
 # Current inventory checkpoint
 
 На рабочей системе 2026-09-23 подтверждено:

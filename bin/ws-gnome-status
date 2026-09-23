@@ -229,6 +229,7 @@ section "5. GNOME extensions"
 for uuid in \
     workstation-input-source@local \
     workstation-smart-popup@local \
+    workstation-dock-spring@local \
     xremap@k0kubun.com \
     window-control@carlo9890.github.io
 do
@@ -334,6 +335,9 @@ cat <<'NOTES'
   - Host Qt5/Qt6 baseline uses QGnomePlatform + native Wayland automatically;
     no global QT_QPA_PLATFORM/QT_QPA_PLATFORMTHEME/QT_STYLE_OVERRIDE/scale override
     is part of the workstation configuration.
+  - Dock spring-loading is part of the host baseline: during an external file
+    drag, hovering a RUNNING Ubuntu Dock application for 1.3 s focuses its
+    existing window. Closed applications are never launched by hover.
   - Flatpak, Distrobox and Wine application scaling/theme policy is intentionally
     deferred until their corresponding workstation plans are implemented.
 NOTES

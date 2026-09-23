@@ -1,5 +1,11 @@
 .\" -*- mode: troff; coding: utf-8 -*-
-.TH "ws-plan-gnome" "1" "2026-09-23" "Workstation" "User Commands"
+.TH "ws-plan-gnome" "7" ""
+.PP
+\fBStatus:\fR DONE — GNOME host layer finalized and verified 2026-09-23.
+section: 1
+date: 2026-09-23
+source: Workstation
+volume: User Commands
 .SH PLAN — GNOME VISUAL / INPUT / PORTALS
 .SS
 Цель
@@ -225,23 +231,56 @@ Qt integration внутри Distrobox остаётся задачей \f(CRplan-
 Settings и её разумно хранить как обычный GSettings state.
 .LP
 \l'2i'
-.SH 8. Extensions policy
+.SH 8. Extensions policy — DONE
 .LP
-Workstation baseline включает:
+Текущий осознанный enabled set:
+.PP
+Project/workstation:
 .LP
 .EX
 xremap@k0kubun.com
 window-control@carlo9890.github.io
-Tiling Assistant
+tiling-assistant@ubuntu.com
 workstation-smart-popup@local
+workstation-dock-spring@local
 workstation-input-source@local
 .EE
 .PP
-\f(CRWindow Monitor Pro\fR сейчас установлен и enabled, но не является зависимостью
-текущего keyboard/Touch Bar baseline. Его удаление/отключение рассматриваем как
-отдельный cleanup после проверки отсутствия пользовательской зависимости.
+Ubuntu/GNOME:
+.LP
+.EX
+ding@rastersoft.com
+snapd-prompting@canonical.com
+snapd-search-provider@canonical.com
+ubuntu-appindicators@ubuntu.com
+ubuntu-dock@ubuntu.com
+web-search-provider@ubuntu.com
+.EE
 .PP
-Системные Ubuntu extensions не отключаем автоматически.
+Legacy \f(CRwindow-monitor-pro@muhammed.hussien2030.gmail.com\fR удалён и не входит в
+baseline.
+.PP
+Policy:
+.IP "\(bu" 3
+отсутствие любого перечисленного baseline extension -> FAIL;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+повторное появление Window Monitor Pro -> FAIL;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+другой неизвестный enabled extension -> WARN;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+автоматически ничего не отключаем.
 .LP
 \l'2i'
 .SH 9. Keyboard / shortcuts — FROZEN
@@ -294,6 +333,105 @@ plan-windows
 .EE
 .PP
 Wine на host не устанавливается.
+.LP
+\l'2i'
+.SH 12. Dock spring-loaded drag-and-drop — VERIFIED
+.LP
+Для внешнего file drag добавлен локальный extension:
+.LP
+.EX
+workstation-dock-spring@local
+.EE
+.PP
+Финально проверенная policy:
+.LP
+.EX
+hover delay             1300 ms
+target                  Ubuntu Dock app icon
+running/minimized app   activate existing Meta.Window
+app on other workspace  switch/focus existing window
+closed application      NO ACTION
+application launch      forbidden on hover
+drop                    не перехватывается
+.EE
+.PP
+Практический workflow:
+.LP
+.EX
+Nautilus file drag
+    -> hover running app icon \(ti1.3 s
+    -> existing app window comes forward
+    -> continue the same drag into the window
+    -> drop
+.EE
+.PP
+Desktop Icons NG остаётся установленным и самостоятельным; Ubuntu Dock не
+патчится.
+.PP
+Task функционально проверен и включён в GNOME source-of-truth.
+.LP
+\l'2i'
+.SH 13. Final host smoke-test — DONE
+.LP
+Реализован read-only helper:
+.LP
+.EX
+ws-gnome test
+.EE
+.PP
+Он автоматически проверяет:
+.LP
+.EX
+GNOME / Wayland / scale 1.5
+Yaru-dark / orange / managed profile
+Ubuntu Dock
+extension policy
+host Qt5/Qt6 integration
+portals
+PipeWire / WirePlumber
+XWayland availability
+GNOME Shell/Mutter crash-level journal
+.EE
+.PP
+Из теста сознательно исключены:
+.LP
+.EX
+tiny-dfr / Touch Bar
+Flatpak
+Distrobox
+Wine
+.EE
+.PP
+После автоматической части остаётся короткий ручной checklist: Overview/Dock/
+Quick Settings, Nautilus/Settings, window controls, clipboard, drag-and-drop,
+host file chooser и browser ScreenCast chooser.
+.PP
+После успешного выполнения автоматического и ручного smoke-test этот план можно
+пометить DONE.
+.LP
+\l'2i'
+.LP
+Финальная проверка выполнена 2026-09-23.
+.PP
+Подтверждено:
+.LP
+.EX
+GNOME / Wayland / scale 1.5                  PASS
+Yaru appearance + managed Dock profile       PASS
+Qt5/Qt6 QGnomePlatform + native Wayland      PASS
+portals / PipeWire / WirePlumber             PASS
+extension policy                             PASS
+Window Monitor Pro removed                   PASS
+Dock Spring 1300 ms / running-only           PASS
+Nautilus -> application window DnD            PASS
+clipboard / file chooser / ScreenCast         PASS
+manual desktop smoke-test                     PASS
+.EE
+.PP
+\f(CRtiny-dfr\fR не относится к \f(CRplan-gnome\fR и остаётся отдельным T2/Touch Bar
+вопросом.
+.PP
+\fBPLAN-GNOME CLOSED.\fR
 .LP
 \l'2i'
 .SH DONE WHEN
