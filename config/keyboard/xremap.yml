@@ -47,6 +47,50 @@ keymap:
       Ctrl-C: Shift-Ctrl-Alt-Super-C
       Ctrl-R: Shift-Ctrl-Alt-Super-R
 
+      # Fn+Option: spatial focus / Tile Editing Mode
+      # Fn+Left/Right/Up/Down is normalized to Home/End/PageUp/PageDown.
+      Alt-Home:
+        - Shift-Ctrl-Alt-Super-E
+        - { sleep: 120 }
+        - Left
+        - { sleep: 30 }
+        - Enter
+      Alt-End:
+        - Shift-Ctrl-Alt-Super-E
+        - { sleep: 120 }
+        - Right
+        - { sleep: 30 }
+        - Enter
+      Alt-PageUp:
+        - Shift-Ctrl-Alt-Super-E
+        - { sleep: 120 }
+        - Up
+        - { sleep: 30 }
+        - Enter
+      Alt-PageDown:
+        - Shift-Ctrl-Alt-Super-E
+        - { sleep: 120 }
+        - Down
+        - { sleep: 30 }
+        - Enter
+      Alt-E: Shift-Ctrl-Alt-Super-E
+      # Fn+Option+T: toggle Always on Top
+      Alt-T: Shift-Ctrl-Alt-Super-T
+      # Fn+CapsLock: select Ukrainian layout
+      CapsLock: { launch: ["/home/king/.local/share/workstation-config/bin/ws-input-source", "ua"] }
+      Alt-CapsLock: { launch: ["/home/king/.local/share/workstation-config/bin/ws-input-source", "ua"] }
+  - name: CapsLock input-source selector
+    exact_match: true
+    remap:
+      # Logical CapsLock: OFF=EN, ON=RU. Real CapsLock modifier is suppressed.
+      CapsLock: { launch: ["/home/king/.local/share/workstation-config/bin/ws-input-source", "caps"] }
+
+      # Ukrainian override; does not change remembered EN/RU Caps state.
+      Alt-CapsLock: { launch: ["/home/king/.local/share/workstation-config/bin/ws-input-source", "ua"] }
+
+      # Deterministic input-source cycle
+      Ctrl-Space: { launch: ["/home/king/.local/share/workstation-config/bin/ws-input-source", "next"] }
+      Ctrl-Alt-Space: { launch: ["/home/king/.local/share/workstation-config/bin/ws-input-source", "prev"] }
   - name: macOS Spaces
     exact_match: true
     remap:
@@ -77,6 +121,54 @@ keymap:
       Ctrl-Super-Right: Shift-Ctrl-Alt-Super-Right
       Ctrl-Super-Up: Shift-Ctrl-Alt-Super-Up
       Ctrl-Super-Down: Shift-Ctrl-Alt-Super-Down
+
+      # PC equivalent of Fn+Option on Apple: Alt+Win.
+      Alt-Super-Left:
+        - Shift-Ctrl-Alt-Super-E
+        - { sleep: 120 }
+        - Left
+        - { sleep: 30 }
+        - Enter
+      Alt-Super-Right:
+        - Shift-Ctrl-Alt-Super-E
+        - { sleep: 120 }
+        - Right
+        - { sleep: 30 }
+        - Enter
+      Alt-Super-Up:
+        - Shift-Ctrl-Alt-Super-E
+        - { sleep: 120 }
+        - Up
+        - { sleep: 30 }
+        - Enter
+      Alt-Super-Down:
+        - Shift-Ctrl-Alt-Super-E
+        - { sleep: 120 }
+        - Down
+        - { sleep: 30 }
+        - Enter
+      Alt-Super-E: Shift-Ctrl-Alt-Super-E
+      # Alt+Win+T: toggle Always on Top
+      Alt-Super-T: Shift-Ctrl-Alt-Super-T
+  - name: Smart Popup on Apple right modifiers
+    exact_match: true
+    device:
+      only:
+        - ids:0x05ac:0
+    remap:
+      # Right Option + Right Command, either press order.
+      ALT_R-SUPER_R: Shift-Ctrl-Alt-Super-Space
+      SUPER_R-ALT_R: Shift-Ctrl-Alt-Super-Space
+
+  - name: Smart Popup on PC right modifiers
+    exact_match: true
+    device:
+      not:
+        - ids:0x05ac:0
+    remap:
+      # Right Alt + Right Win, either press order.
+      ALT_R-SUPER_R: Shift-Ctrl-Alt-Super-Space
+      SUPER_R-ALT_R: Shift-Ctrl-Alt-Super-Space
 
   - name: macOS terminal shortcuts
     exact_match: true
