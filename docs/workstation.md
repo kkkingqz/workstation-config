@@ -92,6 +92,79 @@ workstation-input-source@local
 
 ---
 
+
+# GNOME MANAGED APPEARANCE
+
+Штатный GNOME appearance/Dock baseline теперь хранится декларативно:
+
+```text
+config/gnome/settings.conf
+```
+
+Управление:
+
+```console
+ws-gnome status
+ws-gnome check
+ws-gnome dry-run
+ws-gnome apply
+ws-gnome rollback
+```
+
+Текущий профиль фиксирует небольшой curated набор appearance и Ubuntu Dock
+settings. Он намеренно **не** управляет:
+
+```text
+display scale / monitors.xml
+Mutter experimental-features
+input sources / shortcuts
+GNOME extension enablement
+wallpaper
+Flatpak / Distrobox / Wine settings
+```
+
+Фактический scale встроенного display сейчас `1.5`; он выбран через GNOME
+Settings и остаётся inventory-only.
+
+Application-specific integration выполняется позже:
+
+```text
+Flatpak theme / scale / portals  -> plan-flatpak
+Distrobox GUI / Wayland / Qt     -> plan-dev
+Wine                             -> plan-windows, только внутри отдельного Distrobox
+```
+
+Wine на host не устанавливается.
+
+Подробности:
+
+```console
+helpws gnome
+```
+
+---
+
+
+# HOST QT INTEGRATION
+
+Host Qt applications используют штатную GNOME/Wayland integration:
+
+```text
+qgnomeplatform-qt5
+qgnomeplatform-qt6
+qtwayland5
+qt6-wayland
+```
+
+Qt5 и Qt6 автоматически используют native Wayland и GNOME dark appearance.
+Глобальные `QT_QPA_PLATFORM`, `QT_QPA_PLATFORMTHEME`, `QT_STYLE_OVERRIDE` и
+`QT_SCALE_FACTOR` не задаются.
+
+Это относится только к host applications. Qt внутри Distrobox проверяется
+отдельно в `plan-dev`.
+
+---
+
 # KEYBOARD / SHORTCUTS
 
 Используется финальный macOS-style semantic profile для Apple и PC keyboards:
@@ -542,6 +615,9 @@ workstation-config/
 │   ├── ws-keyboard-install-extensions
 │   ├── ws-keyboard-system-apply
 │   ├── ws-workstation-verify
+│   ├── ws-gnome
+│   ├── ws-gnome-apply
+│   ├── ws-gnome-status
 │   ├── ws-xremap
 │   ├── ws-window
 │   ├── ws-nautilus-current
@@ -551,6 +627,7 @@ workstation-config/
 ├── config/
 │   ├── fish/
 │   ├── ghostty/
+│   ├── gnome/
 │   ├── keyboard/
 │   ├── micro-help/
 │   └── tiny-dfr/

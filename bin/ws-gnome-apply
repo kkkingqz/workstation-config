@@ -1,0 +1,283 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo="${WORKSTATION_CONFIG:-$HOME/.local/share/workstation-config}"
+config="$repo/config/gnome/settings.conf"
+mode="apply"
+quiet=false
+
+usage() {
+    cat <<'USAGE'
+Usage:
+  ws-gnome-apply                 apply managed GNOME appearance profile
+  ws-gnome-apply --check         compare runtime state with the profile
+  ws-gnome-apply --dry-run       show changes without writing anything
+  ws-gnome-apply --rollback-last restore values saved before the last apply
+
+Options:
+  --repo PATH       use another workstation-config repository
+  --quiet           suppress per-key output (mainly for status/verify helpers)
+  -h, --help        show this help
+
+The managed profile intentionally excludes display scaling, Mutter experimental
+features, keyboard/input sources, GNOME extension enablement, wallpaper, and
+Flatpak/Distrobox/Wine application settings.
+USAGE
+}
+
+while (($#)); do
+    case "$1" in
+        --check) mode="check"; shift ;;
+        --dry-run) mode="dry-run"; shift ;;
+        --rollback-last) mode="rollback"; shift ;;
+        --repo)
+            [[ $# -ge 2 ]] || { echo "ws-gnome-apply: --repo requires PATH" >&2; exit 64; }
+            repo="${2%/}"
+            config="$repo/config/gnome/settings.conf"
+            shift 2
+            ;;
+        --quiet) quiet=true; shift ;;
+        -h|--help) usage; exit 0 ;;
+        *) echo "ws-gnome-apply: unknown argument: $1" >&2; usage >&2; exit 64 ;;
+    esac
+done
+
+command -v gsettings >/dev/null 2>&1 || {
+    echo "ws-gnome-apply: gsettings not found" >&2
+    exit 1
+}
+
+state_dir="$repo/state/gnome"
+last_before="$state_dir/last-apply.before"
+last_after="$state_dir/last-apply.after"
+
+die() {
+    echo "ws-gnome-apply: $*" >&2
+    exit 1
+}
+
+say() {
+    [[ "$quiet" == true ]] || printf '%s\n' "$*"
+}
+
+trim() {
+    local s="$1"
+    s="${s#"${s%%[![:space:]]*}"}"
+    s="${s%"${s##*[![:space:]]}"}"
+    printf '%s' "$s"
+}
+
+forbidden_setting() {
+    local schema="$1" key="$2"
+    case "$schema|$key" in
+        org.gnome.desktop.interface\|text-scaling-factor|\
+        org.gnome.mutter\|experimental-features|\
+        org.gnome.shell\|enabled-extensions|\
+        org.gnome.shell\|disabled-extensions)
+            return 0
+            ;;
+    esac
+
+    case "$schema" in
+        org.gnome.desktop.input-sources|\
+        org.gnome.desktop.wm.keybindings|\
+        org.gnome.settings-daemon.plugins.media-keys|\
+        org.gnome.shell.extensions.tiling-assistant)
+            return 0
+            ;;
+    esac
+
+    return 1
+}
+
+load_file() {
+    local file="$1"
+    [[ -r "$file" ]] || die "profile not readable: $file"
+
+    schemas=()
+    keys=()
+    values=()
+
+    local raw schema key value extra lineno=0
+    while IFS= read -r raw || [[ -n "$raw" ]]; do
+        ((lineno += 1))
+        [[ "$raw" =~ ^[[:space:]]*$ ]] && continue
+        [[ "$raw" =~ ^[[:space:]]*# ]] && continue
+
+        IFS='|' read -r schema key value extra <<<"$raw"
+        schema="$(trim "${schema:-}")"
+        key="$(trim "${key:-}")"
+        value="$(trim "${value:-}")"
+
+        [[ -z "${extra:-}" ]] || die "$file:$lineno: too many '|' fields"
+        [[ -n "$schema" && -n "$key" && -n "$value" ]] \
+            || die "$file:$lineno: expected SCHEMA|KEY|VALUE"
+
+        forbidden_setting "$schema" "$key" \
+            && die "$file:$lineno: forbidden ownership overlap: $schema $key"
+
+        local i
+        for i in "${!schemas[@]}"; do
+            if [[ "${schemas[$i]}" == "$schema" && "${keys[$i]}" == "$key" ]]; then
+                die "$file:$lineno: duplicate setting: $schema $key"
+            fi
+        done
+
+        schemas+=("$schema")
+        keys+=("$key")
+        values+=("$value")
+    done < "$file"
+
+    ((${#schemas[@]} > 0)) || die "profile contains no managed settings: $file"
+}
+
+validate_runtime_keys() {
+    local i schema key
+    for i in "${!schemas[@]}"; do
+        schema="${schemas[$i]}"
+        key="${keys[$i]}"
+        if ! gsettings get "$schema" "$key" >/dev/null 2>&1; then
+            die "schema/key unavailable on this desktop: $schema $key"
+        fi
+        if [[ "$(gsettings writable "$schema" "$key" 2>/dev/null || true)" != "true" ]]; then
+            die "setting is not writable: $schema $key"
+        fi
+    done
+}
+
+write_state_file() {
+    local file="$1" source="$2"
+    mkdir -p "$state_dir"
+    : > "$file"
+
+    local i current
+    for i in "${!schemas[@]}"; do
+        if [[ "$source" == "current" ]]; then
+            current="$(gsettings get "${schemas[$i]}" "${keys[$i]}")"
+        else
+            current="${values[$i]}"
+        fi
+        printf '%s|%s|%s\n' "${schemas[$i]}" "${keys[$i]}" "$current" >> "$file"
+    done
+}
+
+check_profile() {
+    local drift=0 i current desired
+    for i in "${!schemas[@]}"; do
+        current="$(gsettings get "${schemas[$i]}" "${keys[$i]}")"
+        desired="${values[$i]}"
+        if [[ "$current" == "$desired" ]]; then
+            [[ "$quiet" == true ]] || printf '  OK      %s %s = %s\n' "${schemas[$i]}" "${keys[$i]}" "$current"
+        else
+            ((drift += 1))
+            [[ "$quiet" == true ]] || {
+                printf '  DRIFT   %s %s\n' "${schemas[$i]}" "${keys[$i]}"
+                printf '          current: %s\n' "$current"
+                printf '          desired: %s\n' "$desired"
+            }
+        fi
+    done
+
+    if ((drift == 0)); then
+        say "GNOME managed profile: in sync (${#schemas[@]} settings)"
+        return 0
+    fi
+
+    say "GNOME managed profile: $drift setting(s) differ"
+    return 1
+}
+
+if [[ "$mode" == "rollback" ]]; then
+    [[ -r "$last_before" ]] || die "no last-apply backup found: $last_before"
+    config="$last_before"
+    load_file "$config"
+    validate_runtime_keys
+
+    say "Restoring GNOME settings saved before the last apply:"
+    for i in "${!schemas[@]}"; do
+        say "  SET     ${schemas[$i]} ${keys[$i]} = ${values[$i]}"
+        gsettings set "${schemas[$i]}" "${keys[$i]}" "${values[$i]}"
+        actual="$(gsettings get "${schemas[$i]}" "${keys[$i]}")"
+        [[ "$actual" == "${values[$i]}" ]] \
+            || die "rollback verification failed: ${schemas[$i]} ${keys[$i]}"
+    done
+    say "Rollback completed."
+    exit 0
+fi
+
+load_file "$config"
+validate_runtime_keys
+
+if [[ "$mode" == "check" ]]; then
+    check_profile
+    exit $?
+fi
+
+if [[ "$mode" == "dry-run" ]]; then
+    say "GNOME managed profile dry-run:"
+    changed=0
+    for i in "${!schemas[@]}"; do
+        current="$(gsettings get "${schemas[$i]}" "${keys[$i]}")"
+        if [[ "$current" == "${values[$i]}" ]]; then
+            say "  KEEP    ${schemas[$i]} ${keys[$i]} = $current"
+        else
+            ((changed += 1))
+            say "  WOULD   ${schemas[$i]} ${keys[$i]}: $current -> ${values[$i]}"
+        fi
+    done
+    say "Would change: $changed setting(s)"
+    exit 0
+fi
+
+# Apply mode. Save the complete managed state so rollback is deterministic.
+write_state_file "$last_before" current
+
+changed=0
+applied=0
+restore_pre_apply() {
+    echo "ws-gnome-apply: restoring pre-apply values" >&2
+    local rs rk rv rextra
+    while IFS='|' read -r rs rk rv rextra; do
+        [[ -n "$rs" ]] || continue
+        gsettings set "$rs" "$rk" "$rv" >/dev/null 2>&1 || true
+    done < "$last_before"
+}
+
+interrupted() {
+    restore_pre_apply
+    exit 130
+}
+trap interrupted INT TERM
+
+say "Applying GNOME managed appearance profile:"
+for i in "${!schemas[@]}"; do
+    current="$(gsettings get "${schemas[$i]}" "${keys[$i]}")"
+    desired="${values[$i]}"
+
+    if [[ "$current" == "$desired" ]]; then
+        say "  KEEP    ${schemas[$i]} ${keys[$i]} = $current"
+        continue
+    fi
+
+    ((changed += 1))
+    say "  SET     ${schemas[$i]} ${keys[$i]}: $current -> $desired"
+    if ! gsettings set "${schemas[$i]}" "${keys[$i]}" "$desired"; then
+        echo "ws-gnome-apply: write failed: ${schemas[$i]} ${keys[$i]}" >&2
+        restore_pre_apply
+        exit 1
+    fi
+    actual="$(gsettings get "${schemas[$i]}" "${keys[$i]}")"
+    if [[ "$actual" != "$desired" ]]; then
+        echo "ws-gnome-apply: post-write verification failed: ${schemas[$i]} ${keys[$i]} (got $actual)" >&2
+        restore_pre_apply
+        exit 1
+    fi
+    ((applied += 1))
+done
+
+trap - INT TERM
+write_state_file "$last_after" desired
+
+say "Applied: $applied setting(s); already correct: $((${#schemas[@]} - changed))."
+say "Pre-apply state: $last_before"
+say "Rollback: ws-gnome-apply --rollback-last"

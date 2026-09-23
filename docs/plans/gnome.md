@@ -8,99 +8,188 @@ volume: User Commands
 
 ## Цель
 
-Завершить desktop layer, оставаясь максимально близко к штатному Ubuntu GNOME.
+Завершить desktop layer, оставаясь максимально близко к штатному Ubuntu GNOME
+и не создавая конфликтов с будущими Flatpak/Distrobox/Wine application layers.
 
-Уже работают GNOME 50, Wayland, GDM3, Ubuntu Dock, Quick Settings, Nautilus и системные OSD. Этот план — не замена desktop environment, а финальная интеграция.
+Уже работают GNOME 50, Wayland, GDM3, Ubuntu Dock, Quick Settings, Nautilus и
+системные OSD. Keyboard layer также завершён и является отдельным baseline.
 
-# 1. Appearance baseline
+# 1. Read-only inventory — DONE
 
-Через `Settings → Appearance` зафиксировать:
+Реализован:
 
-- Dark/Light;
-- accent;
-- Dock position;
-- autohide;
-- icon size;
-- wallpaper.
+```console
+ws-gnome-status
+```
 
-Не использовать:
+Рабочая машина подтверждена:
+
+```text
+GNOME Shell        50.1
+Mutter             50.1-0ubuntu2.4
+Wayland
+3072x1920@60
+logical scale      1.5
+Yaru-dark
+accent             orange
+Ubuntu Dock        bottom
+portals/PipeWire   active
+host Wine          absent
+```
+
+Display scale остаётся inventory-only.
+
+---
+
+# 2. Appearance/Dock source of truth — DONE
+
+Создан небольшой curated profile:
+
+```text
+config/gnome/settings.conf
+```
+
+Управление:
+
+```console
+ws-gnome check
+ws-gnome dry-run
+ws-gnome apply
+ws-gnome rollback
+```
+
+Profile фиксирует текущий рабочий GNOME/GTK + Ubuntu Dock baseline и специально
+не включает display, keyboard, extensions, wallpaper или application-specific
+settings.
+
+Полный `dconf dump` не используется.
+
+---
+
+# 3. Color refinement — SKIPPED
+
+Решено сохранить штатный `Yaru-dark` со стандартными цветами Ubuntu/GNOME.
+
+Не создаём дополнительный GTK/libadwaita color override и не используем
+`adw-gtk3` как workstation baseline.
+
+Текущий visual baseline остаётся:
+
+```text
+color scheme   prefer-dark
+accent         orange
+GTK theme      Yaru-dark
+icons          Yaru-dark
+cursor         Yaru
+```
+
+Это решение приоритетно сохраняет штатную совместимость и минимизирует
+обслуживание после обновлений GNOME/GTK.
+
+Не используем как baseline:
 
 - custom GNOME Shell CSS;
-- theme forks;
-- замену Ubuntu Dock;
-- отдельные notification/OSD daemons.
-
-### Результат
-
-Один штатный visual profile, который переживает GNOME updates.
+- custom `gtk.css` для изменения системной палитры;
+- глобальный `GTK_THEME`;
+- глобальный `QT_STYLE_OVERRIDE=kvantum`;
+- Kvantum как общий desktop theme layer;
+- theme forks без доказанной необходимости.
 
 ---
 
-# 2. Retina scaling
+# 4. Display scale — FROZEN
 
-На встроенной 3072×1920 панели проверить:
+Текущий scale уже выбран через `Settings -> Displays`; проблем с отображением
+GNOME сейчас нет. Фактический scale встроенного display — `1.5`.
 
-- 200%;
-- при необходимости 175%/150%.
+На GNOME stage:
 
-Настраивать только через `Settings → Displays`.
+- scale только инвентаризируется;
+- не задаём новое значение автоматически;
+- не редактируем `monitors.xml` вручную;
+- не используем `xrandr` scale hacks;
+- не задаём глобальный `Xft.dpi`;
+- текущие Mutter experimental flags не переносим в appearance profile.
 
-Не использовать:
-
-- `xrandr` scale hacks;
-- глобальный `Xft.dpi`;
-- ручные Mutter experimental flags без необходимости.
-
-### Проверка
-
-- GNOME Shell;
-- Nautilus;
-- Firefox;
-- GTK3;
-- GTK4/libadwaita;
-- Qt;
-- XWayland application.
+Применение того же визуального масштаба к Flatpak, Distrobox и Wine apps будет
+проверяться в соответствующих application plans после их реализации.
 
 ---
 
-# 3. Qt5/Qt6 integration
+# 5. Ubuntu Dock / application menu
 
-Если Qt apps выглядят заметно чужеродно, добавить штатную GNOME integration:
+Ubuntu Dock остаётся штатным и расположен снизу.
 
-```bash
-sudo apt install \
-  qgnomeplatform-qt5 qgnomeplatform-qt6 \
-  adwaita-qt adwaita-qt6
+Текущие Dock values входят в `config/gnome/settings.conf`.
+
+Стандартную кнопку `Show Applications` и меню приложений пока не заменяем.
+Установка ArcMenu или другого menu extension отложена.
+
+---
+
+# 6. Host Qt5/Qt6 integration — DONE
+
+Для проверки временно использовались:
+
+```text
+JuffEd      Qt5
+FeatherPad  Qt6
 ```
 
-После logout/login проверить palette, fonts и file dialogs.
+До integration packages оба приложения запускались через XCB/XWayland и не
+следовали GNOME dark appearance.
 
-Не задавать глобально `QT_STYLE_OVERRIDE=kvantum`, если нет конкретной причины.
+Постоянный host baseline:
 
----
-
-# 4. GNOME Tweaks — только при необходимости
-
-Можно установить:
-
-```bash
-sudo apt install gnome-tweaks
+```text
+qgnomeplatform-qt5
+qgnomeplatform-qt6
+qtwayland5
+qt6-wayland
 ```
 
-Использовать только для:
+После установки подтверждено:
 
-- fonts;
-- window behavior;
-- startup applications;
-- обычных GSettings options.
+```text
+Qt5  -> QGnomePlatform auto + libqwayland-generic.so
+Qt6  -> QGnomePlatform auto + libqwayland.so
+```
 
-Не использовать Tweaks как повод поставить много Shell extensions.
+Обычный запуск автоматически использует native Wayland; принудительный
+`QT_QPA_PLATFORM=wayland` не требуется.
+
+Не задаём глобально:
+
+```text
+QT_QPA_PLATFORM
+QT_QPA_PLATFORMTHEME
+QT_STYLE_OVERRIDE
+QT_SCALE_FACTOR
+```
+
+Dark appearance наследуется автоматически через GNOME/QGnomePlatform.
+Fractional display scale `1.5` обслуживается compositor/Qt Wayland и не требует
+ручного Qt scale override.
+
+`JuffEd` и `FeatherPad` являются только test applications и после проверки
+удаляются. `apt autoremove` в рамках этого этапа не выполняется.
+
+Qt integration внутри Distrobox остаётся задачей `plan-dev`.
 
 ---
 
-# 5. Extensions policy
+# 7. GNOME Tweaks — только при необходимости
 
-Текущий extension set для workstation является осознанной частью baseline:
+`gnome-tweaks` сейчас не установлен и не требуется для baseline.
+
+Устанавливать только если конкретная нужная настройка отсутствует в штатных
+Settings и её разумно хранить как обычный GSettings state.
+
+---
+
+# 8. Extensions policy
+
+Workstation baseline включает:
 
 ```text
 xremap@k0kubun.com
@@ -110,28 +199,17 @@ workstation-smart-popup@local
 workstation-input-source@local
 ```
 
-Назначение:
+`Window Monitor Pro` сейчас установлен и enabled, но не является зависимостью
+текущего keyboard/Touch Bar baseline. Его удаление/отключение рассматриваем как
+отдельный cleanup после проверки отсутствия пользовательской зависимости.
 
-```text
-xremap@k0kubun.com              application awareness для xremap/Wayland
-Window Control                  application/window actions
-Tiling Assistant                tiling backend
-workstation-smart-popup@local   Smart Tiling Popup
-workstation-input-source@local  EN/RU/UA, Caps, unlock-dialog EN
-```
-
-`Window Monitor Pro`, если остаётся установленным после старых экспериментов,
-не является зависимостью текущего keyboard/Touch Bar baseline.
-
-Новые extensions по-прежнему добавлять только по одной, после snapshot и с
-проверкой GNOME session responsiveness.
+Системные Ubuntu extensions не отключаем автоматически.
 
 ---
 
-# 6. Keyboard / shortcuts
+# 9. Keyboard / shortcuts — FROZEN
 
-Keyboard layer **завершён и является частью baseline**. Не дублировать его
-через `Settings -> Keyboard -> Keyboard Shortcuts`, `xdotool` или `xbindkeys`.
+Keyboard layer **завершён и является частью baseline**; GNOME appearance plan его не перенастраивает.
 
 Source of truth:
 
@@ -143,72 +221,57 @@ gnome/extensions/workstation-input-source@local/
 gnome/extensions/workstation-smart-popup@local/
 ```
 
-Текущие правила:
-
-```text
-CapsLock             EN <-> RU; UA -> EN
-Fn+CapsLock          UA
-Control+Space        EN -> RU -> UA -> EN
-GDM/login            EN
-GNOME lock screen    EN
-```
-
-Tiling, Tile Editing Mode, Always on Top и Smart Popup также входят в
-зафиксированный keyboard baseline.
-
-Touch Bar здесь отдельно не перенастраивать: текущий renderer — `tiny-dfr`,
-обычный слой F1..F12, удержание Fn — media/brightness.
-
-Полная проверка:
-
-```console
-ws-workstation-verify --strict
-```
-
 ---
 
-# 7. Toolkit smoke-test
+# 10. Portals infrastructure
 
-Проверить матрицу:
+Подтверждено active:
 
 ```text
-GTK4/libadwaita  → Settings / Files / system apps
-GTK3             → pavucontrol или другая GTK3 utility
-Qt5/Qt6          → выбранное Qt app
-Flatpak          → после плана 03
-XWayland         → legacy test app
+xdg-desktop-portal
+xdg-desktop-portal-gnome
+PipeWire
+PipeWire Pulse
+WirePlumber
 ```
-
-Отдельно проверить:
-
-- file chooser;
-- clipboard;
-- drag-and-drop;
-- HiDPI;
-- dark preference.
-
----
-
-# 8. Portals / screen sharing
-
-После появления основных Flatpak apps проверить:
-
-- screenshot portal;
-- file chooser portal;
-- browser screen sharing;
-- PipeWire screen capture.
 
 Не создавать собственный `portals.conf`, пока нет доказанной проблемы.
+
+Полный Flatpak file chooser / screenshot / screen sharing smoke-test переносится
+в `plan-flatpak`.
+
+---
+
+# 11. Deferred application integration
+
+После завершения соответствующих планов отдельно проверить:
+
+```text
+plan-flatpak
+    Flatpak theme / scale / portals
+
+plan-dev
+    Distrobox GUI / Wayland / GTK / Qt scaling
+
+plan-windows
+    Wine внутри отдельного Distrobox
+    Wine Wayland / legacy scaling / per-prefix DPI
+```
+
+Wine на host не устанавливается.
 
 ---
 
 # DONE WHEN
 
-Этап завершён, когда:
+GNOME stage считается завершённым, когда:
 
-- GNOME выглядит цельно без Shell hacks;
-- Retina scale выбран;
-- GTK/Qt/XWayland apps имеют приемлемый DPI;
-- Overview/Dock/Quick Settings не тормозят;
-- screen sharing и portal dialogs работают;
-- список extensions короткий и осознанный.
+- current inventory сохранён и воспроизводим;
+- managed appearance/Dock profile стабилен;
+- сохранён штатный `Yaru-dark` со стандартными цветами;
+- display scale `1.5` не ухудшен и не управляется appearance layer;
+- host Qt5/Qt6 integration подтверждена на native Wayland без глобальных overrides;
+- Overview/Dock/Quick Settings остаются отзывчивыми;
+- portals/PipeWire/WirePlumber infrastructure исправна;
+- extension set короткий и осознанный;
+- application-specific integration оставлена соответствующим будущим планам.

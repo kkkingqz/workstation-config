@@ -231,7 +231,66 @@ systemctl --user is-active wireplumber
 .EE
 .PP
 Не ставить SwayNC/SwayOSD/swaylock/swayidle и не заменять штатные GNOME components.
-.SH 6.1. Keyboard / shortcuts
+.SH 6.1. Managed GNOME appearance
+.LP
+После clone repository сначала проверить текущий desktop state:
+.LP
+.EX
+ws-gnome status
+ws-gnome check
+.EE
+.PP
+Source of truth:
+.LP
+.EX
+config/gnome/settings.conf
+.EE
+.PP
+Если \f(CRws-gnome check\fR показывает drift относительно зафиксированного baseline,
+просмотреть изменения:
+.LP
+.EX
+ws-gnome dry-run
+.EE
+.PP
+и только после этого применить:
+.LP
+.EX
+ws-gnome apply
+.EE
+.PP
+\f(CRws-gnome apply\fR не управляет display scale, \f(CRmonitors.xml\fR, Mutter
+experimental flags, keyboard/input sources, extension enablement, wallpaper,
+Flatpak, Distrobox или Wine.
+.PP
+Display scale после reinstall выбирается штатно через \f(CRSettings -> Displays\fR;
+текущий рабочий checkpoint — logical scale \f(CR1.5\fR.
+.PP
+Wine не устанавливать на host. Его application layer относится к
+\f(CRplan-windows\fR и будет жить в отдельном Distrobox.
+.SH 6.2. Host Qt integration
+.LP
+Для host Qt5/Qt6 applications установить:
+.LP
+.EX
+sudo apt install --no-install-recommends \e
+    qgnomeplatform-qt5 \e
+    qgnomeplatform-qt6 \e
+    qtwayland5 \e
+    qt6-wayland
+.EE
+.PP
+Не добавлять глобальные Qt platform/theme/scale environment overrides.
+.PP
+Ожидаемый baseline:
+.LP
+.EX
+Qt5 -> native Wayland + QGnomePlatform automatically
+Qt6 -> native Wayland + QGnomePlatform automatically
+.EE
+.PP
+Qt внутри Distrobox относится к \f(CRplan-dev\fR.
+.SH 6.3. Keyboard / shortcuts
 .LP
 После clone \f(CRworkstation-config\fR восстановить system-level keyboard state:
 .LP

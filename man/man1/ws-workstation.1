@@ -161,6 +161,75 @@ workstation-input-source@local
 \f(CRWindow Monitor Pro\fR не является зависимостью текущего keyboard/Touch Bar baseline.
 .LP
 \l'2i'
+.SH GNOME MANAGED APPEARANCE
+.LP
+Штатный GNOME appearance/Dock baseline теперь хранится декларативно:
+.LP
+.EX
+config/gnome/settings.conf
+.EE
+.PP
+Управление:
+.LP
+.EX
+ws-gnome status
+ws-gnome check
+ws-gnome dry-run
+ws-gnome apply
+ws-gnome rollback
+.EE
+.PP
+Текущий профиль фиксирует небольшой curated набор appearance и Ubuntu Dock
+settings. Он намеренно \fBне\fR управляет:
+.LP
+.EX
+display scale / monitors.xml
+Mutter experimental-features
+input sources / shortcuts
+GNOME extension enablement
+wallpaper
+Flatpak / Distrobox / Wine settings
+.EE
+.PP
+Фактический scale встроенного display сейчас \f(CR1.5\fR; он выбран через GNOME
+Settings и остаётся inventory-only.
+.PP
+Application-specific integration выполняется позже:
+.LP
+.EX
+Flatpak theme / scale / portals  -> plan-flatpak
+Distrobox GUI / Wayland / Qt     -> plan-dev
+Wine                             -> plan-windows, только внутри отдельного Distrobox
+.EE
+.PP
+Wine на host не устанавливается.
+.PP
+Подробности:
+.LP
+.EX
+helpws gnome
+.EE
+.LP
+\l'2i'
+.SH HOST QT INTEGRATION
+.LP
+Host Qt applications используют штатную GNOME/Wayland integration:
+.LP
+.EX
+qgnomeplatform-qt5
+qgnomeplatform-qt6
+qtwayland5
+qt6-wayland
+.EE
+.PP
+Qt5 и Qt6 автоматически используют native Wayland и GNOME dark appearance.
+Глобальные \f(CRQT_QPA_PLATFORM\fR, \f(CRQT_QPA_PLATFORMTHEME\fR, \f(CRQT_STYLE_OVERRIDE\fR и
+\f(CRQT_SCALE_FACTOR\fR не задаются.
+.PP
+Это относится только к host applications. Qt внутри Distrobox проверяется
+отдельно в \f(CRplan-dev\fR.
+.LP
+\l'2i'
 .SH KEYBOARD / SHORTCUTS
 .LP
 Используется финальный macOS-style semantic profile для Apple и PC keyboards:
@@ -712,6 +781,9 @@ workstation-config/
 │   ├── ws-keyboard-install-extensions
 │   ├── ws-keyboard-system-apply
 │   ├── ws-workstation-verify
+│   ├── ws-gnome
+│   ├── ws-gnome-apply
+│   ├── ws-gnome-status
 │   ├── ws-xremap
 │   ├── ws-window
 │   ├── ws-nautilus-current
@@ -721,6 +793,7 @@ workstation-config/
 ├── config/
 │   ├── fish/
 │   ├── ghostty/
+│   ├── gnome/
 │   ├── keyboard/
 │   ├── micro-help/
 │   └── tiny-dfr/

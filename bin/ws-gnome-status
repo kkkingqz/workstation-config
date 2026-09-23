@@ -1,0 +1,339 @@
+#!/usr/bin/env bash
+set -u
+set -o pipefail
+
+repo="${WORKSTATION_CONFIG:-$HOME/.local/share/workstation-config}"
+
+# Read-only GNOME desktop inventory.
+#
+# This command intentionally does not call gsettings set/reset, dconf write,
+# gnome-extensions enable/disable, systemctl start/stop, apt, Flatpak,
+# Distrobox, Wine, or any other mutating command.
+
+have() {
+    command -v "$1" >/dev/null 2>&1
+}
+
+section() {
+    echo
+    echo "$1"
+    printf '%s\n' '------------------------------------------------------------------------'
+}
+
+kv() {
+    printf '  %-28s %s\n' "$1" "${2:-unknown}"
+}
+
+indent() {
+    sed 's/^/    /'
+}
+
+pkg_version() {
+    local pkg="$1"
+    if have dpkg-query; then
+        dpkg-query -W -f='${Status}\t${Version}\n' "$pkg" 2>/dev/null \
+            | awk -F '\t' '$1 == "install ok installed" { print $2; exit }'
+    fi
+}
+
+gsettings_schema_exists() {
+    local schema="$1"
+    have gsettings || return 1
+
+    # Do not depend on `gsettings list-schemas` here. On the target Ubuntu
+    # workstation it did not enumerate several normal GNOME desktop schemas
+    # even though direct reads work. list-keys is a read-only and more useful
+    # probe for the exact schema we want to inspect.
+    gsettings list-keys "$schema" >/dev/null 2>&1
+}
+
+gvalue() {
+    local schema="$1" key="$2" value
+    if ! have gsettings; then
+        printf '%s' '<gsettings unavailable>'
+        return
+    fi
+
+    # Probe the value directly. This avoids false "<not available>" results
+    # caused by pre-validating the schema/key through enumeration commands.
+    if value="$(gsettings get "$schema" "$key" 2>/dev/null)"; then
+        printf '%s' "$value"
+    else
+        printf '%s' '<not available>'
+    fi
+}
+
+show_gsetting() {
+    local label="$1" schema="$2" key="$3"
+    kv "$label" "$(gvalue "$schema" "$key")"
+}
+
+user_unit_state() {
+    local unit="$1" state
+    if ! have systemctl; then
+        printf '%s' '<systemctl unavailable>'
+        return
+    fi
+    state="$(systemctl --user is-active "$unit" 2>/dev/null || true)"
+    [[ -n "$state" ]] || state="not-found/inactive"
+    printf '%s' "$state"
+}
+
+system_unit_state() {
+    local unit="$1" state
+    if ! have systemctl; then
+        printf '%s' '<systemctl unavailable>'
+        return
+    fi
+    state="$(systemctl is-active "$unit" 2>/dev/null || true)"
+    [[ -n "$state" ]] || state="not-found/inactive"
+    printf '%s' "$state"
+}
+
+extension_state() {
+    local uuid="$1" out
+    if ! have gnome-extensions; then
+        printf '%s' '<gnome-extensions unavailable>'
+        return
+    fi
+
+    out="$(gnome-extensions info "$uuid" 2>/dev/null || true)"
+    if [[ -z "$out" ]]; then
+        printf '%s' 'not installed'
+    elif grep -Eq 'State:[[:space:]]+ACTIVE|Enabled:[[:space:]]+Yes' <<<"$out"; then
+        printf '%s' 'ACTIVE'
+    elif grep -Eq 'State:[[:space:]]+INACTIVE|Enabled:[[:space:]]+No' <<<"$out"; then
+        printf '%s' 'inactive'
+    else
+        printf '%s' 'installed / state unknown'
+    fi
+}
+
+usage() {
+    cat <<'USAGE'
+Usage: ws-gnome-status
+
+Print a read-only inventory of the current GNOME desktop configuration.
+No settings, services, packages, extensions, displays, or application
+sandboxes are modified.
+USAGE
+}
+
+case "${1:-}" in
+    -h|--help)
+        usage
+        exit 0
+        ;;
+    "") ;;
+    *)
+        echo "ws-gnome-status: unknown argument: $1" >&2
+        usage >&2
+        exit 64
+        ;;
+esac
+
+echo "GNOME workstation status"
+echo "Time: $(date --iso-8601=seconds 2>/dev/null || date)"
+echo "Mode: READ-ONLY"
+
+section "1. Session / shell"
+kv "XDG_CURRENT_DESKTOP" "${XDG_CURRENT_DESKTOP:-unset}"
+kv "XDG_SESSION_DESKTOP" "${XDG_SESSION_DESKTOP:-unset}"
+kv "XDG_SESSION_TYPE" "${XDG_SESSION_TYPE:-unset}"
+kv "XDG_SESSION_ID" "${XDG_SESSION_ID:-unset}"
+kv "WAYLAND_DISPLAY" "${WAYLAND_DISPLAY:-unset}"
+kv "DISPLAY" "${DISPLAY:-unset}"
+kv "GDM3" "$(system_unit_state gdm3.service)"
+
+if have gnome-shell; then
+    kv "GNOME Shell" "$(gnome-shell --version 2>/dev/null || echo '<version read failed>')"
+else
+    kv "GNOME Shell" "<not found>"
+fi
+
+mutter_version=""
+mutter_package=""
+for pkg in mutter-common-bin libmutter-18-0 mutter-common mutter; do
+    version="$(pkg_version "$pkg")"
+    if [[ -n "$version" ]]; then
+        mutter_version="$version"
+        mutter_package="$pkg"
+        break
+    fi
+done
+if [[ -n "$mutter_version" ]]; then
+    kv "Mutter package" "$mutter_version ($mutter_package)"
+else
+    kv "Mutter package" "<not found via dpkg>"
+fi
+
+if [[ -n "${XDG_SESSION_ID:-}" ]] && have loginctl; then
+    echo
+    echo "  loginctl session:"
+    loginctl show-session "$XDG_SESSION_ID" \
+        -p Type -p Desktop -p Name -p Remote -p State 2>/dev/null | indent || true
+fi
+
+section "2. Display / scale (inventory only)"
+show_gsetting "text-scaling-factor" org.gnome.desktop.interface text-scaling-factor
+show_gsetting "Mutter experimental" org.gnome.mutter experimental-features
+
+if have gdctl; then
+    kv "gdctl" "available"
+    echo
+    echo "  Mutter DisplayConfig:"
+    gdctl show 2>&1 | indent || true
+else
+    kv "gdctl" "<not found>"
+fi
+
+if [[ -f "$HOME/.config/monitors.xml" ]]; then
+    kv "monitors.xml" "present (managed by desktop; not modified here)"
+else
+    kv "monitors.xml" "not present"
+fi
+
+section "3. Appearance"
+show_gsetting "color-scheme" org.gnome.desktop.interface color-scheme
+show_gsetting "accent-color" org.gnome.desktop.interface accent-color
+show_gsetting "GTK theme" org.gnome.desktop.interface gtk-theme
+show_gsetting "icon theme" org.gnome.desktop.interface icon-theme
+show_gsetting "cursor theme" org.gnome.desktop.interface cursor-theme
+show_gsetting "font" org.gnome.desktop.interface font-name
+show_gsetting "document font" org.gnome.desktop.interface document-font-name
+show_gsetting "monospace font" org.gnome.desktop.interface monospace-font-name
+show_gsetting "wallpaper (dark)" org.gnome.desktop.background picture-uri-dark
+show_gsetting "wallpaper" org.gnome.desktop.background picture-uri
+
+section "4. Ubuntu Dock"
+dock_schema="org.gnome.shell.extensions.dash-to-dock"
+if gsettings_schema_exists "$dock_schema"; then
+    kv "schema" "$dock_schema"
+    show_gsetting "position" "$dock_schema" dock-position
+    show_gsetting "dock-fixed" "$dock_schema" dock-fixed
+    show_gsetting "autohide" "$dock_schema" autohide
+    show_gsetting "intellihide" "$dock_schema" intellihide
+    show_gsetting "icon size" "$dock_schema" dash-max-icon-size
+    show_gsetting "show applications" "$dock_schema" show-show-apps-button
+    show_gsetting "show favorites" "$dock_schema" show-favorites
+    show_gsetting "show running" "$dock_schema" show-running
+    show_gsetting "show trash" "$dock_schema" show-trash
+    show_gsetting "show mounts" "$dock_schema" show-mounts
+    show_gsetting "multi-monitor" "$dock_schema" multi-monitor
+    show_gsetting "click action" "$dock_schema" click-action
+else
+    kv "Ubuntu Dock schema" "<not available>"
+fi
+
+section "5. GNOME extensions"
+for uuid in \
+    workstation-input-source@local \
+    workstation-smart-popup@local \
+    xremap@k0kubun.com \
+    window-control@carlo9890.github.io
+do
+    kv "$uuid" "$(extension_state "$uuid")"
+done
+
+if gsettings_schema_exists org.gnome.shell.extensions.tiling-assistant; then
+    kv "Tiling Assistant schema" "present"
+else
+    kv "Tiling Assistant schema" "not present"
+fi
+
+if have gnome-extensions; then
+    echo
+    echo "  Enabled extensions:"
+    enabled_extensions="$(gnome-extensions list --enabled 2>/dev/null || true)"
+    if [[ -n "$enabled_extensions" ]]; then
+        printf '%s\n' "$enabled_extensions" | indent
+    else
+        echo "    <none or unavailable>"
+    fi
+
+    echo
+    echo "  Installed extensions:"
+    all_extensions="$(gnome-extensions list 2>/dev/null || true)"
+    if [[ -n "$all_extensions" ]]; then
+        printf '%s\n' "$all_extensions" | indent
+    else
+        echo "    <none or unavailable>"
+    fi
+fi
+
+section "6. Portals / desktop services"
+for unit in \
+    xdg-desktop-portal.service \
+    xdg-desktop-portal-gnome.service \
+    pipewire.service \
+    pipewire-pulse.service \
+    wireplumber.service
+do
+    kv "$unit" "$(user_unit_state "$unit")"
+done
+
+for pkg in \
+    xdg-desktop-portal \
+    xdg-desktop-portal-gnome \
+    pipewire \
+    wireplumber
+do
+    version="$(pkg_version "$pkg")"
+    kv "package: $pkg" "${version:-<not installed via dpkg>}"
+done
+
+section "7. Host toolkit integration"
+for pkg in \
+    qgnomeplatform-qt5 \
+    qgnomeplatform-qt6 \
+    qtwayland5 \
+    qt6-wayland \
+    libadwaitaqt1 \
+    libadwaitaqt6-1 \
+    gnome-tweaks
+do
+    version="$(pkg_version "$pkg")"
+    kv "$pkg" "${version:-not installed}"
+done
+
+kv "QT_QPA_PLATFORM" "${QT_QPA_PLATFORM:-unset}"
+kv "QT_QPA_PLATFORMTHEME" "${QT_QPA_PLATFORMTHEME:-unset}"
+kv "QT_STYLE_OVERRIDE" "${QT_STYLE_OVERRIDE:-unset}"
+kv "QT_SCALE_FACTOR" "${QT_SCALE_FACTOR:-unset}"
+kv "GDK_SCALE" "${GDK_SCALE:-unset}"
+kv "GDK_DPI_SCALE" "${GDK_DPI_SCALE:-unset}"
+kv "GTK_THEME" "${GTK_THEME:-unset}"
+
+section "8. Deferred application layers"
+kv "Flatpak integration" "deferred to plan-flatpak"
+kv "Distrobox GUI integration" "deferred to plan-dev"
+kv "Wine integration" "deferred to plan-windows; Wine must stay out of host"
+if have wine || have wine64; then
+    kv "Host Wine command" "PRESENT — review later; project policy expects no host Wine"
+else
+    kv "Host Wine command" "absent (expected)"
+fi
+
+section "9. Managed appearance profile"
+profile="$repo/config/gnome/settings.conf"
+apply_helper="$repo/bin/ws-gnome-apply"
+if [[ -r "$profile" && -x "$apply_helper" ]]; then
+    if WORKSTATION_CONFIG="$repo" "$apply_helper" --check --quiet >/dev/null 2>&1; then
+        kv "config/gnome/settings.conf" "in sync"
+    else
+        kv "config/gnome/settings.conf" "DRIFT — run: ws-gnome check"
+    fi
+else
+    kv "managed profile" "not installed yet"
+fi
+
+section "10. Notes"
+cat <<'NOTES'
+  - Display scale is inventory-only. This tool never changes it.
+  - Wallpaper is intentionally not part of the managed GNOME profile yet.
+  - Host Qt5/Qt6 baseline uses QGnomePlatform + native Wayland automatically;
+    no global QT_QPA_PLATFORM/QT_QPA_PLATFORMTHEME/QT_STYLE_OVERRIDE/scale override
+    is part of the workstation configuration.
+  - Flatpak, Distrobox and Wine application scaling/theme policy is intentionally
+    deferred until their corresponding workstation plans are implemented.
+NOTES

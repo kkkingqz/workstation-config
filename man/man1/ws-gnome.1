@@ -1,0 +1,293 @@
+.\" -*- mode: troff; coding: utf-8 -*-
+.TH "ws-gnome" "1" "2026-09-23" "Workstation" "User Commands"
+.SH GNOME DESKTOP — CURRENT MANAGED BASELINE
+.LP
+Этот документ описывает управляемую часть GNOME layer workstation.
+.SS
+Архитектурные границы
+.LP
+GNOME остаётся максимально штатным Ubuntu desktop:
+.LP
+.EX
+GDM3
+GNOME Shell + Mutter
+Wayland
+Ubuntu Dock
+Quick Settings
+Nautilus
+GNOME Settings
+xdg-desktop-portal + GNOME backend
+PipeWire / WirePlumber
+.EE
+.PP
+Не заменяем штатные panel, Dock, notifications или OSD.
+.PP
+Текущий display scale уже выбран через \f(CRSettings -> Displays\fR и считается
+рабочим. На этой машине фактический logical monitor scale — \f(CR1.5\fR. GNOME
+appearance profile его не задаёт и не меняет.
+.PP
+Стандартную кнопку \f(CRShow Applications\fR и меню приложений пока не заменяем.
+.SS
+Application layers вне текущего этапа
+.LP
+Интеграцию приложений специально разводим по соответствующим планам:
+.LP
+.EX
+Flatpak theme / scale / portals
+    -> plan-flatpak
+
+Distrobox GUI / Wayland / Qt
+    -> plan-dev
+
+Wine
+    -> plan-windows
+    -> Wine устанавливается в отдельный Distrobox
+    -> Wine на host не устанавливается
+.EE
+.SH Управляемый appearance profile
+.LP
+Source of truth:
+.LP
+.EX
+config/gnome/settings.conf
+.EE
+.PP
+Формат строки:
+.LP
+.EX
+GSETTINGS_SCHEMA|KEY|GVARIANT_VALUE
+.EE
+.PP
+Текущий профиль фиксирует только небольшой curated набор GNOME/GTK и Ubuntu
+Dock settings, полученный с рабочей системы 2026-09-23.
+.PP
+Текущий visual baseline:
+.LP
+.EX
+color scheme      prefer-dark
+accent            orange
+GTK theme         Yaru-dark
+icons             Yaru-dark
+cursor            Yaru
+UI font           Ubuntu Sans 11
+document font     Sans 11
+monospace         Ubuntu Sans Mono 11
+Ubuntu Dock       bottom
+Dock icon size    50
+Dock autohide     true
+Show Applications true
+click action      focus-minimize-or-appspread
+.EE
+.PP
+Дополнительные текущие Dock settings также записаны в \f(CRsettings.conf\fR для
+воспроизводимости.
+.SS
+Что profile намеренно НЕ управляет
+.LP
+.EX
+display scale / monitors.xml
+org.gnome.mutter experimental-features
+input sources
+keyboard shortcuts
+GNOME extension enablement
+wallpaper
+Flatpak settings
+Distrobox settings
+Wine settings
+.EE
+.LP
+Это защищает уже завершённый keyboard layer и не смешивает desktop baseline с
+application-specific integration.
+.SH ws-gnome
+.LP
+Основной wrapper:
+.LP
+.EX
+ws-gnome status
+ws-gnome check
+ws-gnome dry-run
+ws-gnome apply
+ws-gnome rollback
+.EE
+.SS
+status
+.LP
+.EX
+ws-gnome status
+.EE
+.LP
+Read-only inventory. Показывает GNOME/Wayland session, Mutter display state,
+appearance, Dock, extensions, portals, host toolkit environment и состояние
+managed profile.
+.PP
+Прямой вызов:
+.LP
+.EX
+ws-gnome-status
+.EE
+.SS
+check
+.LP
+.EX
+ws-gnome check
+.EE
+.LP
+Сравнивает все managed keys с \f(CRconfig/gnome/settings.conf\fR. Ничего не меняет.
+.PP
+Exit status:
+.LP
+.EX
+0  profile полностью совпадает
+1  есть drift или ошибка проверки
+.EE
+.SS
+dry-run
+.LP
+.EX
+ws-gnome dry-run
+.EE
+.LP
+Показывает, какие значения изменил бы apply, но не вызывает \f(CRgsettings set\fR.
+.SS
+apply
+.LP
+.EX
+ws-gnome apply
+.EE
+.LP
+Перед изменениями сохраняет предыдущие managed values в:
+.LP
+.EX
+state/gnome/last-apply.before
+.EE
+.PP
+После успешного применения сохраняет итоговый managed state в:
+.LP
+.EX
+state/gnome/last-apply.after
+.EE
+.PP
+\f(CRstate/\fR является machine-local runtime state и не коммитится.
+.PP
+Apply проверяет наличие и writable-state каждого schema/key до начала записи.
+При ошибке во время применения выполняется best-effort автоматический rollback
+к \f(CRlast-apply.before\fR.
+.SS
+rollback
+.LP
+.EX
+ws-gnome rollback
+.EE
+.LP
+Восстанавливает managed values, сохранённые перед последним \f(CRapply\fR.
+.SH Safety ownership rules
+.LP
+\f(CRws-gnome-apply\fR отказывается принимать profile entries, которые принадлежат
+другим workstation layers, включая:
+.LP
+.EX
+org.gnome.desktop.interface text-scaling-factor
+org.gnome.mutter experimental-features
+org.gnome.desktop.input-sources/*
+org.gnome.desktop.wm.keybindings/*
+org.gnome.settings-daemon.plugins.media-keys/*
+org.gnome.shell enabled-extensions / disabled-extensions
+org.gnome.shell.extensions.tiling-assistant/*
+.EE
+.PP
+Таким образом GNOME appearance apply не может случайно переписать display,
+keyboard, Tiling Assistant или extension baseline.
+.SH Current inventory checkpoint
+.LP
+На рабочей системе 2026-09-23 подтверждено:
+.LP
+.EX
+GNOME Shell            50.1
+Mutter                  50.1-0ubuntu2.4
+session                 Wayland
+internal display        3072x1920@60
+logical scale           1.5
+color scheme            prefer-dark
+accent                  orange
+GTK / icons             Yaru-dark
+Ubuntu Dock             BOTTOM
+portals                  active
+PipeWire / WirePlumber  active
+host Wine               absent
+.EE
+.PP
+Mutter experimental features сейчас содержат:
+.LP
+.EX
+scale-monitor-framebuffer
+xwayland-native-scaling
+.EE
+.PP
+Они только инвентаризируются и не являются частью \f(CRsettings.conf\fR.
+.SH Host Qt5/Qt6 — CURRENT BASELINE
+.LP
+Для host Qt applications используется минимальная GNOME integration layer:
+.LP
+.EX
+qgnomeplatform-qt5
+qgnomeplatform-qt6
+qtwayland5
+qt6-wayland
+.EE
+.PP
+Тестирование выполнено на временных приложениях:
+.LP
+.EX
+JuffEd      Qt5
+FeatherPad  Qt6
+.EE
+.PP
+Подтверждено:
+.LP
+.EX
+Qt5 normal launch  -> libqwayland-generic.so
+Qt6 normal launch  -> libqwayland.so
+dark appearance    -> автоматически через QGnomePlatform
+display scale      -> compositor/Qt Wayland
+.EE
+.PP
+Никакие глобальные overrides не используются:
+.LP
+.EX
+QT_QPA_PLATFORM
+QT_QPA_PLATFORMTHEME
+QT_STYLE_OVERRIDE
+QT_SCALE_FACTOR
+.EE
+.PP
+Это важно: обычное Qt приложение получает native Wayland и GNOME appearance
+без workstation-specific environment hacks.
+.PP
+Тестовые \f(CRjuffed\fR и \f(CRfeatherpad\fR не являются частью workstation baseline и
+после проверки удаляются. \f(CRapt autoremove\fR на этом этапе специально не
+выполняется.
+.PP
+Distrobox Qt integration не наследуется из этого раздела автоматически и будет
+проверяться отдельно в \f(CRplan-dev\fR.
+.LP
+\l'2i'
+.SH Colors — FROZEN
+.LP
+Цветовой эксперимент завершён без изменения baseline.
+.PP
+Остаётся штатный Ubuntu/GNOME visual profile:
+.LP
+.EX
+color scheme   prefer-dark
+accent         orange
+GTK theme      Yaru-dark
+icons          Yaru-dark
+cursor         Yaru
+.EE
+.PP
+Не используем custom GTK/libadwaita palette, custom GNOME Shell CSS или
+стороннюю GTK theme как workstation baseline. Это сохраняет максимально
+штатное поведение GNOME и снижает риск несовместимости после обновлений.
+.PP
+Flatpak, Distrobox/Qt и Wine visual integration по-прежнему проверяются позже
+в соответствующих application plans.

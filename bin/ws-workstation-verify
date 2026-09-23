@@ -537,6 +537,12 @@ for path in \
     bin/ws-keyboard-install-extensions \
     bin/ws-keyboard-system-apply \
     bin/ws-workstation-verify \
+    bin/ws-gnome \
+    bin/ws-gnome-apply \
+    bin/ws-gnome-status \
+    config/gnome/settings.conf \
+    config/fish/completions/ws-gnome.fish \
+    docs/gnome.md \
     config/tiny-dfr/config.toml \
     gnome/extensions/workstation-smart-popup@local/metadata.json \
     gnome/extensions/workstation-smart-popup@local/extension.js \
@@ -547,6 +553,15 @@ for path in \
 do
     tracked "$path" "$path"
 done
+
+
+# GNOME desktop helpers are part of the reproducible user runtime layer.
+for name in ws-gnome ws-gnome-apply ws-gnome-status; do
+    check_runtime_helper "$name"
+done
+
+tracked "config/fish/completions/ws-gnome.fish" "GNOME Fish completion"
+tracked "docs/plans/gnome.md" "GNOME implementation plan"
 
 section "5. Apply reproducibility"
 
@@ -560,6 +575,63 @@ contains_literal "$apply" 'ws-tiling-apply' "apply reapplies Tiling Assistant pr
 [[ -x "$repo/bin/ws-keyboard-system-apply" ]] \
     && pass "system-level keyboard/uinput/tiny-dfr apply helper is executable" \
     || fail "bin/ws-keyboard-system-apply missing/not executable"
+
+
+section "5.1 GNOME managed appearance"
+
+gnome_profile="$repo/config/gnome/settings.conf"
+if [[ -r "$gnome_profile" ]]; then
+    pass "GNOME managed profile present"
+else
+    fail "GNOME managed profile missing: config/gnome/settings.conf"
+fi
+
+if [[ -x "$repo/bin/ws-gnome-apply" ]]; then
+    if WORKSTATION_CONFIG="$repo" "$repo/bin/ws-gnome-apply" --check --quiet >/dev/null 2>&1; then
+        pass "GNOME managed appearance/Dock profile is in sync"
+    else
+        fail "GNOME managed appearance/Dock profile has drift or cannot be validated"
+    fi
+else
+    fail "bin/ws-gnome-apply is missing or not executable"
+fi
+
+if [[ -r "$gnome_profile" ]]; then
+    forbidden_gnome_profile="$(
+        grep -nE \
+          'org\.gnome\.desktop\.interface\|text-scaling-factor|org\.gnome\.mutter\|experimental-features|org\.gnome\.desktop\.input-sources|org\.gnome\.desktop\.wm\.keybindings|org\.gnome\.settings-daemon\.plugins\.media-keys|org\.gnome\.shell\|(enabled-extensions|disabled-extensions)|org\.gnome\.shell\.extensions\.tiling-assistant' \
+          "$gnome_profile" 2>/dev/null || true
+    )"
+    if [[ -z "$forbidden_gnome_profile" ]]; then
+        pass "GNOME profile does not overlap display/keyboard/extension ownership"
+    else
+        fail "GNOME profile contains forbidden cross-layer settings:"
+        printf '%s\n' "$forbidden_gnome_profile" | sed 's/^/        /'
+    fi
+fi
+
+
+section "5.2 Host Qt integration"
+
+for pkg in qgnomeplatform-qt5 qgnomeplatform-qt6 qtwayland5 qt6-wayland; do
+    if dpkg-query -W -f='${Status}' "$pkg" 2>/dev/null \
+        | grep -qx 'install ok installed'; then
+        pass "host Qt baseline package installed: $pkg"
+    else
+        fail "host Qt baseline package missing: $pkg"
+    fi
+done
+
+qt_override_bad=false
+for var in QT_QPA_PLATFORM QT_QPA_PLATFORMTHEME QT_STYLE_OVERRIDE QT_SCALE_FACTOR; do
+    value="${!var:-}"
+    if [[ -n "$value" ]]; then
+        qt_override_bad=true
+        fail "global Qt override should be unset: $var=$value"
+    fi
+done
+[[ "$qt_override_bad" == false ]] \
+    && pass "no global Qt platform/theme/scale overrides"
 
 section "6. Script / config syntax"
 
@@ -1109,6 +1181,20 @@ if [[ -r "$repo/docs/plans/gnome.md" ]]; then
 else
     fail "docs/plans/gnome.md missing"
 fi
+
+
+if [[ -r "$repo/docs/gnome.md" ]]; then
+    grep -Fqi 'config/gnome/settings.conf' "$repo/docs/gnome.md" \
+        && grep -Fqi 'ws-gnome check' "$repo/docs/gnome.md" \
+        && pass "docs/gnome.md documents the managed GNOME profile" \
+        || fail "docs/gnome.md does not document the current managed GNOME profile"
+else
+    fail "docs/gnome.md missing"
+fi
+
+grep -Fqi 'Wine на host не устанавливается' "$repo/docs/gnome.md" 2>/dev/null \
+    && pass "docs/gnome.md preserves host-without-Wine architecture" \
+    || warn "docs/gnome.md does not explicitly preserve host-without-Wine architecture"
 
 if [[ -x "$repo/bin/ws-doc-build" ]] && have lowdown; then
     doc_tmp="$(mktemp -d)"

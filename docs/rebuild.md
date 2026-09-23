@@ -183,7 +183,72 @@ systemctl --user is-active wireplumber
 
 Не ставить SwayNC/SwayOSD/swaylock/swayidle и не заменять штатные GNOME components.
 
-# 6.1. Keyboard / shortcuts
+
+# 6.1. Managed GNOME appearance
+
+После clone repository сначала проверить текущий desktop state:
+
+```console
+ws-gnome status
+ws-gnome check
+```
+
+Source of truth:
+
+```text
+config/gnome/settings.conf
+```
+
+Если `ws-gnome check` показывает drift относительно зафиксированного baseline,
+просмотреть изменения:
+
+```console
+ws-gnome dry-run
+```
+
+и только после этого применить:
+
+```console
+ws-gnome apply
+```
+
+`ws-gnome apply` не управляет display scale, `monitors.xml`, Mutter
+experimental flags, keyboard/input sources, extension enablement, wallpaper,
+Flatpak, Distrobox или Wine.
+
+Display scale после reinstall выбирается штатно через `Settings -> Displays`;
+текущий рабочий checkpoint — logical scale `1.5`.
+
+Wine не устанавливать на host. Его application layer относится к
+`plan-windows` и будет жить в отдельном Distrobox.
+
+
+
+# 6.2. Host Qt integration
+
+Для host Qt5/Qt6 applications установить:
+
+```console
+sudo apt install --no-install-recommends \
+    qgnomeplatform-qt5 \
+    qgnomeplatform-qt6 \
+    qtwayland5 \
+    qt6-wayland
+```
+
+Не добавлять глобальные Qt platform/theme/scale environment overrides.
+
+Ожидаемый baseline:
+
+```text
+Qt5 -> native Wayland + QGnomePlatform automatically
+Qt6 -> native Wayland + QGnomePlatform automatically
+```
+
+Qt внутри Distrobox относится к `plan-dev`.
+
+
+# 6.3. Keyboard / shortcuts
 
 После clone `workstation-config` восстановить system-level keyboard state:
 

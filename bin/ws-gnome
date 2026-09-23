@@ -1,0 +1,29 @@
+#!/usr/bin/env sh
+set -eu
+
+repo="${WORKSTATION_CONFIG:-$HOME/.local/share/workstation-config}"
+cmd="${1:-status}"
+shift 2>/dev/null || true
+
+case "$cmd" in
+    status) exec "$repo/bin/ws-gnome-status" "$@" ;;
+    check) exec "$repo/bin/ws-gnome-apply" --check "$@" ;;
+    apply) exec "$repo/bin/ws-gnome-apply" "$@" ;;
+    dry-run) exec "$repo/bin/ws-gnome-apply" --dry-run "$@" ;;
+    rollback) exec "$repo/bin/ws-gnome-apply" --rollback-last "$@" ;;
+    -h|--help|help)
+        cat <<'USAGE'
+Usage: ws-gnome [status|check|apply|dry-run|rollback]
+
+  status     read-only GNOME inventory
+  check      compare managed appearance/Dock state with config/gnome/settings.conf
+  dry-run    show what apply would change
+  apply      apply the managed appearance/Dock profile
+  rollback   restore values saved before the last apply
+USAGE
+        ;;
+    *)
+        echo "ws-gnome: unknown command: $cmd" >&2
+        exit 64
+        ;;
+esac

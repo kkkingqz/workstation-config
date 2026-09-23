@@ -4,46 +4,82 @@
 .SS
 Цель
 .LP
-Завершить desktop layer, оставаясь максимально близко к штатному Ubuntu GNOME.
+Завершить desktop layer, оставаясь максимально близко к штатному Ubuntu GNOME
+и не создавая конфликтов с будущими Flatpak/Distrobox/Wine application layers.
 .PP
-Уже работают GNOME 50, Wayland, GDM3, Ubuntu Dock, Quick Settings, Nautilus и системные OSD. Этот план — не замена desktop environment, а финальная интеграция.
-.SH 1. Appearance baseline
+Уже работают GNOME 50, Wayland, GDM3, Ubuntu Dock, Quick Settings, Nautilus и
+системные OSD. Keyboard layer также завершён и является отдельным baseline.
+.SH 1. Read-only inventory — DONE
 .LP
-Через \f(CRSettings → Appearance\fR зафиксировать:
-.IP "\(bu" 3
-Dark/Light;
-.if n \
-.sp -1
-.if t \
-.sp -0.25v
-.IP "\(bu" 3
-accent;
-.if n \
-.sp -1
-.if t \
-.sp -0.25v
-.IP "\(bu" 3
-Dock position;
-.if n \
-.sp -1
-.if t \
-.sp -0.25v
-.IP "\(bu" 3
-autohide;
-.if n \
-.sp -1
-.if t \
-.sp -0.25v
-.IP "\(bu" 3
-icon size;
-.if n \
-.sp -1
-.if t \
-.sp -0.25v
-.IP "\(bu" 3
-wallpaper.
+Реализован:
 .LP
-Не использовать:
+.EX
+ws-gnome-status
+.EE
+.PP
+Рабочая машина подтверждена:
+.LP
+.EX
+GNOME Shell        50.1
+Mutter             50.1-0ubuntu2.4
+Wayland
+3072x1920@60
+logical scale      1.5
+Yaru-dark
+accent             orange
+Ubuntu Dock        bottom
+portals/PipeWire   active
+host Wine          absent
+.EE
+.PP
+Display scale остаётся inventory-only.
+.LP
+\l'2i'
+.SH 2. Appearance/Dock source of truth — DONE
+.LP
+Создан небольшой curated profile:
+.LP
+.EX
+config/gnome/settings.conf
+.EE
+.PP
+Управление:
+.LP
+.EX
+ws-gnome check
+ws-gnome dry-run
+ws-gnome apply
+ws-gnome rollback
+.EE
+.PP
+Profile фиксирует текущий рабочий GNOME/GTK + Ubuntu Dock baseline и специально
+не включает display, keyboard, extensions, wallpaper или application-specific
+settings.
+.PP
+Полный \f(CRdconf dump\fR не используется.
+.LP
+\l'2i'
+.SH 3. Color refinement — SKIPPED
+.LP
+Решено сохранить штатный \f(CRYaru-dark\fR со стандартными цветами Ubuntu/GNOME.
+.PP
+Не создаём дополнительный GTK/libadwaita color override и не используем
+\f(CRadw-gtk3\fR как workstation baseline.
+.PP
+Текущий visual baseline остаётся:
+.LP
+.EX
+color scheme   prefer-dark
+accent         orange
+GTK theme      Yaru-dark
+icons          Yaru-dark
+cursor         Yaru
+.EE
+.PP
+Это решение приоритетно сохраняет штатную совместимость и минимизирует
+обслуживание после обновлений GNOME/GTK.
+.PP
+Не используем как baseline:
 .IP "\(bu" 3
 custom GNOME Shell CSS;
 .if n \
@@ -51,147 +87,147 @@ custom GNOME Shell CSS;
 .if t \
 .sp -0.25v
 .IP "\(bu" 3
-theme forks;
+custom \f(CRgtk.css\fR для изменения системной палитры;
 .if n \
 .sp -1
 .if t \
 .sp -0.25v
 .IP "\(bu" 3
-замену Ubuntu Dock;
+глобальный \f(CRGTK_THEME\fR;
 .if n \
 .sp -1
 .if t \
 .sp -0.25v
 .IP "\(bu" 3
-отдельные notification/OSD daemons.
-.SS
-Результат
-.LP
-Один штатный visual profile, который переживает GNOME updates.
+глобальный \f(CRQT_STYLE_OVERRIDE=kvantum\fR;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Kvantum как общий desktop theme layer;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+theme forks без доказанной необходимости.
 .LP
 \l'2i'
-.SH 2. Retina scaling
+.SH 4. Display scale — FROZEN
 .LP
-На встроенной 3072×1920 панели проверить:
-.IP "\(bu" 3
-200%;
-.if n \
-.sp -1
-.if t \
-.sp -0.25v
-.IP "\(bu" 3
-при необходимости 175%/150%.
-.LP
-Настраивать только через \f(CRSettings → Displays\fR.
+Текущий scale уже выбран через \f(CRSettings -> Displays\fR; проблем с отображением
+GNOME сейчас нет. Фактический scale встроенного display — \f(CR1.5\fR.
 .PP
-Не использовать:
+На GNOME stage:
 .IP "\(bu" 3
-\f(CRxrandr\fR scale hacks;
+scale только инвентаризируется;
 .if n \
 .sp -1
 .if t \
 .sp -0.25v
 .IP "\(bu" 3
-глобальный \f(CRXft.dpi\fR;
+не задаём новое значение автоматически;
 .if n \
 .sp -1
 .if t \
 .sp -0.25v
 .IP "\(bu" 3
-ручные Mutter experimental flags без необходимости.
-.SS
-Проверка
-.IP "\(bu" 3
-GNOME Shell;
+не редактируем \f(CRmonitors.xml\fR вручную;
 .if n \
 .sp -1
 .if t \
 .sp -0.25v
 .IP "\(bu" 3
-Nautilus;
+не используем \f(CRxrandr\fR scale hacks;
 .if n \
 .sp -1
 .if t \
 .sp -0.25v
 .IP "\(bu" 3
-Firefox;
+не задаём глобальный \f(CRXft.dpi\fR;
 .if n \
 .sp -1
 .if t \
 .sp -0.25v
 .IP "\(bu" 3
-GTK3;
-.if n \
-.sp -1
-.if t \
-.sp -0.25v
-.IP "\(bu" 3
-GTK4/libadwaita;
-.if n \
-.sp -1
-.if t \
-.sp -0.25v
-.IP "\(bu" 3
-Qt;
-.if n \
-.sp -1
-.if t \
-.sp -0.25v
-.IP "\(bu" 3
-XWayland application.
+текущие Mutter experimental flags не переносим в appearance profile.
+.LP
+Применение того же визуального масштаба к Flatpak, Distrobox и Wine apps будет
+проверяться в соответствующих application plans после их реализации.
 .LP
 \l'2i'
-.SH 3. Qt5/Qt6 integration
+.SH 5. Ubuntu Dock / application menu
 .LP
-Если Qt apps выглядят заметно чужеродно, добавить штатную GNOME integration:
+Ubuntu Dock остаётся штатным и расположен снизу.
+.PP
+Текущие Dock values входят в \f(CRconfig/gnome/settings.conf\fR.
+.PP
+Стандартную кнопку \f(CRShow Applications\fR и меню приложений пока не заменяем.
+Установка ArcMenu или другого menu extension отложена.
+.LP
+\l'2i'
+.SH 6. Host Qt5/Qt6 integration — DONE
+.LP
+Для проверки временно использовались:
 .LP
 .EX
-sudo apt install \e
-  qgnomeplatform-qt5 qgnomeplatform-qt6 \e
-  adwaita-qt adwaita-qt6
+JuffEd      Qt5
+FeatherPad  Qt6
 .EE
 .PP
-После logout/login проверить palette, fonts и file dialogs.
+До integration packages оба приложения запускались через XCB/XWayland и не
+следовали GNOME dark appearance.
 .PP
-Не задавать глобально \f(CRQT_STYLE_OVERRIDE=kvantum\fR, если нет конкретной причины.
-.LP
-\l'2i'
-.SH 4. GNOME Tweaks — только при необходимости
-.LP
-Можно установить:
+Постоянный host baseline:
 .LP
 .EX
-sudo apt install gnome-tweaks
+qgnomeplatform-qt5
+qgnomeplatform-qt6
+qtwayland5
+qt6-wayland
 .EE
 .PP
-Использовать только для:
-.IP "\(bu" 3
-fonts;
-.if n \
-.sp -1
-.if t \
-.sp -0.25v
-.IP "\(bu" 3
-window behavior;
-.if n \
-.sp -1
-.if t \
-.sp -0.25v
-.IP "\(bu" 3
-startup applications;
-.if n \
-.sp -1
-.if t \
-.sp -0.25v
-.IP "\(bu" 3
-обычных GSettings options.
+После установки подтверждено:
 .LP
-Не использовать Tweaks как повод поставить много Shell extensions.
+.EX
+Qt5  -> QGnomePlatform auto + libqwayland-generic.so
+Qt6  -> QGnomePlatform auto + libqwayland.so
+.EE
+.PP
+Обычный запуск автоматически использует native Wayland; принудительный
+\f(CRQT_QPA_PLATFORM=wayland\fR не требуется.
+.PP
+Не задаём глобально:
+.LP
+.EX
+QT_QPA_PLATFORM
+QT_QPA_PLATFORMTHEME
+QT_STYLE_OVERRIDE
+QT_SCALE_FACTOR
+.EE
+.PP
+Dark appearance наследуется автоматически через GNOME/QGnomePlatform.
+Fractional display scale \f(CR1.5\fR обслуживается compositor/Qt Wayland и не требует
+ручного Qt scale override.
+.PP
+\f(CRJuffEd\fR и \f(CRFeatherPad\fR являются только test applications и после проверки
+удаляются. \f(CRapt autoremove\fR в рамках этого этапа не выполняется.
+.PP
+Qt integration внутри Distrobox остаётся задачей \f(CRplan-dev\fR.
 .LP
 \l'2i'
-.SH 5. Extensions policy
+.SH 7. GNOME Tweaks — только при необходимости
 .LP
-Текущий extension set для workstation является осознанной частью baseline:
+\f(CRgnome-tweaks\fR сейчас не установлен и не требуется для baseline.
+.PP
+Устанавливать только если конкретная нужная настройка отсутствует в штатных
+Settings и её разумно хранить как обычный GSettings state.
+.LP
+\l'2i'
+.SH 8. Extensions policy
+.LP
+Workstation baseline включает:
 .LP
 .EX
 xremap@k0kubun.com
@@ -201,27 +237,16 @@ workstation-smart-popup@local
 workstation-input-source@local
 .EE
 .PP
-Назначение:
-.LP
-.EX
-xremap@k0kubun.com              application awareness для xremap/Wayland
-Window Control                  application/window actions
-Tiling Assistant                tiling backend
-workstation-smart-popup@local   Smart Tiling Popup
-workstation-input-source@local  EN/RU/UA, Caps, unlock-dialog EN
-.EE
+\f(CRWindow Monitor Pro\fR сейчас установлен и enabled, но не является зависимостью
+текущего keyboard/Touch Bar baseline. Его удаление/отключение рассматриваем как
+отдельный cleanup после проверки отсутствия пользовательской зависимости.
 .PP
-\f(CRWindow Monitor Pro\fR, если остаётся установленным после старых экспериментов,
-не является зависимостью текущего keyboard/Touch Bar baseline.
-.PP
-Новые extensions по-прежнему добавлять только по одной, после snapshot и с
-проверкой GNOME session responsiveness.
+Системные Ubuntu extensions не отключаем автоматически.
 .LP
 \l'2i'
-.SH 6. Keyboard / shortcuts
+.SH 9. Keyboard / shortcuts — FROZEN
 .LP
-Keyboard layer \fBзавершён и является частью baseline\fR. Не дублировать его
-через \f(CRSettings -> Keyboard -> Keyboard Shortcuts\fR, \f(CRxdotool\fR или \f(CRxbindkeys\fR.
+Keyboard layer \fBзавершён и является частью baseline\fR; GNOME appearance plan его не перенастраивает.
 .PP
 Source of truth:
 .LP
@@ -232,130 +257,95 @@ bin/ws-keyboard*
 gnome/extensions/workstation-input-source@local/
 gnome/extensions/workstation-smart-popup@local/
 .EE
-.PP
-Текущие правила:
-.LP
-.EX
-CapsLock             EN <-> RU; UA -> EN
-Fn+CapsLock          UA
-Control+Space        EN -> RU -> UA -> EN
-GDM/login            EN
-GNOME lock screen    EN
-.EE
-.PP
-Tiling, Tile Editing Mode, Always on Top и Smart Popup также входят в
-зафиксированный keyboard baseline.
-.PP
-Touch Bar здесь отдельно не перенастраивать: текущий renderer — \f(CRtiny-dfr\fR,
-обычный слой F1..F12, удержание Fn — media/brightness.
-.PP
-Полная проверка:
-.LP
-.EX
-ws-workstation-verify --strict
-.EE
 .LP
 \l'2i'
-.SH 7. Toolkit smoke-test
+.SH 10. Portals infrastructure
 .LP
-Проверить матрицу:
+Подтверждено active:
 .LP
 .EX
-GTK4/libadwaita  → Settings / Files / system apps
-GTK3             → pavucontrol или другая GTK3 utility
-Qt5/Qt6          → выбранное Qt app
-Flatpak          → после плана 03
-XWayland         → legacy test app
+xdg-desktop-portal
+xdg-desktop-portal-gnome
+PipeWire
+PipeWire Pulse
+WirePlumber
 .EE
 .PP
-Отдельно проверить:
-.IP "\(bu" 3
-file chooser;
-.if n \
-.sp -1
-.if t \
-.sp -0.25v
-.IP "\(bu" 3
-clipboard;
-.if n \
-.sp -1
-.if t \
-.sp -0.25v
-.IP "\(bu" 3
-drag-and-drop;
-.if n \
-.sp -1
-.if t \
-.sp -0.25v
-.IP "\(bu" 3
-HiDPI;
-.if n \
-.sp -1
-.if t \
-.sp -0.25v
-.IP "\(bu" 3
-dark preference.
-.LP
-\l'2i'
-.SH 8. Portals / screen sharing
-.LP
-После появления основных Flatpak apps проверить:
-.IP "\(bu" 3
-screenshot portal;
-.if n \
-.sp -1
-.if t \
-.sp -0.25v
-.IP "\(bu" 3
-file chooser portal;
-.if n \
-.sp -1
-.if t \
-.sp -0.25v
-.IP "\(bu" 3
-browser screen sharing;
-.if n \
-.sp -1
-.if t \
-.sp -0.25v
-.IP "\(bu" 3
-PipeWire screen capture.
-.LP
 Не создавать собственный \f(CRportals.conf\fR, пока нет доказанной проблемы.
+.PP
+Полный Flatpak file chooser / screenshot / screen sharing smoke-test переносится
+в \f(CRplan-flatpak\fR.
+.LP
+\l'2i'
+.SH 11. Deferred application integration
+.LP
+После завершения соответствующих планов отдельно проверить:
+.LP
+.EX
+plan-flatpak
+    Flatpak theme / scale / portals
+
+plan-dev
+    Distrobox GUI / Wayland / GTK / Qt scaling
+
+plan-windows
+    Wine внутри отдельного Distrobox
+    Wine Wayland / legacy scaling / per-prefix DPI
+.EE
+.PP
+Wine на host не устанавливается.
 .LP
 \l'2i'
 .SH DONE WHEN
 .LP
-Этап завершён, когда:
+GNOME stage считается завершённым, когда:
 .IP "\(bu" 3
-GNOME выглядит цельно без Shell hacks;
+current inventory сохранён и воспроизводим;
 .if n \
 .sp -1
 .if t \
 .sp -0.25v
 .IP "\(bu" 3
-Retina scale выбран;
+managed appearance/Dock profile стабилен;
 .if n \
 .sp -1
 .if t \
 .sp -0.25v
 .IP "\(bu" 3
-GTK/Qt/XWayland apps имеют приемлемый DPI;
+сохранён штатный \f(CRYaru-dark\fR со стандартными цветами;
 .if n \
 .sp -1
 .if t \
 .sp -0.25v
 .IP "\(bu" 3
-Overview/Dock/Quick Settings не тормозят;
+display scale \f(CR1.5\fR не ухудшен и не управляется appearance layer;
 .if n \
 .sp -1
 .if t \
 .sp -0.25v
 .IP "\(bu" 3
-screen sharing и portal dialogs работают;
+host Qt5/Qt6 integration подтверждена на native Wayland без глобальных overrides;
 .if n \
 .sp -1
 .if t \
 .sp -0.25v
 .IP "\(bu" 3
-список extensions короткий и осознанный.
+Overview/Dock/Quick Settings остаются отзывчивыми;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+portals/PipeWire/WirePlumber infrastructure исправна;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+extension set короткий и осознанный;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+application-specific integration оставлена соответствующим будущим планам.

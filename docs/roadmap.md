@@ -40,7 +40,7 @@ volume: User Commands
    Touch ID, fan policy, battery audit, optional hibernate/suspend-then-hibernate.
 
 2. `helpws plan-gnome`
-   Финальная доводка штатного GNOME: Retina scale, Qt integration и toolkit smoke-test. Keyboard layer уже зафиксирован как baseline.
+   GNOME appearance/Dock source of truth создан; стандартный Yaru сохранён; host Qt5/Qt6 integration завершена через QGnomePlatform + native Wayland. Дальше: extensions cleanup/policy и host toolkit/portal smoke-test. Flatpak/Distrobox/Wine integration выполняется в соответствующих application plans.
 
 3. `helpws plan-flatpak`
    Flatpak application layer, permissions, portals, lifecycle и maintenance.
