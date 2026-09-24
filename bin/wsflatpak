@@ -44,7 +44,7 @@ def managed_apps():
 
 
 def resolve_user_app(query):
-    """Resolve full App ID, display name, or final App-ID component."""
+    # Resolve full App ID, display name, final component, or unique substring.
     need_flatpak()
 
     p = run(
@@ -60,7 +60,7 @@ def resolve_user_app(query):
     )
 
     q = query.casefold()
-    matches = []
+    rows = []
 
     for raw in p.stdout.splitlines():
         if not raw.strip():
@@ -69,29 +69,60 @@ def resolve_user_app(query):
         parts = raw.split("	", 1)
         app_id = parts[0].strip()
         name = parts[1].strip() if len(parts) > 1 else ""
+        short = app_id.rsplit(".", 1)[-1]
 
+        rows.append((app_id, name, short))
+
+    exact = []
+
+    for app_id, name, short in rows:
         aliases = {
             app_id.casefold(),
-            app_id.rsplit(".", 1)[-1].casefold(),
+            short.casefold(),
         }
 
         if name:
             aliases.add(name.casefold())
 
         if q in aliases:
-            matches.append(app_id)
+            exact.append(app_id)
 
-    matches = list(dict.fromkeys(matches))
+    exact = list(dict.fromkeys(exact))
 
-    if len(matches) == 1:
-        return matches[0]
+    if len(exact) == 1:
+        return exact[0]
 
-    if len(matches) > 1:
+    if len(exact) > 1:
         raise SystemExit(
             "wsflatpak: ambiguous app name "
             + query
             + ": "
-            + ", ".join(matches)
+            + ", ".join(exact)
+        )
+
+    fuzzy = []
+
+    for app_id, name, short in rows:
+        fields = (
+            app_id.casefold(),
+            name.casefold(),
+            short.casefold(),
+        )
+
+        if any(q in field for field in fields):
+            fuzzy.append(app_id)
+
+    fuzzy = list(dict.fromkeys(fuzzy))
+
+    if len(fuzzy) == 1:
+        return fuzzy[0]
+
+    if len(fuzzy) > 1:
+        raise SystemExit(
+            "wsflatpak: ambiguous app name "
+            + query
+            + ": "
+            + ", ".join(fuzzy)
         )
 
     raise SystemExit(
@@ -345,7 +376,9 @@ def manage(app):
 
 def unmanage(app):
     ensure_cfg()
-    app = resolve_user_app(app)
+
+    if app not in managed_apps():
+        app = resolve_user_app(app)
 
     if not is_managed(app):
         print(f"Not managed: {app}")
@@ -367,10 +400,18 @@ def unmanage(app):
 def cmd_install(ns):
     need_flatpak()
 
+    before = set(user_apps())
+
     cmd = ["flatpak", "install", "--user", "flathub", ns.app] + ns.extra
     run(cmd)
 
-    app = resolve_user_app(ns.app)
+    after = set(user_apps())
+    added = sorted(after - before)
+
+    if len(added) == 1:
+        app = added[0]
+    else:
+        app = resolve_user_app(ns.app)
 
     if not ns.unmanaged:
         manage(app)
@@ -389,9 +430,6 @@ def cmd_remove(ns):
             "use --unmanage to remove it from managed state"
         )
 
-    if ns.unmanage:
-        unmanage(app)
-
     cmd = ["flatpak", "uninstall", "--user"]
 
     if not ns.keep_data:
@@ -399,6 +437,9 @@ def cmd_remove(ns):
 
     cmd.append(app)
     run(cmd)
+
+    if ns.unmanage:
+        unmanage(app)
 
 
 def cmd_filesystem(app, spec):
@@ -880,9 +921,9 @@ def cmd_test():
     if cmd_check() != 0:
         failures += 1
 
-    print("\n===== MANUAL APP TESTS =====")
+    print("\n===== MANUAL APP CHECKLIST =====")
     print(
-        "TODO after a test GUI app is installed:\n"
+        "Recheck after major Flatpak / desktop changes:\n"
         "  - native Wayland / correct 1.5 scale\n"
         "  - open/save portal\n"
         "  - clipboard\n"

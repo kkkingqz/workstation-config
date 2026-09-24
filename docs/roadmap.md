@@ -1,6 +1,6 @@
 title: ws-roadmap
 section: 1
-date: 2026-09-23
+date: 2026-09-24
 source: Workstation
 volume: User Commands
 
@@ -14,7 +14,7 @@ volume: User Commands
 
 - Ubuntu 26.04.1 LTS;
 - GNOME 50 / Wayland / GDM3;
-- rEFInd + T2 kernel `7.2.6-1-t2-resolute`, generic kernel как fallback;
+- rEFInd + T2 kernel `7.2.7-1-t2-resolute`;
 - Btrfs root с `@`, `@home`, `@root`, `@srv`, `@cache`, `@tmp`, `@log`, `.snapshots`;
 - Wi-Fi, Bluetooth, T2 audio, microphone, camera;
 - Intel UHD 630 как primary GPU + AMD dGPU offload;
@@ -42,8 +42,11 @@ volume: User Commands
 2. `helpws plan-gnome` — **DONE**
    GNOME host layer завершён 2026-09-23: Retina scale, managed Yaru/Dock profile, host Qt5/Qt6 native Wayland integration, extension policy, portals/PipeWire, Dock Spring и полный smoke-test зафиксированы.
 
-3. `helpws plan-flatpak`
-   Flatpak application layer, permissions, portals, lifecycle и maintenance.
+3. `helpws plan-flatpak` — **DONE**
+   Flatpak application layer завершён 2026-09-24: user-only Flathub,
+   managed-by-default `wsflatpak`, tracked filesystem/environment/D-Bus
+   overrides, GTK/Qt6 integration, portals/PipeWire, associations,
+   install/remove lifecycle и maintenance проверены.
 
 4. `helpws plan-dev`
    Постоянный dev box, Python/uv, Node/Rust, VS Code и специализированные boxes.
@@ -60,8 +63,6 @@ volume: User Commands
 ## Рекомендуемый порядок
 
 ```text
-03 Flatpak desktop apps
-        ↓
 04 Distrobox development
         ↓
 06 KVM / Unreal
