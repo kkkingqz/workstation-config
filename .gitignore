@@ -9,3 +9,7 @@ runtime/
 
 # GNOME GSettings compiled schemas are generated from tracked XML sources
 gnome/extensions/*/schemas/gschemas.compiled
+
+# Python bytecode/cache
+__pycache__/
+*.pyc
