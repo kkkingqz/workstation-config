@@ -66,119 +66,7 @@ def resolve_user_app(query):
         if not raw.strip():
             continue
 
-        parts = raw.split("\t", 1)
-        app_id = parts[0].strip()
-        name = parts[1].strip() if len(parts) > 1 else ""
-
-        aliases = {
-            app_id.casefold(),
-            app_id.rsplit(".", 1)[-1].casefold(),
-        }
-
-        if name:
-            aliases.add(name.casefold())
-
-        if q in aliases:
-            matches.append(app_id)
-
-    matches = list(dict.fromkeys(matches))
-
-    if len(matches) == 1:
-        return matches[0]
-
-    if len(matches) > 1:
-        raise SystemExit(
-            "wsflatpak: ambiguous app name "
-            + query
-            + ": "
-            + ", ".join(matches)
-        )
-
-    raise SystemExit(
-        f"wsflatpak: {query} is not installed in user scope"
-    )
-
-
-def resolve_user_app(query):
-    """Resolve full App ID, display name, or final App-ID component."""
-    need_flatpak()
-
-    p = run(
-        [
-            "flatpak",
-            "list",
-            "--user",
-            "--app",
-            "--columns=application,name",
-        ],
-        check=False,
-        capture=True,
-    )
-
-    q = query.casefold()
-    matches = []
-
-    for raw in p.stdout.splitlines():
-        if not raw.strip():
-            continue
-
-        parts = raw.split("\t", 1)
-        app_id = parts[0].strip()
-        name = parts[1].strip() if len(parts) > 1 else ""
-
-        aliases = {
-            app_id.casefold(),
-            app_id.rsplit(".", 1)[-1].casefold(),
-        }
-
-        if name:
-            aliases.add(name.casefold())
-
-        if q in aliases:
-            matches.append(app_id)
-
-    matches = list(dict.fromkeys(matches))
-
-    if len(matches) == 1:
-        return matches[0]
-
-    if len(matches) > 1:
-        raise SystemExit(
-            "wsflatpak: ambiguous app name "
-            + query
-            + ": "
-            + ", ".join(matches)
-        )
-
-    raise SystemExit(
-        f"wsflatpak: {query} is not installed in user scope"
-    )
-
-
-def resolve_user_app(query):
-    """Resolve full App ID, display name, or final App-ID component."""
-    need_flatpak()
-
-    p = run(
-        [
-            "flatpak",
-            "list",
-            "--user",
-            "--app",
-            "--columns=application,name",
-        ],
-        check=False,
-        capture=True,
-    )
-
-    q = query.casefold()
-    matches = []
-
-    for raw in p.stdout.splitlines():
-        if not raw.strip():
-            continue
-
-        parts = raw.split("\t", 1)
+        parts = raw.split("	", 1)
         app_id = parts[0].strip()
         name = parts[1].strip() if len(parts) > 1 else ""
 
@@ -323,6 +211,12 @@ def runtime_override_config(app):
         cp.read_string(text)
 
     return cp
+
+
+def runtime_filesystems(app):
+    cp = runtime_override_config(app)
+    value = cp.get("Context", "filesystems", fallback="")
+    return [x for x in value.split(";") if x]
 
 
 def runtime_host(app):
@@ -507,10 +401,50 @@ def cmd_remove(ns):
     run(cmd)
 
 
-def cmd_host(app):
+def cmd_filesystem(app, spec):
     need_flatpak()
     app = resolve_user_app(app)
+
+    if spec == "host":
+        raise SystemExit(
+            "wsflatpak: use `wsflatpak host APP` for filesystem=host"
+        )
+
+    values = read_managed_filesystems(app)
+
+    if spec not in values:
+        values.append(spec)
+
+    write_filesystems(app, values)
+    apply_override(app)
+
+    print(f"Tracked filesystem permission enabled: {app}")
+    print(spec)
+
+
+def cmd_unfilesystem(app, spec):
+    need_flatpak()
     app = resolve_user_app(app)
+
+    if spec == "host":
+        raise SystemExit(
+            "wsflatpak: use `wsflatpak unhost APP` for filesystem=host"
+        )
+
+    values = [
+        x for x in read_managed_filesystems(app)
+        if x != spec
+    ]
+
+    write_filesystems(app, values)
+    apply_override(app)
+
+    print(f"Tracked filesystem permission removed: {app}")
+    print(spec)
+
+
+def cmd_host(app):
+    need_flatpak()
     app = resolve_user_app(app)
 
     if not installed_user(app):
@@ -528,8 +462,6 @@ def cmd_host(app):
 
 def cmd_unhost(app):
     need_flatpak()
-    app = resolve_user_app(app)
-    app = resolve_user_app(app)
     app = resolve_user_app(app)
 
     fs = [x for x in read_managed_filesystems(app) if x != "host"]
@@ -599,8 +531,6 @@ def cmd_untalk(app, name):
 def cmd_reset_permissions(app):
     need_flatpak()
     app = resolve_user_app(app)
-    app = resolve_user_app(app)
-    app = resolve_user_app(app)
 
     override_file(app).unlink(missing_ok=True)
     run(["flatpak", "override", "--user", "--reset", app], check=False)
@@ -614,8 +544,6 @@ def cmd_reset_permissions(app):
 
 def cmd_permissions(app):
     need_flatpak()
-    app = resolve_user_app(app)
-    app = resolve_user_app(app)
     app = resolve_user_app(app)
 
     print("===== APP =====")
@@ -815,6 +743,33 @@ def cmd_check():
                 passed(f"filesystem=host tracked: {app}")
             else:
                 fail(f"untracked filesystem=host: {app}")
+
+    for path in OVERRIDES.glob("*.conf"):
+        app = path.stem
+
+        if not installed_user(app):
+            continue
+
+        expected_fs = set(read_managed_filesystems(app)) - {"host"}
+        actual_fs = set(runtime_filesystems(app)) - {"host"}
+
+        for spec in sorted(expected_fs):
+            if spec in actual_fs:
+                passed(
+                    f"filesystem permission tracked: "
+                    f"{app}: {spec}"
+                )
+            else:
+                fail(
+                    f"filesystem permission not applied: "
+                    f"{app}: {spec}"
+                )
+
+        for spec in sorted(actual_fs - expected_fs):
+            fail(
+                f"untracked filesystem override: "
+                f"{app}: {spec}"
+            )
 
     for path in OVERRIDES.glob("*.conf"):
         app = path.stem
@@ -1021,6 +976,14 @@ def build_parser():
         q = sp.add_parser(name)
         q.add_argument("app")
 
+    q = sp.add_parser("filesystem")
+    q.add_argument("app")
+    q.add_argument("spec")
+
+    q = sp.add_parser("unfilesystem")
+    q.add_argument("app")
+    q.add_argument("spec")
+
     q = sp.add_parser("env")
     q.add_argument("app")
     q.add_argument("key")
@@ -1080,6 +1043,10 @@ def main():
         unmanage(ns.app)
     elif ns.cmd == "permissions":
         cmd_permissions(ns.app)
+    elif ns.cmd == "filesystem":
+        cmd_filesystem(ns.app, ns.spec)
+    elif ns.cmd == "unfilesystem":
+        cmd_unfilesystem(ns.app, ns.spec)
     elif ns.cmd == "host":
         cmd_host(ns.app)
     elif ns.cmd == "unhost":

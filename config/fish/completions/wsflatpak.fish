@@ -76,3 +76,24 @@ complete -c wsflatpak -n "__wsflatpak_needs_command" -a untalk -d "Remove tracke
 complete -c wsflatpak -n "__wsflatpak_using_command talk" -a "(__wsflatpak_user_apps)"
 complete -c wsflatpak -n "__wsflatpak_using_command untalk" -a "(__wsflatpak_user_apps)"
 complete -c wsflatpak -n "__wsflatpak_using_command run" -l direct -d "Use flatpak run directly"
+
+
+function __wsflatpak_filesystem_needs_app
+    set -l cmd (commandline -opc)
+    test (count $cmd) -eq 2
+    and contains -- $cmd[2] filesystem unfilesystem
+end
+
+function __wsflatpak_filesystem_needs_spec
+    set -l cmd (commandline -opc)
+    test (count $cmd) -eq 3
+    and contains -- $cmd[2] filesystem unfilesystem
+end
+
+complete -c wsflatpak     -n "__wsflatpak_needs_command"     -a filesystem     -d "Grant tracked filesystem permission"
+
+complete -c wsflatpak     -n "__wsflatpak_needs_command"     -a unfilesystem     -d "Remove tracked filesystem permission"
+
+complete -c wsflatpak     -n "__wsflatpak_filesystem_needs_app"     -a "(__wsflatpak_user_apps)"
+
+complete -c wsflatpak     -n "__wsflatpak_filesystem_needs_spec"     -F
