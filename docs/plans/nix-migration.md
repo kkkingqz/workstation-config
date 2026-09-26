@@ -838,6 +838,18 @@ t2-mbp16         90-touchbar-native.rules, 70-bcm4364-no-d3cold.rules,
 `get-apple-firmware.service` enabled (multi-user.target),
 `broadcom-aspm-restore.service` static.
 
+**Ход 4a (2026-09-26):** опись — `modules/system/`: `common.nix`,
+`boot/<facts.boot>.nix`, `hardware/<facts.hardware>.nix` (выбор по фактам,
+а не отдельный `hosts/mbp16/system.nix`: второй хост получит те же профили).
+Новые факты `rootUuid` и `refindEspPartuuid` — без них `refind_linux.conf`
+и сравнение ESP не собрать. Сборка `system-mbp16` (в `checks` и
+`packages`): `files/` + `esp/` + `manifest` (режим, путь; состояние unit'ов).
+`ws system diff|check` сравнивает содержимое, режим и root:root, ESP — только
+смонтированный; `ws check` включает `ws system check`. Первый
+`ws system diff` пуст: 23 файла (ESP не смонтирован), 3 unit'а; проверка
+с лишним параметром ядра даёт DIFFERS в `refind_linux.conf` и
+`10-workstation-cmdline.cfg`.
+
 ## 4b. `ws system apply` — те же действия, что сейчас
 
 `apply` повторяет всё, что делают `ws-keyboard-system-apply` и

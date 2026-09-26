@@ -194,10 +194,14 @@ systemctl --user is-active wireplumber
 ws apply            # расширения → tiling → клавиатура → GNOME → Flatpak → Distrobox
 # logout/login: новые расширения GNOME активируются только в новой сессии
 ws apply            # шаг keyboard, не прошедший preflight в первый раз
-ws check            # verify, wsflatpak, wsbox, ws-gnome, ws-suspend: итог FAIL/WARN
+ws check            # verify, wsflatpak, wsbox, ws-gnome, ws-suspend, ws system: итог FAIL/WARN
 ```
 
 Шаг, чей preflight не прошёл (exit 69), выводится в конце как `PREFLIGHT`.
+
+`ws system diff` сравнивает системные файлы (`/etc`, `/boot`, `/usr/local`,
+`/usr/lib/systemd/system-sleep`), собранные Nix из `modules/system/`, с
+установленными; ничего не меняет. Пустой вывод — система совпадает с repo.
 Отдельный шаг: `ws apply keyboard`. Разделы 6.1, 6.3, 6.4 и 10 ниже
 описывают те же шаги вручную.
 

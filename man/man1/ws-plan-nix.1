@@ -1069,6 +1069,18 @@ t2-mbp16         90-touchbar-native.rules, 70-bcm4364-no-d3cold.rules,
 \f(CRws system check\fR проверяет и включённость: \f(CRws-touchbar-fn.service\fR и
 \f(CRget-apple-firmware.service\fR enabled (multi-user.target),
 \f(CRbroadcom-aspm-restore.service\fR static.
+.PP
+\fBХод 4a (2026-09-26):\fR опись — \f(CRmodules/system/\fR: \f(CRcommon.nix\fR,
+\f(CRboot/<facts.boot>.nix\fR, \f(CRhardware/<facts.hardware>.nix\fR (выбор по фактам,
+а не отдельный \f(CRhosts/mbp16/system.nix\fR: второй хост получит те же профили).
+Новые факты \f(CRrootUuid\fR и \f(CRrefindEspPartuuid\fR — без них \f(CRrefind_linux.conf\fR
+и сравнение ESP не собрать. Сборка \f(CRsystem-mbp16\fR (в \f(CRchecks\fR и
+\f(CRpackages\fR): \f(CRfiles/\fR + \f(CResp/\fR + \f(CRmanifest\fR (режим, путь; состояние unit\(cqов).
+\f(CRws system diff|check\fR сравнивает содержимое, режим и root:root, ESP — только
+смонтированный; \f(CRws check\fR включает \f(CRws system check\fR. Первый
+\f(CRws system diff\fR пуст: 23 файла (ESP не смонтирован), 3 unit\(cqа; проверка
+с лишним параметром ядра даёт DIFFERS в \f(CRrefind_linux.conf\fR и
+\f(CR10-workstation-cmdline.cfg\fR.
 .SS
 4b. \f(CRws system apply\fR — те же действия, что сейчас
 .LP

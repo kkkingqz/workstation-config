@@ -1506,6 +1506,8 @@ section "14.4 Nix layer (docs/plans/nix-migration.md)"
 
 for path in flake.nix hosts/mbp16/facts.nix hosts/mbp16/home.nix \
     modules/home/links.nix modules/home/cli.nix modules/home/xremap.nix pkgs/xremap.nix \
+    modules/system/default.nix modules/system/common.nix \
+    modules/system/boot/refind-grub-recovery.nix modules/system/hardware/t2-mbp16.nix \
     config/fish/conf.d/00-nix.fish config/nix/nix.conf .github/workflows/check.yml; do
     tracked "$path" "$path"
 done

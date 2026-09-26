@@ -14,6 +14,7 @@ Usage:
   ws diff
   ws apply [STEP...]
   ws check [-v]
+  ws system diff|check
   ws baseline capture|diff|list ...
   ws host
 
@@ -33,6 +34,10 @@ apply     run the layer owners in order, as by hand (no sudo steps):
 check     run the owners' checks (ws-workstation-verify, wsflatpak check,
           wsbox check, ws-gnome check, ws-suspend status) and summarize;
           shows WARN/FAIL lines only, -v shows the full output
+system    build the host system file tree (modules/system) and compare it
+          with the live system, read-only: diff shows file differences,
+          check also unit states and prints OK/DIFFERS/MISSING per entry;
+          files on the rEFInd ESP are compared only when it is mounted
 baseline  functional baseline, see ws-baseline --help
 host      print the flake host name used for this machine
 USAGE
@@ -153,6 +158,89 @@ cmd_apply() {
     [[ "$failed" == false ]]
 }
 
+system_tree() {
+    local nix
+    nix="$(nix_bin)"
+    check_untracked
+    "$nix" build --no-link --print-out-paths "$repo#system-$(host)"
+}
+
+# Compare one built file with the live one: content, mode and root:root.
+# Prints a status line (and, for diff, the content difference); returns 1 on
+# a difference.
+system_compare() {
+    local mode="$1" built="$2" live="$3" want="$4" have
+    if [[ ! -e "$live" ]]; then
+        printf 'MISSING %s\n' "$live"
+        return 1
+    fi
+    if [[ ! -r "$live" ]]; then
+        printf 'FAIL    %s (not readable)\n' "$live"
+        return 1
+    fi
+    if ! cmp -s "$built" "$live"; then
+        printf 'DIFFERS %s\n' "$live"
+        [[ "$mode" == diff ]] && { diff -u --label "$live" --label "built" "$live" "$built" || true; }
+        return 1
+    fi
+    have="$(stat -c '%a %U:%G' "$live")"
+    if [[ "$have" != "${want#0} root:root" ]]; then
+        printf 'DIFFERS %s (%s, want %s root:root)\n' "$live" "$have" "${want#0}"
+        return 1
+    fi
+    if [[ "$mode" == check ]]; then
+        printf 'OK      %s\n' "$live"
+    fi
+}
+
+cmd_system() {
+    local mode="${1:-}" tree kind a b esp state problems=0 files=0 units=0
+
+    case "$mode" in
+        diff|check) ;;
+        *) die "usage: ws system diff|check" ;;
+    esac
+    tree="$(system_tree)"
+
+    while IFS=$'\t' read -r kind a b; do
+        case "$kind" in
+            file)
+                files=$((files + 1))
+                system_compare "$mode" "$tree/files$b" "$b" "$a" || problems=$((problems + 1))
+                ;;
+            esp)
+                files=$((files + 1))
+                esp="$(findmnt -rno TARGET "/dev/disk/by-partuuid/$a" 2>/dev/null | head -n1 || true)"
+                if [[ -z "$esp" ]]; then
+                    if [[ "$mode" == check ]]; then
+                        printf 'SKIP    ESP:%s (ESP not mounted)\n' "$b"
+                    fi
+                    continue
+                fi
+                system_compare "$mode" "$tree/esp/$b" "$esp/$b" 0644 || problems=$((problems + 1))
+                ;;
+            unit)
+                units=$((units + 1))
+                [[ "$mode" == check ]] || continue
+                state="$(systemctl is-enabled "$b" 2>/dev/null || true)"
+                if [[ "$state" == "$a" ]]; then
+                    printf 'OK      unit %s (%s)\n' "$b" "$state"
+                else
+                    printf 'DIFFERS unit %s (%s, want %s)\n' "$b" "${state:-unknown}" "$a"
+                    problems=$((problems + 1))
+                fi
+                ;;
+        esac
+    done < "$tree/manifest"
+
+    if [[ "$mode" == check ]]; then
+        printf '\n%s: %d files, %d units, %d problem(s)\n' "$tree" "$files" "$units" "$problems"
+    elif ((problems == 0)); then
+        echo "no differences ($files files)"
+    fi
+    ((problems == 0))
+}
+
 # Owner checks: name, command. Problem lines are WARN/FAIL (verify, wsflatpak,
 # wsbox), DRIFT (ws-gnome), DIFFERS/MISSING and an unheld kernel (ws-suspend).
 check_steps=(
@@ -161,6 +249,7 @@ check_steps=(
     "distrobox wsbox check"
     "gnome ws-gnome check"
     "suspend ws-suspend status"
+    "system ws system check"
 )
 
 cmd_check() {
@@ -219,6 +308,7 @@ case "${1:-}" in
     check) shift; cmd_check "$@" ;;
     switch) shift; cmd_switch "$@" ;;
     diff) shift; cmd_diff "$@" ;;
+    system) shift; cmd_system "$@" ;;
     baseline) shift; exec "$repo/bin/ws-baseline" "$@" ;;
     host) host ;;
     -h|--help|help) usage ;;

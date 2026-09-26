@@ -24,17 +24,25 @@
           };
           modules = [ ./hosts/${host}/home.nix ];
         };
+
+      # System file tree of the host; `ws system diff|check` compares it.
+      mkSystem = host: pkgs.callPackage ./modules/system {
+        facts = import ./hosts/${host}/facts.nix;
+      };
     in {
       homeConfigurations."king@mbp16" = mkHome "mbp16";
 
-      checks.${system}.home-mbp16 =
-        (mkHome "mbp16").activationPackage;
+      checks.${system} = {
+        home-mbp16 = (mkHome "mbp16").activationPackage;
+        system-mbp16 = mkSystem "mbp16";
+      };
 
       # Tools `ws` runs, pinned by flake.lock.
       packages.${system} = {
         home-manager = home-manager.packages.${system}.home-manager;
         nvd = pkgs.nvd;
         xremap = pkgs.callPackage ./pkgs/xremap.nix { };
+        system-mbp16 = mkSystem "mbp16";
       };
     };
 }
