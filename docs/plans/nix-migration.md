@@ -750,6 +750,17 @@ ws check    ws-workstation-verify, wsflatpak check, wsbox check,
 пуст, кроме отметок времени бэкапов `ws-gnome`); `ws check` зелёный; тег
 `nix-phase-2`.
 
+**Итог (2026-09-26):** `ws apply [STEP...]` — шаги `extensions`, `tiling`,
+`keyboard`, `gnome`, `flatpak`, `distrobox`; ошибка шага не прерывает
+остальные, exit 69 выводится как `PREFLIGHT` (logout/login), итог — в конце.
+`ws check [-v]` — пять проверок владельцев, показывает только строки
+WARN/FAIL/DRIFT/DIFFERS/MISSING и итог `FAIL=… WARN=…`. На текущей машине
+`ws apply` — все шаги OK, `ws baseline diff phase-1 phase-2` — только
+хэши `ws` и `ws-baseline`; `ws-keyboard-apply` записывает те же значения
+ключей и перезапускает `xremap.service`, `wsbox apply` пропускает
+существующие контейнеры до pull. `ws check`: FAIL=0, WARN — неуправляемые
+контейнеры сборки `t2bce-build`, `touchbar-build` (были и до миграции).
+
 ---
 
 # ФАЗА 3 — БИНАРНИК XREMAP

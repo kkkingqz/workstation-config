@@ -232,6 +232,21 @@ systemctl --user is-active wireplumber
 .EE
 .PP
 Не ставить SwayNC/SwayOSD/swaylock/swayidle и не заменять штатные GNOME components.
+.SH 6.0. Пользовательский слой одной командой
+.LP
+Когда есть Nix и выполнен \f(CRws switch\fR (\f(CRhelpws plan-nix\fR), владельцы слоёв
+вызываются по порядку одной командой, без sudo:
+.LP
+.EX
+ws apply            # расширения → tiling → клавиатура → GNOME → Flatpak → Distrobox
+# logout/login: новые расширения GNOME активируются только в новой сессии
+ws apply            # шаг keyboard, не прошедший preflight в первый раз
+ws check            # verify, wsflatpak, wsbox, ws-gnome, ws-suspend: итог FAIL/WARN
+.EE
+.PP
+Шаг, чей preflight не прошёл (exit 69), выводится в конце как \f(CRPREFLIGHT\fR.
+Отдельный шаг: \f(CRws apply keyboard\fR. Разделы 6.1, 6.3, 6.4 и 10 ниже
+описывают те же шаги вручную.
 .SH 6.1. Managed GNOME appearance
 .LP
 После clone repository сначала проверить текущий desktop state:
@@ -259,6 +274,8 @@ ws-gnome dry-run
 .EX
 ws-gnome apply
 .EE
+.PP
+(шаг \f(CRgnome\fR в \f(CRws apply\fR)
 .PP
 \f(CRws-gnome apply\fR не управляет display scale, \f(CRmonitors.xml\fR, Mutter
 experimental flags, keyboard/input sources, extension enablement, wallpaper,
@@ -338,6 +355,8 @@ ls -l /dev/ntsync
 wsbox apply
 wsbox status
 .EE
+.PP
+(шаг \f(CRdistrobox\fR в \f(CRws apply\fR)
 .PP
 Managed set:
 .LP
@@ -474,6 +493,9 @@ GDM/login layout = US only
 \(ti/.local/share/workstation-config/bin/ws-tiling-apply
 \(ti/.local/share/workstation-config/bin/ws-keyboard-apply
 .EE
+.PP
+Расширения, tiling и клавиатура — шаги \f(CRextensions\fR, \f(CRtiling\fR, \f(CRkeyboard\fR
+в \f(CRws apply\fR; \f(CRws-keyboard-system-apply\fR (sudo) в него не входит.
 .PP
 Целевые input sources:
 .LP
@@ -633,7 +655,8 @@ workstation-input-source@local
 ws-keyboard-install-extensions
 .EE
 .PP
-После изменения \f(CRextension.js\fR на Wayland выполнить logout/login.
+(шаг \f(CRextensions\fR в \f(CRws apply\fR). После изменения \f(CRextension.js\fR на Wayland
+выполнить logout/login.
 .PP
 \f(CRWindow Monitor Pro\fR не является зависимостью текущего keyboard baseline.
 .PP
@@ -682,6 +705,7 @@ GNOME plan.
 Запустить:
 .LP
 .EX
+ws check
 ws-workstation-verify --strict
 .EE
 .PP

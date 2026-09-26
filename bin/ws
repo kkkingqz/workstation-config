@@ -12,12 +12,27 @@ usage() {
 Usage:
   ws switch [HOME-MANAGER-ARG...]
   ws diff
+  ws apply [STEP...]
+  ws check [-v]
   ws baseline capture|diff|list ...
   ws host
 
 switch    home-manager switch for this user and host (pinned by flake.lock)
 diff      build the home generation without activating it and show the
           package difference against the current one (nvd)
+apply     run the layer owners in order, as by hand (no sudo steps):
+            extensions  ws-keyboard-install-extensions
+            tiling      ws-tiling-apply
+            keyboard    ws-keyboard-apply
+            gnome       ws-gnome apply
+            flatpak     wsflatpak apply
+            distrobox   wsbox apply
+          a step whose preflight fails (exit 69: e.g. new extensions need a
+          logout/login) is reported at the end; on a new machine:
+          ws apply, log out and in, ws apply
+check     run the owners' checks (ws-workstation-verify, wsflatpak check,
+          wsbox check, ws-gnome check, ws-suspend status) and summarize;
+          shows WARN/FAIL lines only, -v shows the full output
 baseline  functional baseline, see ws-baseline --help
 host      print the flake host name used for this machine
 USAGE
@@ -93,7 +108,115 @@ cmd_diff() {
     "$nix" run "$repo#nvd" -- diff "$old" "$new"
 }
 
+# Layer owners in apply order: name, command.
+apply_steps=(
+    "extensions ws-keyboard-install-extensions"
+    "tiling ws-tiling-apply"
+    "keyboard ws-keyboard-apply"
+    "gnome ws-gnome apply"
+    "flatpak wsflatpak apply"
+    "distrobox wsbox apply"
+)
+
+cmd_apply() {
+    local wanted=("$@") step name cmd rc known
+    local -a results=()
+    local failed=false
+
+    for name in "${wanted[@]}"; do
+        known=false
+        for step in "${apply_steps[@]}"; do
+            [[ "${step%% *}" == "$name" ]] && known=true
+        done
+        [[ "$known" == true ]] || die "unknown apply step: $name"
+    done
+
+    for step in "${apply_steps[@]}"; do
+        name="${step%% *}"
+        cmd="${step#* }"
+        if ((${#wanted[@]})) && [[ " ${wanted[*]} " != *" $name "* ]]; then
+            continue
+        fi
+        printf '\n=== %s: %s\n' "$name" "$cmd"
+        rc=0
+        # shellcheck disable=SC2086 # cmd is a fixed command line
+        "$repo/bin/"$cmd || rc=$?
+        case "$rc" in
+            0) results+=("OK        $name") ;;
+            69) results+=("PREFLIGHT $name (log out and in, then: ws apply $name)"); failed=true ;;
+            *) results+=("FAIL      $name (exit $rc)"); failed=true ;;
+        esac
+    done
+
+    printf '\n=== ws apply\n'
+    printf '  %s\n' "${results[@]}"
+    [[ "$failed" == false ]]
+}
+
+# Owner checks: name, command. Problem lines are WARN/FAIL (verify, wsflatpak,
+# wsbox), DRIFT (ws-gnome), DIFFERS/MISSING and an unheld kernel (ws-suspend).
+check_steps=(
+    "verify ws-workstation-verify"
+    "flatpak wsflatpak check"
+    "distrobox wsbox check"
+    "gnome ws-gnome check"
+    "suspend ws-suspend status"
+)
+
+cmd_check() {
+    local verbose=false step name cmd rc out warn fail
+    local -a results=()
+    local total_warn=0 total_fail=0
+
+    case "${1:-}" in
+        -v|--verbose) verbose=true ;;
+        "") ;;
+        *) die "unknown check option: $1" ;;
+    esac
+
+    out="$(mktemp)"
+    trap 'rm -f "$out"' RETURN
+
+    for step in "${check_steps[@]}"; do
+        name="${step%% *}"
+        cmd="${step#* }"
+        rc=0
+        # shellcheck disable=SC2086 # cmd is a fixed command line
+        "$repo/bin/"$cmd > "$out" 2>&1 || rc=$?
+        warn="$(grep -cE '^[[:space:]]*WARN[[:space:]]|not held' "$out" || true)"
+        fail="$(grep -cE '^[[:space:]]*(FAIL|DRIFT|DIFFERS|MISSING)[[:space:]]' "$out" || true)"
+        # A non-zero exit without problem lines still counts as one failure.
+        if ((rc != 0 && fail == 0)); then
+            fail=1
+        fi
+
+        printf '\n=== %s: %s (exit %s)\n' "$name" "$cmd" "$rc"
+        if [[ "$verbose" == true ]]; then
+            cat "$out"
+        else
+            grep -E '^[[:space:]]*(WARN|FAIL|DRIFT|DIFFERS|MISSING)[[:space:]]|not held' "$out" || true
+        fi
+
+        total_warn=$((total_warn + warn))
+        total_fail=$((total_fail + fail))
+        if ((fail)); then
+            results+=("FAIL  $name ($fail)")
+        elif ((warn)); then
+            results+=("WARN  $name ($warn)")
+        else
+            results+=("OK    $name")
+        fi
+    done
+
+    printf '\n=== ws check\n'
+    printf '  %s\n' "${results[@]}"
+    printf '  FAIL=%d WARN=%d\n' "$total_fail" "$total_warn"
+    ((total_fail == 0))
+}
+
 case "${1:-}" in
+    apply) shift; cmd_apply "$@" ;;
+    check) shift; cmd_check "$@" ;;
     switch) shift; cmd_switch "$@" ;;
     diff) shift; cmd_diff "$@" ;;
     baseline) shift; exec "$repo/bin/ws-baseline" "$@" ;;

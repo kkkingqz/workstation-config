@@ -958,6 +958,17 @@ ws check    ws-workstation-verify, wsflatpak check, wsbox check,
 \fBГотово:\fR \f(CRws apply\fR на текущей машине ничего не меняет (\f(CRws baseline diff\fR
 пуст, кроме отметок времени бэкапов \f(CRws-gnome\fR); \f(CRws check\fR зелёный; тег
 \f(CRnix-phase-2\fR.
+.PP
+\fBИтог (2026-09-26):\fR \f(CRws apply [STEP...]\fR — шаги \f(CRextensions\fR, \f(CRtiling\fR,
+\f(CRkeyboard\fR, \f(CRgnome\fR, \f(CRflatpak\fR, \f(CRdistrobox\fR; ошибка шага не прерывает
+остальные, exit 69 выводится как \f(CRPREFLIGHT\fR (logout/login), итог — в конце.
+\f(CRws check [-v]\fR — пять проверок владельцев, показывает только строки
+WARN/FAIL/DRIFT/DIFFERS/MISSING и итог \f(CRFAIL=… WARN=…\fR. На текущей машине
+\f(CRws apply\fR — все шаги OK, \f(CRws baseline diff phase-1 phase-2\fR — только
+хэши \f(CRws\fR и \f(CRws-baseline\fR; \f(CRws-keyboard-apply\fR записывает те же значения
+ключей и перезапускает \f(CRxremap.service\fR, \f(CRwsbox apply\fR пропускает
+существующие контейнеры до pull. \f(CRws check\fR: FAIL=0, WARN — неуправляемые
+контейнеры сборки \f(CRt2bce-build\fR, \f(CRtouchbar-build\fR (были и до миграции).
 .LP
 \l'2i'
 .SH ФАЗА 3 — БИНАРНИК XREMAP

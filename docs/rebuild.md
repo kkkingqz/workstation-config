@@ -185,6 +185,22 @@ systemctl --user is-active wireplumber
 Не ставить SwayNC/SwayOSD/swaylock/swayidle и не заменять штатные GNOME components.
 
 
+# 6.0. Пользовательский слой одной командой
+
+Когда есть Nix и выполнен `ws switch` (`helpws plan-nix`), владельцы слоёв
+вызываются по порядку одной командой, без sudo:
+
+```console
+ws apply            # расширения → tiling → клавиатура → GNOME → Flatpak → Distrobox
+# logout/login: новые расширения GNOME активируются только в новой сессии
+ws apply            # шаг keyboard, не прошедший preflight в первый раз
+ws check            # verify, wsflatpak, wsbox, ws-gnome, ws-suspend: итог FAIL/WARN
+```
+
+Шаг, чей preflight не прошёл (exit 69), выводится в конце как `PREFLIGHT`.
+Отдельный шаг: `ws apply keyboard`. Разделы 6.1, 6.3, 6.4 и 10 ниже
+описывают те же шаги вручную.
+
 # 6.1. Managed GNOME appearance
 
 После clone repository сначала проверить текущий desktop state:
@@ -212,6 +228,8 @@ ws-gnome dry-run
 ```console
 ws-gnome apply
 ```
+
+(шаг `gnome` в `ws apply`)
 
 `ws-gnome apply` не управляет display scale, `monitors.xml`, Mutter
 experimental flags, keyboard/input sources, extension enablement, wallpaper,
@@ -296,6 +314,8 @@ ls -l /dev/ntsync
 wsbox apply
 wsbox status
 ```
+
+(шаг `distrobox` в `ws apply`)
 
 Managed set:
 
@@ -434,6 +454,9 @@ GDM/login layout = US only
 ~/.local/share/workstation-config/bin/ws-tiling-apply
 ~/.local/share/workstation-config/bin/ws-keyboard-apply
 ```
+
+Расширения, tiling и клавиатура — шаги `extensions`, `tiling`, `keyboard`
+в `ws apply`; `ws-keyboard-system-apply` (sudo) в него не входит.
 
 Целевые input sources:
 
@@ -582,7 +605,8 @@ workstation-input-source@local
 ws-keyboard-install-extensions
 ```
 
-После изменения `extension.js` на Wayland выполнить logout/login.
+(шаг `extensions` в `ws apply`). После изменения `extension.js` на Wayland
+выполнить logout/login.
 
 `Window Monitor Pro` не является зависимостью текущего keyboard baseline.
 
@@ -634,6 +658,7 @@ GNOME plan.
 Запустить:
 
 ```bash
+ws check
 ws-workstation-verify --strict
 ```
 
