@@ -16,6 +16,10 @@ if status is-interactive
         # Keep Ctrl+R = history and Alt+C = directory search.
         set -lx FZF_CTRL_T_COMMAND ""
         fzf --fish | source
+        # fzf >= 0.70 also takes Shift+Tab (fzf_complete); keep fish's own
+        # complete-and-search there, as with older fzf.
+        bind -e shift-tab
+        bind -M insert -e shift-tab
     end
 
     # -------------------------------------------------------------------------

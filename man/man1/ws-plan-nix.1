@@ -896,6 +896,32 @@ zoxide, алиасы eza, заголовки вкладок как раньше;
 .PP
 \fBОткат:\fR \f(CRhome-manager generations\fR → \f(CRactivate\fR предыдущего поколения;
 ссылки \f(CR*.hm-bak\fR.
+.PP
+\fBИтог (2026-09-26):\fR \f(CRmodules/home/links.nix\fR — ссылки по одному файлу на
+каталоги \f(CRconfig/fish/**\fR, \f(CRconfig/ghostty/*.ghostty\fR, \f(CRconfig/nix\fR, \f(CRbin/\fR
+(кроме \f(CRws-caps-led\fR), \f(CRman/man1\fR, плюс три файла \f(CRconfig/xdg-terminals/\fR;
+новые файлы подключает следующий \f(CRws switch\fR. \f(CRmodules/home/cli.nix\fR — fzf
+0.72, zoxide 0.9.9, eza 0.23.4, micro 2.0.15, nvd. Отличия от плана:
+.IP "\(bu" 3
+\f(CRlowdown\fR остаётся из apt: 3.0.1 меняет man-вывод (отступы списков в 9
+страницах из 16);
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+fzf ≥ 0.70 в \f(CRfzf --fish\fR безусловно занимает Shift+Tab (\f(CRfzf_complete\fR);
+\f(CRconfig.fish\fR снимает эту привязку — остаётся \f(CRcomplete-and-search\fR fish;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+\f(CR*.hm-bak\fR не появились: home-manager заменяет существующие ссылки с той
+же целью без бэкапа («skipped since they are the same»).
+.LP
+Цели ссылок не изменились (сверено по \f(CRreadlink -f\fR до switch); новое —
+\f(CRws-gnome-test.fish\fR и 14 man-страниц, \f(CRman ws-…\fR работает.
 .LP
 \l'2i'
 .SH ФАЗА 2 — ОРКЕСТРАТОР WS APPLY / WS CHECK

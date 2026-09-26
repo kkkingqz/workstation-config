@@ -707,6 +707,22 @@ zoxide, алиасы eza, заголовки вкладок как раньше;
 **Откат:** `home-manager generations` → `activate` предыдущего поколения;
 ссылки `*.hm-bak`.
 
+**Итог (2026-09-26):** `modules/home/links.nix` — ссылки по одному файлу на
+каталоги `config/fish/**`, `config/ghostty/*.ghostty`, `config/nix`, `bin/`
+(кроме `ws-caps-led`), `man/man1`, плюс три файла `config/xdg-terminals/`;
+новые файлы подключает следующий `ws switch`. `modules/home/cli.nix` — fzf
+0.72, zoxide 0.9.9, eza 0.23.4, micro 2.0.15, nvd. Отличия от плана:
+
+- `lowdown` остаётся из apt: 3.0.1 меняет man-вывод (отступы списков в 9
+  страницах из 16);
+- fzf ≥ 0.70 в `fzf --fish` безусловно занимает Shift+Tab (`fzf_complete`);
+  `config.fish` снимает эту привязку — остаётся `complete-and-search` fish;
+- `*.hm-bak` не появились: home-manager заменяет существующие ссылки с той
+  же целью без бэкапа («skipped since they are the same»).
+
+Цели ссылок не изменились (сверено по `readlink -f` до switch); новое —
+`ws-gnome-test.fish` и 14 man-страниц, `man ws-…` работает.
+
 ---
 
 # ФАЗА 2 — ОРКЕСТРАТОР WS APPLY / WS CHECK

@@ -538,6 +538,13 @@ man ws-workstation
 ~/.config/fish/completions/helpws.fish
 ```
 
+Все файлы из `config/fish/` (и `config/ghostty/*.ghostty`, команды `bin/`,
+`man/man1/`) подключены ссылками home-manager в checkout
+(`modules/home/links.nix`); новый файл подключается следующим `ws switch`.
+fzf, zoxide, eza, micro — из Nix (`modules/home/cli.nix`), `lowdown` — из
+apt. fzf ≥ 0.70 занимает Shift+Tab; `config.fish` возвращает туда
+`complete-and-search` fish.
+
 ## Help viewer
 
 ```text

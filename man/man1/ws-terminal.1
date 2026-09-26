@@ -603,6 +603,13 @@ Fish
 \(ti/.config/fish/functions/fzf_cd_browser.fish
 \(ti/.config/fish/completions/helpws.fish
 .EE
+.LP
+Все файлы из \f(CRconfig/fish/\fR (и \f(CRconfig/ghostty/*.ghostty\fR, команды \f(CRbin/\fR,
+\f(CRman/man1/\fR) подключены ссылками home-manager в checkout
+(\f(CRmodules/home/links.nix\fR); новый файл подключается следующим \f(CRws switch\fR.
+fzf, zoxide, eza, micro — из Nix (\f(CRmodules/home/cli.nix\fR), \f(CRlowdown\fR — из
+apt. fzf ≥ 0.70 занимает Shift+Tab; \f(CRconfig.fish\fR возвращает туда
+\f(CRcomplete-and-search\fR fish.
 .SS
 Help viewer
 .LP

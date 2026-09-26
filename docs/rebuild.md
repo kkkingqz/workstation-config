@@ -258,7 +258,9 @@ sudo apt install --no-install-recommends -y \
     podman distrobox uidmap fuse-overlayfs slirp4netns passt
 ```
 
-Восстановить runtime helper и Fish completion:
+Runtime helper и Fish completion — ссылки home-manager, их создаёт
+`ws switch` (`modules/home/links.nix`, `helpws plan-nix`). Без Nix —
+вручную:
 
 ```console
 repo="$HOME/.local/share/workstation-config"

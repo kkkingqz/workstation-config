@@ -242,7 +242,8 @@ normalize_verify() {
         | grep -E '^(PASS|WARN|FAIL) ' || true)"
     normalize_check "$base/checks/ws-workstation-verify.txt" \
         | grep -vE '^(PASS|WARN|FAIL) (working tree|HEAD |local HEAD|wsbox check:|arch: )' \
-        | grep -vxF -e "${boxes:-@@none@@}"
+        | grep -vxF -e "${boxes:-@@none@@}" \
+        | sed -E "s/^(PASS ws-input-source status works: ).*/\1<layout>/"
 }
 
 # Active user units without what depends on open apps and devices: app and
@@ -274,6 +275,11 @@ cmd_diff() {
         fi
         case "$rel" in
             meta.txt) continue ;;
+            # The active layout is the state of the moment, not configuration.
+            checks/ws-input-source-status.txt)
+                sed -E "s/^\('[a-z]+', '[a-z]+'\)$/<layout>/" "$a/$rel" > "$tmp/a"
+                sed -E "s/^\('[a-z]+', '[a-z]+'\)$/<layout>/" "$b/$rel" > "$tmp/b"
+                ;;
             checks/ws-workstation-verify.txt)
                 normalize_verify "$a" > "$tmp/a"
                 normalize_verify "$b" > "$tmp/b"
@@ -281,6 +287,10 @@ cmd_diff() {
             checks/*)
                 normalize_check "$a/$rel" > "$tmp/a"
                 normalize_check "$b/$rel" > "$tmp/b"
+                ;;
+            gnome/dconf.ini)
+                grep -v "^caps-binary-state=" "$a/$rel" > "$tmp/a"
+                grep -v "^caps-binary-state=" "$b/$rel" > "$tmp/b"
                 ;;
             gnome/extensions-enabled.txt)
                 sort "$a/$rel" > "$tmp/a"

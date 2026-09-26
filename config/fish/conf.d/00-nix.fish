@@ -5,4 +5,10 @@
 if test -d /nix/var/nix
     set -q NIX_REMOTE; or set -gx NIX_REMOTE daemon
     fish_add_path --global --path $HOME/.nix-profile/bin
+    # Completions of CLI from Nix. XDG_DATA_DIRS stays untouched: it would
+    # duplicate .desktop entries in the app grid.
+    set -l nix_completions $HOME/.nix-profile/share/fish/vendor_completions.d
+    if test -d $nix_completions; and not contains $nix_completions $fish_complete_path
+        set -g fish_complete_path $fish_complete_path $nix_completions
+    end
 end

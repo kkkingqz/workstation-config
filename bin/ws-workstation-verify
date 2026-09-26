@@ -1492,6 +1492,7 @@ check_symlink_target "$HOME/.local/share/applications/ghostty-open-here.desktop"
 section "14.4 Nix layer (docs/plans/nix-migration.md)"
 
 for path in flake.nix hosts/mbp16/facts.nix hosts/mbp16/home.nix \
+    modules/home/links.nix modules/home/cli.nix \
     config/fish/conf.d/00-nix.fish config/nix/nix.conf .github/workflows/check.yml; do
     tracked "$path" "$path"
 done
@@ -1533,6 +1534,24 @@ if [[ -d /nix/var/nix ]]; then
         fail "nix-bin installed but nix not in PATH"
     fi
     tracked flake.lock flake.lock
+
+    # Phase 1: links into the checkout are owned by home-manager, terminal
+    # CLI come from Nix, lowdown stays from apt (man/ is generated with 2.x).
+    hm_gen="$(readlink -f "${XDG_STATE_HOME:-$HOME/.local/state}/nix/profiles/home-manager" 2>/dev/null || true)"
+    [[ -n "$hm_gen" && -e "$hm_gen/activate" ]] \
+        && pass "home-manager generation active: ${hm_gen#/nix/store/}" \
+        || fail "no active home-manager generation (ws switch)"
+    [[ "$(readlink "$HOME/.local/bin/ws" 2>/dev/null)" == /nix/store/*-home-manager-files/* ]] \
+        && pass "~/.local/bin links are owned by home-manager" \
+        || warn "~/.local/bin/ws is not a home-manager link (ws switch)"
+    for tool in fzf zoxide eza micro nvd; do
+        [[ "$(command -v "$tool" 2>/dev/null)" == "$HOME/.nix-profile/bin/$tool" ]] \
+            && pass "$tool from Nix profile" \
+            || warn "$tool does not resolve to ~/.nix-profile/bin ($(command -v "$tool" 2>/dev/null || echo missing))"
+    done
+    [[ "$(command -v lowdown 2>/dev/null)" == /usr/bin/lowdown ]] \
+        && pass "lowdown from apt (man/ is generated with it)" \
+        || warn "lowdown resolves to $(command -v lowdown 2>/dev/null || echo missing), not /usr/bin/lowdown"
 else
     warn "Nix not installed yet (phase 0 of docs/plans/nix-migration.md)"
 fi

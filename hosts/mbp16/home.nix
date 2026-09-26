@@ -1,7 +1,12 @@
-# User layer of mbp16. Phase 0: an empty home-manager generation; layer owners
+# User layer of mbp16: links into the checkout and terminal CLI; layer owners
 # (wsflatpak, wsbox, ws-gnome, ws-keyboard*, ws-suspend) stay as they are.
 { facts, ... }:
 {
+  imports = [
+    ../../modules/home/links.nix
+    ../../modules/home/cli.nix
+  ];
+
   home.username = facts.user;
   home.homeDirectory = "/home/${facts.user}";
   home.stateVersion = "26.05";
