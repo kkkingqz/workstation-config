@@ -1145,6 +1145,20 @@ verify: проверки «apply installs …» указывают на ново
 .PP
 \fBОткат:\fR файлы из \f(CR/var/backups/workstation/\fR; если не грузится — GRUB →
 recovery → \f(CRpre-phase4-root\fR.
+.PP
+\fBИтог (2026-09-26), фаза закрыта с отступлениями:\fR \f(CRws system apply\fR
+(\f(CRebe8942\fR) — единый владелец системных файлов; \f(CRws-keyboard-system-apply\fR
+и \f(CRws-suspend apply\fR — обёртки над ним. Перед apply: recovery обновлён
+(\f(CRsystem-backup-snapshot\fR), \f(CR/.snapshots/pre-phase4-root\fR и
+\f(CRpre-phase4-nix\fR. Первый \f(CRws system apply\fR: 0 файлов изменено,
+\f(CR/etc/default/keyboard\fR без изменений, \f(CRws-touchbar-fn\fR перезапущен и
+активен, \f(CRMemorySleepMode=deep\fR, Touch Bar в USB configuration 1; ни
+initramfs, ни \f(CRupdate-grub\fR не запускались. Ошибка в конце первого запуска
+(RETURN-trap \f(CRapply\fR срабатывал и при выходе из \f(CRcmd_system\fR) исправлена.
+\f(CRws check\fR: FAIL 0. \f(CRws baseline diff phase-3 phase-4\fR — только хэши
+изменённых скриптов и новые проверки verify. Отступления (решение
+пользователя): 10 циклов suspend не делались — \f(CRapply\fR не изменил ни одного
+файла suspend-слоя; загрузка recovery не проверялась, как и в фазе −1.
 .LP
 \l'2i'
 .SH ФАЗА 5 — ПЕРЕКЛЮЧЕНИЕ И УБОРКА

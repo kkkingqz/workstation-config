@@ -356,7 +356,6 @@ cmd_system_apply() {
     echo
     echo "== GDM/login keyboard"
     tmp="$(mktemp)"
-    trap 'rm -f "$tmp"' RETURN
     keyboard_default /etc/default/keyboard > "$tmp"
     if cmp -s "$tmp" /etc/default/keyboard; then
         echo "unchanged: /etc/default/keyboard"
@@ -366,6 +365,7 @@ cmd_system_apply() {
         echo "edited: /etc/default/keyboard"
         changed=$((changed + 1))
     fi
+    rm -f "$tmp"
 
     echo
     echo "== Obsolete files"
@@ -503,7 +503,7 @@ cmd_check() {
     esac
 
     out="$(mktemp)"
-    trap 'rm -f "$out"' RETURN
+    trap 'rm -f "$out"; trap - RETURN' RETURN
 
     for step in "${check_steps[@]}"; do
         name="${step%% *}"

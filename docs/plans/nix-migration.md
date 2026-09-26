@@ -899,6 +899,20 @@ ESP не трогает, сам не перезагружает.
 **Откат:** файлы из `/var/backups/workstation/`; если не грузится — GRUB →
 recovery → `pre-phase4-root`.
 
+**Итог (2026-09-26), фаза закрыта с отступлениями:** `ws system apply`
+(`ebe8942`) — единый владелец системных файлов; `ws-keyboard-system-apply`
+и `ws-suspend apply` — обёртки над ним. Перед apply: recovery обновлён
+(`system-backup-snapshot`), `/.snapshots/pre-phase4-root` и
+`pre-phase4-nix`. Первый `ws system apply`: 0 файлов изменено,
+`/etc/default/keyboard` без изменений, `ws-touchbar-fn` перезапущен и
+активен, `MemorySleepMode=deep`, Touch Bar в USB configuration 1; ни
+initramfs, ни `update-grub` не запускались. Ошибка в конце первого запуска
+(RETURN-trap `apply` срабатывал и при выходе из `cmd_system`) исправлена.
+`ws check`: FAIL 0. `ws baseline diff phase-3 phase-4` — только хэши
+изменённых скриптов и новые проверки verify. Отступления (решение
+пользователя): 10 циклов suspend не делались — `apply` не изменил ни одного
+файла suspend-слоя; загрузка recovery не проверялась, как и в фазе −1.
+
 ---
 
 # ФАЗА 5 — ПЕРЕКЛЮЧЕНИЕ И УБОРКА
