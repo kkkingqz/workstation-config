@@ -1,274 +1,668 @@
 .\" -*- mode: troff; coding: utf-8 -*-
-.TH "ws-plan-flatpak" "1" "2026-09-21" "Workstation" "User Commands"
+.TH "ws-plan-flatpak" "1" "2026-09-26" "Workstation" "User Commands"
+.PP
+\fBStatus:\fR DONE — Flatpak application layer finalized, extended for managed multi-remote support, and verified 2026-09-26.
 .SH PLAN — FLATPAK DESKTOP APPS
 .SS
 Цель
 .LP
-Сделать Flatpak стандартным способом установки обычных сторонних GUI-приложений, сохраняя host чистым.
-.SH 1. Базовая инфраструктура
-.LP
-Проверить/установить:
+Flatpak является стандартным application layer для обычных сторонних GUI-приложений.
+.PP
+Host сохраняется чистым:
 .LP
 .EX
-sudo apt install flatpak flatseal
+kernel / driver / GNOME / service -> apt host
+обычный сторонний GUI app         -> Flatpak
+development / SDK                 -> Distrobox
+Windows app                       -> отдельный Wine environment
 .EE
 .PP
-Добавить Flathub для пользователя:
+Все Flatpak applications и runtimes устанавливаются только в user scope.
+.LP
+\l'2i'
+.SH 1. Infrastructure — DONE
+.LP
+Host package:
 .LP
 .EX
-flatpak remote-add --user --if-not-exists \e
-  flathub https://flathub.org/repo/flathub.flatpakrepo
+flatpak
 .EE
 .PP
-Проверить:
+Используются только managed user remotes.
+.PP
+Текущий baseline:
 .LP
 .EX
-flatpak remotes --user
+flathub  -> https://dl.flathub.org/repo/flathub.flatpakrepo
+flatpark -> https://dl.flatpark.org/flatpark.flatpakrepo
+.EE
+.PP
+Новый remote добавляется через:
+.LP
+.EX
+wsflatpak remote-add NAME URL
+.EE
+.PP
+Подтверждено:
+.LP
+.EX
+managed user Flathub    present
+managed user Flatpark   present
+system remotes          empty
+system Flatpak refs     empty
+.EE
+.PP
+\f(CRgnome-software-plugin-flatpak\fR не входит в workstation baseline.
+.LP
+\l'2i'
+.SH 2. wsflatpak — DONE
+.LP
+Основной интерфейс:
+.LP
+.EX
+wsflatpak
+.EE
+.PP
+Source of truth:
+.LP
+.EX
+bin/wsflatpak
+config/flatpak/apps.conf
+config/flatpak/remotes.conf
+config/flatpak/overrides/
+config/flatpak/desktop/
+config/fish/completions/wsflatpak.fish
+.EE
+.PP
+Основные команды:
+.LP
+.EX
+install / remove
+remote-add
+manage / unmanage
+list / search / info / run
+update / cleanup
+permissions
+host / unhost
+filesystem / unfilesystem
+env / unenv
+talk / untalk
+status / check / test / apply
+.EE
+.PP
+Fish completion поддерживает подкоманды, options и установленные App ID.
+.LP
+\l'2i'
+.SH 3. Managed-by-default policy — DONE
+.LP
+Обычная установка:
+.LP
+.EX
+wsflatpak install APP
+.EE
+.PP
+автоматически добавляет установленное приложение в managed state.
+.PP
+Исключение:
+.LP
+.EX
+wsflatpak install --unmanaged APP
+.EE
+.PP
+Установка из конкретного managed remote:
+.LP
+.EX
+wsflatpak install --remote REMOTE APP
+.EE
+.PP
+Managed application inventory хранит origin remote вместе с App ID:
+.LP
+.EX
+REMOTE APP_ID
+.EE
+.PP
+\f(CRwsflatpak check\fR проверяет фактический origin установленного приложения, а
+\f(CRwsflatpak apply\fR использует сохранённый remote при восстановлении отсутствующего
+managed application.
+.PP
+Короткие поисковые имена поддерживаются. Проверены, например:
+.LP
+.EX
+anydesk -> com.anydesk.Anydesk
+obs     -> com.obsproject.Studio
+winbox  -> com.mikrotik.WinBox
+.EE
+.PP
+После интерактивного выбора Flatpak wrapper использует фактически установленный
+App ID, а не исходную поисковую строку.
+.LP
+\l'2i'
+.SH 4. Remove lifecycle — DONE
+.LP
+Managed application нельзя удалить случайно:
+.LP
+.EX
+wsflatpak remove APP
+.EE
+.PP
+Для удаления managed application требуется явно одновременно вывести его из
+source of truth:
+.LP
+.EX
+wsflatpak remove --unmanage APP
+.EE
+.PP
+По умолчанию удаляются также application data.
+.PP
+Для сохранения данных:
+.LP
+.EX
+wsflatpak remove --unmanage --keep-data APP
+.EE
+.PP
+Практически проверено на Kate:
+.LP
+.EX
+managed remove protection       PASS
+--keep-data                     PASS
+reinstall + preserved data      PASS
+default delete-data             PASS
+managed state consistency       PASS
+.EE
+.PP
+\f(CRunmanage\fR выполняется после успешного uninstall, поэтому ошибка или отмена
+удаления не должна оставлять установленное приложение unmanaged.
+.PP
+Kate использовался как Qt6/lifecycle test application и в итоговый managed set
+не входит.
+.LP
+\l'2i'
+.SH 5. Permissions policy — DONE
+.LP
+Глобальный \f(CRfilesystem=host\fR запрещён.
+.PP
+Широкий host access выдаётся только явно:
+.LP
+.EX
+wsflatpak host APP
+wsflatpak unhost APP
+.EE
+.PP
+Предпочтительный вариант — точечные filesystem permissions:
+.LP
+.EX
+wsflatpak filesystem APP SPEC
+wsflatpak unfilesystem APP SPEC
+.EE
+.PP
+Примеры Flatpak filesystem specs:
+.LP
+.EX
+/home/user/Projects
+/mnt/media:ro
+xdg-download
+xdg-config/Application:create
+.EE
+.PP
+Практически проверено:
+.LP
+.EX
+tracked filesystem permission    PASS
+drift detection                  PASS
+wsflatpak apply restore          PASS
+permission removal               PASS
 .EE
 .LP
 \l'2i'
-.SH 2. Правило размещения
+.SH 6. Environment overrides — DONE
+.LP
+Tracked environment overrides:
 .LP
 .EX
-kernel / driver / GNOME / service → apt host
-обычный GUI app                   → Flatpak
-Ubuntu system app                 → deb/Snap как поставляет Ubuntu
-development / SDK                 → Distrobox
-Windows app                       → отдельный Wine environment
+wsflatpak env APP KEY VALUE
+wsflatpak unenv APP KEY
 .EE
-.LP
-Не переносить системные компоненты GNOME в Flatpak.
-.LP
-\l'2i'
-.SH 3. Начальный набор GUI
-.LP
-Устанавливать приложения по одному, а не огромным batch.
 .PP
-Типичные категории:
-.IP "\(bu" 3
-browser;
-.if n \
-.sp -1
-.if t \
-.sp -0.25v
-.IP "\(bu" 3
-graphics;
-.if n \
-.sp -1
-.if t \
-.sp -0.25v
-.IP "\(bu" 3
-communications;
-.if n \
-.sp -1
-.if t \
-.sp -0.25v
-.IP "\(bu" 3
-utilities;
-.if n \
-.sp -1
-.if t \
-.sp -0.25v
-.IP "\(bu" 3
-media.
-.LP
-Для каждого приложения проверить:
-.IP "\(bu" 3
-Wayland;
-.if n \
-.sp -1
-.if t \
-.sp -0.25v
-.IP "\(bu" 3
-HiDPI;
-.if n \
-.sp -1
-.if t \
-.sp -0.25v
-.IP "\(bu" 3
-file chooser;
-.if n \
-.sp -1
-.if t \
-.sp -0.25v
-.IP "\(bu" 3
-clipboard;
-.if n \
-.sp -1
-.if t \
-.sp -0.25v
-.IP "\(bu" 3
-drag-and-drop;
-.if n \
-.sp -1
-.if t \
-.sp -0.25v
-.IP "\(bu" 3
-notifications;
-.if n \
-.sp -1
-.if t \
-.sp -0.25v
-.IP "\(bu" 3
-audio/video;
-.if n \
-.sp -1
-.if t \
-.sp -0.25v
-.IP "\(bu" 3
-hardware access, если нужен.
-.LP
-\l'2i'
-.SH 4. Permissions
-.LP
-Использовать Flatseal как GUI для просмотра permissions.
-.PP
-Принцип:
-.IP "\(bu" 3
-не выдавать \f(CRfilesystem=host\fR по умолчанию;
-.if n \
-.sp -1
-.if t \
-.sp -0.25v
-.IP "\(bu" 3
-давать доступ только к нужным каталогам;
-.if n \
-.sp -1
-.if t \
-.sp -0.25v
-.IP "\(bu" 3
-Projects/media folders добавлять точечно.
-.LP
-Пример:
+Они хранятся в:
 .LP
 .EX
-flatpak override --user \e
-  --filesystem=\(dq$HOME/Projects/Graphics\(dq \e
-  org.gimp.GIMP
+config/flatpak/overrides/APP.conf
+.EE
+.PP
+и восстанавливаются через:
+.LP
+.EX
+wsflatpak apply
 .EE
 .LP
 \l'2i'
-.SH 5. Portals
+.SH 7. Session D-Bus overrides — DONE
 .LP
-Обязательно проверить с реальными Flatpak apps:
-.IP "\(bu" 3
-open/save dialog;
-.if n \
-.sp -1
-.if t \
-.sp -0.25v
-.IP "\(bu" 3
-screenshots;
-.if n \
-.sp -1
-.if t \
-.sp -0.25v
-.IP "\(bu" 3
-screen sharing;
-.if n \
-.sp -1
-.if t \
-.sp -0.25v
-.IP "\(bu" 3
-notifications;
-.if n \
-.sp -1
-.if t \
-.sp -0.25v
-.IP "\(bu" 3
-URI links;
-.if n \
-.sp -1
-.if t \
-.sp -0.25v
-.IP "\(bu" 3
-default app handling.
-.LP
-При проблеме сначала проверять portals/runtimes, а не расширять filesystem permissions вслепую.
-.LP
-\l'2i'
-.SH 6. File associations / links
-.LP
-После установки основных apps проверить:
+Tracked session bus permissions:
 .LP
 .EX
-xdg-mime query default <mime-type>
+wsflatpak talk APP BUS_NAME
+wsflatpak untalk APP BUS_NAME
 .EE
 .PP
-и реальные сценарии:
-.IP "\(bu" 3
-HTTP/HTTPS;
-.if n \
-.sp -1
-.if t \
-.sp -0.25v
-.IP "\(bu" 3
-mailto;
-.if n \
-.sp -1
-.if t \
-.sp -0.25v
-.IP "\(bu" 3
-magnet/torrent при необходимости;
-.if n \
-.sp -1
-.if t \
-.sp -0.25v
-.IP "\(bu" 3
-изображения;
-.if n \
-.sp -1
-.if t \
-.sp -0.25v
-.IP "\(bu" 3
-PDF;
-.if n \
-.sp -1
-.if t \
-.sp -0.25v
-.IP "\(bu" 3
-видео.
-.LP
-Цель — чтобы Flatpak не ломал обычный desktop workflow.
-.LP
-\l'2i'
-.SH 7. Maintenance
-.LP
-Регулярно:
+Managed override может одновременно содержать несколько типов настроек:
 .LP
 .EX
-flatpak update --user
-flatpak uninstall --user --unused
-flatpak list --app
+[Context]
+filesystems=...
+
+[Environment]
+KEY=value
+
+[Session Bus Policy]
+org.example.Service=talk
+.EE
+.LP
+\l'2i'
+.SH 8. AnyDesk integration — DONE
+.LP
+Для текущего Flatpak AnyDesk используется workstation override:
+.LP
+.EX
+[Environment]
+GDK_SCALE=2
+
+[Session Bus Policy]
+org.kde.StatusNotifierWatcher=talk
 .EE
 .PP
-Не использовать несколько независимых способов установки одной и той же GUI-программы без причины.
+Source of truth:
+.LP
+.EX
+config/flatpak/overrides/com.anydesk.Anydesk.conf
+.EE
+.PP
+Проверено:
+.LP
+.EX
+scale                    PASS
+tray                     PASS
+desktop launcher         PASS
+check/apply restore      PASS
+.EE
+.PP
+Обычный запуск GUI:
+.LP
+.EX
+wsflatpak run anydesk
+.EE
+.PP
+использует desktop launcher.
+.PP
+Для диагностики доступен прямой Flatpak launch:
+.LP
+.EX
+wsflatpak run --direct anydesk
+.EE
+.LP
+\l'2i'
+.SH 9. Claude Desktop integration — DONE
+.LP
+Claude Desktop установлен из managed Flatpark remote:
+.LP
+.EX
+flatpark com.anthropic.ClaudeDesktop
+.EE
+.PP
+Tracked permissions:
+.LP
+.EX
+[Context]
+filesystems=host;
+
+[Session Bus Policy]
+org.freedesktop.Flatpak=talk
+.EE
+.PP
+Source of truth:
+.LP
+.EX
+config/flatpak/overrides/com.anthropic.ClaudeDesktop.conf
+.EE
+.PP
+Claude является Electron/Chromium application. Для корректного fractional scale
+1.5 используется managed desktop launcher override:
+.LP
+.EX
+config/flatpak/desktop/com.anthropic.ClaudeDesktop.desktop
+.EE
+.PP
+Launcher добавляет:
+.LP
+.EX
+--ozone-platform=wayland
+--force-device-scale-factor=1.5
+.EE
+.PP
+Managed desktop override публикуется как symlink в:
+.LP
+.EX
+\(ti/.local/share/applications/com.anthropic.ClaudeDesktop.desktop
+.EE
+.PP
+Проверено:
+.LP
+.EX
+native Wayland launch                 PASS
+scale 1.5                             PASS
+managed permission tracking          PASS
+desktop override drift detection     PASS
+wsflatpak apply launcher restore     PASS
+.EE
+.LP
+\l'2i'
+.SH 10. check/apply reproducibility — DONE
+.LP
+.EX
+wsflatpak check
+.EE
+.LP
+проверяет:
+.LP
+.EX
+Flatpak installed
+managed user remotes configured
+system remotes empty
+system refs empty
+global filesystem=host absent
+managed apps installed
+managed app origin remotes
+unmanaged user apps
+tracked filesystem overrides
+tracked environment overrides
+tracked session D-Bus overrides
+managed desktop launcher overrides
+override drift
+.EE
+.PP
+Unmanaged user application является WARN, а не автоматически удаляется.
+.LP
+.EX
+wsflatpak apply
+.EE
+.PP
+восстанавливает:
+.LP
+.EX
+managed user remotes
+missing managed apps from their recorded origin remote
+managed filesystem overrides
+managed environment overrides
+managed session D-Bus permissions
+managed desktop launcher overrides
+.EE
+.PP
+Reproducibility проверена deliberate drift test:
+.LP
+.EX
+runtime override removed
+        -> wsflatpak check FAIL
+
+wsflatpak apply
+        -> managed state restored
+        -> wsflatpak check PASS
+.EE
+.LP
+\l'2i'
+.SH 11. GTK / Qt / Wayland integration — DONE
+.LP
+GTK application smoke-test:
+.LP
+.EX
+GIMP
+.EE
+.PP
+Qt6 application smoke-test:
+.LP
+.EX
+Kate
+.EE
+.PP
+Проверено:
+.LP
+.EX
+Wayland / GNOME scale 1.5       PASS
+GTK UI                          PASS
+Qt6 UI                          PASS
+open/save                       PASS
+clipboard                       PASS
+Nautilus drag-and-drop          PASS
+Dock Spring drag-and-drop       PASS
+.EE
+.PP
+Application-specific global Qt scale hacks не требуются.
+.LP
+\l'2i'
+.SH 12. Portals / PipeWire / notifications — DONE
+.LP
+Infrastructure:
+.LP
+.EX
+xdg-desktop-portal
+xdg-desktop-portal-gnome
+PipeWire
+PipeWire Pulse
+WirePlumber
+.EE
+.PP
+Проверено на реальных Flatpak applications:
+.LP
+.EX
+file chooser             PASS
+notifications            PASS
+PipeWire ScreenCast      PASS
+GNOME ScreenCast chooser PASS
+.EE
+.PP
+Zoom использовался для notification и ScreenCast smoke-test.
+.LP
+\l'2i'
+.SH 13. File and URI associations — DONE
+.LP
+Подтверждены текущие defaults:
+.LP
+.EX
+HTTP / HTTPS     Firefox
+mailto           Thunderbird
+PDF              GNOME Papers
+JPEG / PNG       GNOME Loupe
+text/plain       GNOME Text Editor
+video/mp4        VLC Flatpak
+anydesk:         AnyDesk Flatpak
+.EE
+.PP
+Flatpak desktop exports доступны в:
+.LP
+.EX
+\(ti/.local/share/flatpak/exports/share/applications/
+.EE
+.PP
+Проверены:
+.LP
+.EX
+xdg-mime
+gio mime
+xdg-open
+.EE
+.PP
+VLC зарегистрирован как default handler для \f(CRvideo/mp4\fR.
+.LP
+\l'2i'
+.SH 14. Maintenance — DONE
+.LP
+Основные команды:
+.LP
+.EX
+wsflatpak list --app
+wsflatpak update
+wsflatpak cleanup
+wsflatpak check
+.EE
+.PP
+Практически проверено:
+.LP
+.EX
+list       PASS
+update     PASS
+cleanup    PASS
+check      PASS
+.EE
+.LP
+\l'2i'
+.SH 15. Current managed application baseline
+.LP
+Source of truth:
+.LP
+.EX
+config/flatpak/apps.conf
+.EE
+.PP
+На текущем verified baseline используются:
+.LP
+.EX
+flathub  com.github.tchx84.Flatseal
+flathub  org.gimp.GIMP
+flathub  com.mikrotik.WinBox
+flathub  com.anydesk.Anydesk
+flathub  us.zoom.Zoom
+flathub  com.obsproject.Studio
+flathub  org.videolan.VLC
+flatpark com.anthropic.ClaudeDesktop
+flathub  com.mattjakeman.ExtensionManager
+.EE
+.PP
+Этот список в документации является snapshot состояния на момент закрытия.
+Authoritative inventory всегда находится в \f(CRconfig/flatpak/apps.conf\fR.
+.LP
+\l'2i'
+.SH 16. Final smoke-test — DONE
+.LP
+Основные проверки:
+.LP
+.EX
+wsflatpak test
+wsflatpak check
+.EE
+.PP
+Manual checklist остаётся внутри \f(CRwsflatpak test\fR для повторного smoke-test
+после крупных обновлений GNOME, Flatpak или portals.
+.PP
+Финально подтверждено:
+.LP
+.EX
+user-only Flatpak policy                PASS
+managed multi-remote state               PASS
+managed application origins             PASS
+install lifecycle                       PASS
+remove lifecycle                        PASS
+filesystem overrides                    PASS
+environment overrides                   PASS
+session D-Bus overrides                 PASS
+managed desktop launcher overrides      PASS
+desktop launcher drift/apply restore    PASS
+GTK integration                         PASS
+Qt6 integration                         PASS
+Electron Wayland / scale                PASS
+notifications                           PASS
+PipeWire ScreenCast                     PASS
+URI/default applications                PASS
+maintenance                             PASS
+.EE
+.PP
+\fBPLAN-FLATPAK CLOSED.\fR
 .LP
 \l'2i'
 .SH DONE WHEN
+.LP
+Flatpak stage считается завершённым, когда:
 .IP "\(bu" 3
-основные сторонние GUI apps работают через Flatpak;
+сторонние GUI apps устанавливаются в user Flatpak;
 .if n \
 .sp -1
 .if t \
 .sp -0.25v
 .IP "\(bu" 3
-permissions минимальны и понятны;
+system Flatpak scope остаётся пустым;
 .if n \
 .sp -1
 .if t \
 .sp -0.25v
 .IP "\(bu" 3
-portals корректны;
+applications managed by default;
 .if n \
 .sp -1
 .if t \
 .sp -0.25v
 .IP "\(bu" 3
-file associations работают;
+несколько user remotes управляются декларативно;
 .if n \
 .sp -1
 .if t \
 .sp -0.25v
 .IP "\(bu" 3
-host не обрастает сторонними GUI repositories.
+origin remote каждого managed application отслеживается;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+managed state воспроизводим через \f(CRcheck/apply\fR;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+application-specific desktop launchers могут быть tracked и восстановлены;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+permissions минимальны и tracked;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+\f(CRfilesystem=host\fR не выдаётся автоматически;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+GTK и Qt6 applications работают корректно;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Wayland и fractional scaling не требуют глобальных hacks;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+portals / PipeWire / notifications работают;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+file и URI associations исправны;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+install/remove/update/cleanup lifecycle проверен;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+\f(CRwsflatpak check\fR возвращает PASS.

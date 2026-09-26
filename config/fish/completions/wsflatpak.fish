@@ -16,12 +16,30 @@ function __wsflatpak_user_apps
 end
 
 function __wsflatpak_managed_apps
-    set -l file ~/.local/share/workstation-config/config/flatpak/apps.conf
+    set -l repo ~/.local/share/workstation-config
+
+    if set -q WORKSTATION_CONFIG
+        set repo $WORKSTATION_CONFIG
+    end
+
+    set -l file $repo/config/flatpak/apps.conf
 
     if test -f $file
-        string replace -r '\s*#.*$' '' < $file \
-            | string trim \
-            | string match -rv '^$'
+        while read -l first second rest
+            if test -z "$first"
+                continue
+            end
+
+            if string match -q "#*" -- $first
+                continue
+            end
+
+            if test -n "$second"
+                echo $second
+            else
+                echo $first
+            end
+        end < $file
     end
 end
 
@@ -97,3 +115,26 @@ complete -c wsflatpak     -n "__wsflatpak_needs_command"     -a unfilesystem    
 complete -c wsflatpak     -n "__wsflatpak_filesystem_needs_app"     -a "(__wsflatpak_user_apps)"
 
 complete -c wsflatpak     -n "__wsflatpak_filesystem_needs_spec"     -F
+
+function __wsflatpak_managed_remotes
+    set -l repo ~/.local/share/workstation-config
+
+    if set -q WORKSTATION_CONFIG
+        set repo $WORKSTATION_CONFIG
+    end
+
+    set -l file $repo/config/flatpak/remotes.conf
+
+    if test -f $file
+        while read -l name url
+            if test -n "$name"
+                and not string match -q "#*" -- $name
+                echo $name
+            end
+        end < $file
+    end
+end
+
+complete -c wsflatpak     -n "__wsflatpak_needs_command"     -a remote-add     -d "Add managed user Flatpak remote"
+
+complete -c wsflatpak     -n "__wsflatpak_using_command install"     -l remote     -r     -a "(__wsflatpak_managed_remotes)"     -d "Install from managed remote"

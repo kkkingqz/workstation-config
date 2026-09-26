@@ -1,10 +1,10 @@
 title: ws-plan-flatpak
-
-**Status:** DONE — Flatpak application layer finalized and verified 2026-09-24.
 section: 1
-date: 2026-09-24
+date: 2026-09-26
 source: Workstation
 volume: User Commands
+
+**Status:** DONE — Flatpak application layer finalized, extended for managed multi-remote support, and verified 2026-09-26.
 
 # PLAN — FLATPAK DESKTOP APPS
 
@@ -33,18 +33,28 @@ Host package:
 flatpak
 ```
 
-Используется только user Flathub:
+Используются только managed user remotes.
+
+Текущий baseline:
 
 ```text
-flathub -> https://dl.flathub.org/repo/
+flathub  -> https://dl.flathub.org/repo/flathub.flatpakrepo
+flatpark -> https://dl.flatpark.org/flatpark.flatpakrepo
+```
+
+Новый remote добавляется через:
+
+```console
+wsflatpak remote-add NAME URL
 ```
 
 Подтверждено:
 
 ```text
-user Flathub          present
-system remotes        empty
-system Flatpak refs   empty
+managed user Flathub    present
+managed user Flatpark   present
+system remotes          empty
+system Flatpak refs     empty
 ```
 
 `gnome-software-plugin-flatpak` не входит в workstation baseline.
@@ -66,6 +76,7 @@ bin/wsflatpak
 config/flatpak/apps.conf
 config/flatpak/remotes.conf
 config/flatpak/overrides/
+config/flatpak/desktop/
 config/fish/completions/wsflatpak.fish
 ```
 
@@ -73,6 +84,7 @@ config/fish/completions/wsflatpak.fish
 
 ```text
 install / remove
+remote-add
 manage / unmanage
 list / search / info / run
 update / cleanup
@@ -103,6 +115,22 @@ wsflatpak install APP
 ```console
 wsflatpak install --unmanaged APP
 ```
+
+Установка из конкретного managed remote:
+
+```console
+wsflatpak install --remote REMOTE APP
+```
+
+Managed application inventory хранит origin remote вместе с App ID:
+
+```text
+REMOTE APP_ID
+```
+
+`wsflatpak check` проверяет фактический origin установленного приложения, а
+`wsflatpak apply` использует сохранённый remote при восстановлении отсутствующего
+managed application.
 
 Короткие поисковые имена поддерживаются. Проверены, например:
 
@@ -286,7 +314,63 @@ wsflatpak run --direct anydesk
 
 ---
 
-# 9. check/apply reproducibility — DONE
+# 9. Claude Desktop integration — DONE
+
+Claude Desktop установлен из managed Flatpark remote:
+
+```text
+flatpark com.anthropic.ClaudeDesktop
+```
+
+Tracked permissions:
+
+```ini
+[Context]
+filesystems=host;
+
+[Session Bus Policy]
+org.freedesktop.Flatpak=talk
+```
+
+Source of truth:
+
+```text
+config/flatpak/overrides/com.anthropic.ClaudeDesktop.conf
+```
+
+Claude является Electron/Chromium application. Для корректного fractional scale
+1.5 используется managed desktop launcher override:
+
+```text
+config/flatpak/desktop/com.anthropic.ClaudeDesktop.desktop
+```
+
+Launcher добавляет:
+
+```text
+--ozone-platform=wayland
+--force-device-scale-factor=1.5
+```
+
+Managed desktop override публикуется как symlink в:
+
+```text
+~/.local/share/applications/com.anthropic.ClaudeDesktop.desktop
+```
+
+Проверено:
+
+```text
+native Wayland launch                 PASS
+scale 1.5                             PASS
+managed permission tracking          PASS
+desktop override drift detection     PASS
+wsflatpak apply launcher restore     PASS
+```
+
+---
+
+# 10. check/apply reproducibility — DONE
 
 ```console
 wsflatpak check
@@ -296,15 +380,17 @@ wsflatpak check
 
 ```text
 Flatpak installed
-user Flathub configured
+managed user remotes configured
 system remotes empty
 system refs empty
 global filesystem=host absent
 managed apps installed
+managed app origin remotes
 unmanaged user apps
 tracked filesystem overrides
 tracked environment overrides
 tracked session D-Bus overrides
+managed desktop launcher overrides
 override drift
 ```
 
@@ -317,11 +403,12 @@ wsflatpak apply
 восстанавливает:
 
 ```text
-user remotes
-missing managed apps
+managed user remotes
+missing managed apps from their recorded origin remote
 managed filesystem overrides
 managed environment overrides
 managed session D-Bus permissions
+managed desktop launcher overrides
 ```
 
 Reproducibility проверена deliberate drift test:
@@ -337,7 +424,7 @@ wsflatpak apply
 
 ---
 
-# 10. GTK / Qt / Wayland integration — DONE
+# 11. GTK / Qt / Wayland integration — DONE
 
 GTK application smoke-test:
 
@@ -367,7 +454,7 @@ Application-specific global Qt scale hacks не требуются.
 
 ---
 
-# 11. Portals / PipeWire / notifications — DONE
+# 12. Portals / PipeWire / notifications — DONE
 
 Infrastructure:
 
@@ -392,7 +479,7 @@ Zoom использовался для notification и ScreenCast smoke-test.
 
 ---
 
-# 12. File and URI associations — DONE
+# 13. File and URI associations — DONE
 
 Подтверждены текущие defaults:
 
@@ -424,7 +511,7 @@ VLC зарегистрирован как default handler для `video/mp4`.
 
 ---
 
-# 13. Maintenance — DONE
+# 14. Maintenance — DONE
 
 Основные команды:
 
@@ -446,7 +533,7 @@ check      PASS
 
 ---
 
-# 14. Current managed application baseline
+# 15. Current managed application baseline
 
 Source of truth:
 
@@ -454,16 +541,18 @@ Source of truth:
 config/flatpak/apps.conf
 ```
 
-На момент закрытия этапа используются:
+На текущем verified baseline используются:
 
 ```text
-com.github.tchx84.Flatseal
-org.gimp.GIMP
-com.mikrotik.WinBox
-com.anydesk.Anydesk
-us.zoom.Zoom
-com.obsproject.Studio
-org.videolan.VLC
+flathub  com.github.tchx84.Flatseal
+flathub  org.gimp.GIMP
+flathub  com.mikrotik.WinBox
+flathub  com.anydesk.Anydesk
+flathub  us.zoom.Zoom
+flathub  com.obsproject.Studio
+flathub  org.videolan.VLC
+flatpark com.anthropic.ClaudeDesktop
+flathub  com.mattjakeman.ExtensionManager
 ```
 
 Этот список в документации является snapshot состояния на момент закрытия.
@@ -471,7 +560,7 @@ Authoritative inventory всегда находится в `config/flatpak/apps.
 
 ---
 
-# 15. Final smoke-test — DONE
+# 16. Final smoke-test — DONE
 
 Основные проверки:
 
@@ -487,16 +576,18 @@ Manual checklist остаётся внутри `wsflatpak test` для повт�
 
 ```text
 user-only Flatpak policy                PASS
-managed application state               PASS
+managed multi-remote state               PASS
+managed application origins             PASS
 install lifecycle                       PASS
 remove lifecycle                        PASS
 filesystem overrides                    PASS
 environment overrides                   PASS
 session D-Bus overrides                 PASS
-drift detection / apply restore         PASS
+managed desktop launcher overrides      PASS
+desktop launcher drift/apply restore    PASS
 GTK integration                         PASS
 Qt6 integration                         PASS
-Wayland / scale                         PASS
+Electron Wayland / scale                PASS
 notifications                           PASS
 PipeWire ScreenCast                     PASS
 URI/default applications                PASS
@@ -514,7 +605,10 @@ Flatpak stage считается завершённым, когда:
 - сторонние GUI apps устанавливаются в user Flatpak;
 - system Flatpak scope остаётся пустым;
 - applications managed by default;
+- несколько user remotes управляются декларативно;
+- origin remote каждого managed application отслеживается;
 - managed state воспроизводим через `check/apply`;
+- application-specific desktop launchers могут быть tracked и восстановлены;
 - permissions минимальны и tracked;
 - `filesystem=host` не выдаётся автоматически;
 - GTK и Qt6 applications работают корректно;

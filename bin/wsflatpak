@@ -13,6 +13,8 @@ CFG = REPO / "config" / "flatpak"
 APPS = CFG / "apps.conf"
 REMOTES = CFG / "remotes.conf"
 OVERRIDES = CFG / "overrides"
+DESKTOP_OVERRIDES = CFG / "desktop"
+USER_APPLICATIONS = Path.home() / ".local/share/applications"
 
 
 def run(args, check=True, capture=False):
@@ -29,19 +31,65 @@ def need_flatpak():
 
 def ensure_cfg():
     OVERRIDES.mkdir(parents=True, exist_ok=True)
+    DESKTOP_OVERRIDES.mkdir(parents=True, exist_ok=True)
     APPS.touch(exist_ok=True)
     REMOTES.touch(exist_ok=True)
 
 
-def managed_apps():
+def parse_managed_line(raw):
+    line = raw.split("#", 1)[0].strip()
+    if not line:
+        return None
+
+    parts = line.split()
+
+    if len(parts) == 1:
+        # Backward compatibility with the original one-column format.
+        return "flathub", parts[0]
+
+    if len(parts) == 2:
+        return parts[0], parts[1]
+
+    raise SystemExit(f"wsflatpak: invalid managed app line: {raw}")
+
+
+def managed_entries():
     ensure_cfg()
+
     out = []
+    seen = {}
+
     for raw in APPS.read_text().splitlines():
-        line = raw.split("#", 1)[0].strip()
-        if line and line not in out:
-            out.append(line)
+        entry = parse_managed_line(raw)
+        if entry is None:
+            continue
+
+        remote, app = entry
+
+        if app in seen:
+            if seen[app] != remote:
+                raise SystemExit(
+                    f"wsflatpak: app {app} is assigned to multiple remotes: "
+                    f"{seen[app]}, {remote}"
+                )
+            continue
+
+        seen[app] = remote
+        out.append((remote, app))
+
     return out
 
+
+def managed_apps():
+    return [app for remote, app in managed_entries()]
+
+
+def managed_remote(app):
+    for remote, candidate in managed_entries():
+        if candidate == app:
+            return remote
+
+    return None
 
 def resolve_user_app(query):
     # Resolve full App ID, display name, final component, or unique substring.
@@ -136,9 +184,27 @@ def is_managed(app):
 
 def installed_user(app):
     need_flatpak()
-    return run(["flatpak", "info", "--user", app], check=False,
-               capture=True).returncode == 0
+    return run(
+        ["flatpak", "info", "--user", app],
+        check=False,
+        capture=True,
+    ).returncode == 0
 
+
+def installed_origin(app):
+    need_flatpak()
+
+    p = run(
+        ["flatpak", "info", "--user", "--show-origin", app],
+        check=False,
+        capture=True,
+    )
+
+    if p.returncode != 0:
+        return None
+
+    origin = p.stdout.strip()
+    return origin or None
 
 def override_file(app):
     return OVERRIDES / f"{app}.conf"
@@ -350,29 +416,57 @@ def apply_override(app):
         )
 
 
-def manage(app):
+def manage(app, remote=None):
     need_flatpak()
     ensure_cfg()
 
     app = resolve_user_app(app)
 
-    if is_managed(app):
-        print(f"Already managed: {app}")
+    if remote is None:
+        remote = installed_origin(app)
+
+    if not remote:
+        raise SystemExit(
+            f"wsflatpak: cannot determine installed origin for {app}"
+        )
+
+    current = managed_remote(app)
+
+    if current == remote:
+        print(f"Already managed: {remote} {app}")
         return
 
-    with APPS.open("a") as f:
-        if APPS.stat().st_size:
-            f.write("\n")
-        f.write(app + "\n")
+    lines = []
+    replaced = False
 
-    print(f"Managed: {app}")
+    for raw in APPS.read_text().splitlines():
+        entry = parse_managed_line(raw)
+
+        if entry is not None and entry[1] == app:
+            if not replaced:
+                lines.append(f"{remote} {app}")
+                replaced = True
+            continue
+
+        lines.append(raw)
+
+    if not replaced:
+        if lines and lines[-1].strip():
+            lines.append("")
+        lines.append(f"{remote} {app}")
+
+    APPS.write_text(chr(10).join(lines).rstrip() + chr(10))
+
+    if current and current != remote:
+        print(f"Managed remote updated: {current} -> {remote} {app}")
+    else:
+        print(f"Managed: {remote} {app}")
 
     if runtime_host(app) and not managed_host(app):
         print(
             f"WARNING: {app} has untracked filesystem=host access.",
             file=sys.stderr,
         )
-
 
 def unmanage(app):
     ensure_cfg()
@@ -385,24 +479,99 @@ def unmanage(app):
         return
 
     kept = []
-    for raw in APPS.read_text().splitlines():
-        stripped = raw.split("#", 1)[0].strip()
-        if stripped != app:
-            kept.append(raw)
 
-    APPS.write_text("\n".join(kept).rstrip() + "\n")
+    for raw in APPS.read_text().splitlines():
+        entry = parse_managed_line(raw)
+
+        if entry is not None and entry[1] == app:
+            continue
+
+        kept.append(raw)
+
+    APPS.write_text(chr(10).join(kept).rstrip() + chr(10))
     print(f"Unmanaged: {app}")
 
     if override_file(app).exists():
         print(f"NOTE: managed override remains: {override_file(app)}")
 
+def cmd_remote_add(name, url):
+    need_flatpak()
+    ensure_cfg()
+
+    for existing_name, existing_url in parse_remotes():
+        if existing_name == name:
+            if existing_url != url:
+                raise SystemExit(
+                    f"wsflatpak: managed remote {name} already uses "
+                    f"{existing_url}"
+                )
+
+            run(
+                [
+                    "flatpak",
+                    "remote-add",
+                    "--user",
+                    "--if-not-exists",
+                    name,
+                    url,
+                ]
+            )
+
+            print(f"Already managed remote: {name}")
+            return
+
+    current = REMOTES.read_text()
+
+    with REMOTES.open("a") as f:
+        if current and not current.endswith(chr(10)):
+            f.write(chr(10))
+
+        f.write(f"{name} {url}")
+        f.write(chr(10))
+
+    run(
+        [
+            "flatpak",
+            "remote-add",
+            "--user",
+            "--if-not-exists",
+            name,
+            url,
+        ]
+    )
+
+    print(f"Managed remote added: {name}")
+    print(url)
+
 
 def cmd_install(ns):
     need_flatpak()
 
+    remotes = {
+        x.strip()
+        for x in run(
+            ["flatpak", "remotes", "--user", "--columns=name"],
+            check=False,
+            capture=True,
+        ).stdout.splitlines()
+        if x.strip()
+    }
+
+    if ns.remote not in remotes:
+        raise SystemExit(
+            f"wsflatpak: user remote not configured: {ns.remote}"
+        )
+
     before = set(user_apps())
 
-    cmd = ["flatpak", "install", "--user", "flathub", ns.app] + ns.extra
+    cmd = [
+        "flatpak",
+        "install",
+        "--user",
+        ns.remote,
+        ns.app,
+    ] + ns.extra
+
     run(cmd)
 
     after = set(user_apps())
@@ -414,11 +583,10 @@ def cmd_install(ns):
         app = resolve_user_app(ns.app)
 
     if not ns.unmanaged:
-        manage(app)
+        manage(app, ns.remote)
 
     if override_file(app).exists():
         apply_override(app)
-
 
 def cmd_remove(ns):
     need_flatpak()
@@ -658,6 +826,65 @@ def cmd_run(ns):
     run(["flatpak", "run", app] + ns.args)
 
 
+def managed_desktop_entries():
+    ensure_cfg()
+    return sorted(
+        path
+        for path in DESKTOP_OVERRIDES.glob("*.desktop")
+        if path.is_file()
+    )
+
+
+def desktop_override_destination(source):
+    return USER_APPLICATIONS / source.name
+
+
+def desktop_override_ok(source):
+    destination = desktop_override_destination(source)
+
+    if not destination.is_symlink():
+        return False
+
+    return destination.resolve() == source.resolve()
+
+
+def sync_desktop_overrides():
+    entries = managed_desktop_entries()
+
+    if not entries:
+        return False
+
+    USER_APPLICATIONS.mkdir(parents=True, exist_ok=True)
+    changed = False
+
+    for source in entries:
+        destination = desktop_override_destination(source)
+
+        if desktop_override_ok(source):
+            continue
+
+        if destination.exists() or destination.is_symlink():
+            if destination.is_dir():
+                raise SystemExit(
+                    f"wsflatpak: desktop override destination is "
+                    f"a directory: {destination}"
+                )
+            destination.unlink()
+
+        destination.symlink_to(source.resolve())
+        changed = True
+
+    updater = shutil.which("update-desktop-database")
+
+    if updater:
+        run(
+            [updater, str(USER_APPLICATIONS)],
+            check=False,
+        )
+
+    return changed
+
+
 def cmd_status():
     ensure_cfg()
 
@@ -669,15 +896,28 @@ def cmd_status():
     run(["flatpak", "--version"])
 
     blocks = [
-        ("USER REMOTES",
-         ["flatpak", "remotes", "--user", "--columns=name,url"]),
-        ("SYSTEM REMOTES",
-         ["flatpak", "remotes", "--system", "--columns=name,url"]),
-        ("USER APPS",
-         ["flatpak", "list", "--user", "--app",
-          "--columns=application,name"]),
-        ("SYSTEM REFS",
-         ["flatpak", "list", "--system", "--columns=application,ref"]),
+        (
+            "USER REMOTES",
+            ["flatpak", "remotes", "--user", "--columns=name,url"],
+        ),
+        (
+            "SYSTEM REMOTES",
+            ["flatpak", "remotes", "--system", "--columns=name,url"],
+        ),
+        (
+            "USER APPS",
+            [
+                "flatpak",
+                "list",
+                "--user",
+                "--app",
+                "--columns=application,name,origin",
+            ],
+        ),
+        (
+            "SYSTEM REFS",
+            ["flatpak", "list", "--system", "--columns=application,ref"],
+        ),
     ]
 
     for title, cmd in blocks:
@@ -686,7 +926,8 @@ def cmd_status():
         print(p.stdout.rstrip() or "(none)")
 
     print("\n===== MANAGED APPS =====")
-    print("\n".join(managed_apps()) or "(none)")
+    entries = [f"{remote} {app}" for remote, app in managed_entries()]
+    print("\n".join(entries) or "(none)")
 
     print("\n===== MANAGED OVERRIDES =====")
     files = sorted(x.name for x in OVERRIDES.glob("*.conf"))
@@ -695,43 +936,55 @@ def cmd_status():
     print("\n===== GLOBAL USER OVERRIDE =====")
     print(runtime_override() or "(none)")
 
-
 def cmd_check():
     ensure_cfg()
 
     failures = 0
     warnings = 0
 
-    def passed(s):
-        print("PASS ", s)
+    def passed(text):
+        print("PASS ", text)
 
-    def warn(s):
+    def warn(text):
         nonlocal warnings
         warnings += 1
-        print("WARN ", s)
+        print("WARN ", text)
 
-    def fail(s):
+    def fail(text):
         nonlocal failures
         failures += 1
-        print("FAIL ", s)
+        print("FAIL ", text)
 
     if not shutil.which("flatpak"):
         fail("flatpak installed")
-        print(f"\nResult: FAIL ({failures} failure(s), {warnings} warning(s))")
+        print(
+            f"\nResult: FAIL ({failures} failure(s), "
+            f"{warnings} warning(s))"
+        )
         return 1
 
     passed("flatpak installed")
 
-    ur = run(
-        ["flatpak", "remotes", "--user", "--columns=name"],
-        check=False,
-        capture=True,
-    ).stdout.splitlines()
+    actual_remotes = {
+        x.strip()
+        for x in run(
+            ["flatpak", "remotes", "--user", "--columns=name"],
+            check=False,
+            capture=True,
+        ).stdout.splitlines()
+        if x.strip()
+    }
 
-    if "flathub" in [x.strip() for x in ur]:
-        passed("user Flathub configured")
-    else:
-        fail("user Flathub configured")
+    expected_remotes = {name for name, url in parse_remotes()}
+
+    for name in sorted(expected_remotes):
+        if name in actual_remotes:
+            passed(f"managed user remote configured: {name}")
+        else:
+            fail(f"managed user remote missing: {name}")
+
+    for name in sorted(actual_remotes - expected_remotes):
+        warn(f"unmanaged user remote: {name}")
 
     sr = run(
         ["flatpak", "remotes", "--system", "--columns=name"],
@@ -769,11 +1022,25 @@ def cmd_check():
     else:
         passed("no global filesystem=host override")
 
-    for app in managed_apps():
-        if installed_user(app):
-            passed(f"managed app installed: {app}")
-        else:
+    for remote, app in managed_entries():
+        if remote not in expected_remotes:
+            fail(f"managed app remote is not declared: {app}: {remote}")
+
+        if not installed_user(app):
             fail(f"managed app missing: {app}")
+            continue
+
+        passed(f"managed app installed: {app}")
+
+        origin = installed_origin(app)
+
+        if origin == remote:
+            passed(f"managed app origin tracked: {app}: {remote}")
+        else:
+            fail(
+                f"managed app origin mismatch: {app}: "
+                f"expected={remote} actual={origin or '(unknown)'}"
+            )
 
     for app in user_apps():
         if not is_managed(app):
@@ -796,45 +1063,41 @@ def cmd_check():
 
         for spec in sorted(expected_fs):
             if spec in actual_fs:
-                passed(
-                    f"filesystem permission tracked: "
-                    f"{app}: {spec}"
-                )
+                passed(f"filesystem permission tracked: {app}: {spec}")
             else:
-                fail(
-                    f"filesystem permission not applied: "
-                    f"{app}: {spec}"
-                )
+                fail(f"filesystem permission not applied: {app}: {spec}")
 
         for spec in sorted(actual_fs - expected_fs):
-            fail(
-                f"untracked filesystem override: "
-                f"{app}: {spec}"
-            )
+            fail(f"untracked filesystem override: {app}: {spec}")
 
     for path in OVERRIDES.glob("*.conf"):
         app = path.stem
 
         if not installed_user(app):
             warn(f"managed override for non-installed app: {app}")
-        elif managed_host(app) and not runtime_host(app):
+            continue
+
+        if managed_host(app) and not runtime_host(app):
             fail(f"managed override not applied: {app}")
 
-        if installed_user(app):
-            expected_env = read_managed_environment(app)
-            actual_env = runtime_environment(app)
+        expected_env = read_managed_environment(app)
+        actual_env = runtime_environment(app)
 
-            for key, value in expected_env.items():
-                if actual_env.get(key) == value:
-                    passed(
-                        f"environment tracked: {app}: "
-                        f"{key}={value}"
-                    )
-                else:
-                    fail(
-                        f"environment override not applied: "
-                        f"{app}: {key}={value}"
-                    )
+        for key, value in expected_env.items():
+            if actual_env.get(key) == value:
+                passed(f"environment tracked: {app}: {key}={value}")
+            else:
+                fail(
+                    f"environment override not applied: "
+                    f"{app}: {key}={value}"
+                )
+
+        for key, value in actual_env.items():
+            if expected_env.get(key) != value:
+                fail(
+                    f"untracked environment override: "
+                    f"{app}: {key}={value}"
+                )
 
     for path in OVERRIDES.glob("*.conf"):
         app = path.stem
@@ -864,13 +1127,25 @@ def cmd_check():
                     f"{app}: {name}={policy}"
                 )
 
+    for source in managed_desktop_entries():
+        if desktop_override_ok(source):
+            passed(
+                f"managed desktop override applied: {source.name}"
+            )
+        else:
+            fail(
+                f"managed desktop override not applied: {source.name}"
+            )
+
     if failures:
-        print(f"\nResult: FAIL ({failures} failure(s), {warnings} warning(s))")
+        print(
+            f"\nResult: FAIL ({failures} failure(s), "
+            f"{warnings} warning(s))"
+        )
         return 1
 
     print(f"\nResult: PASS ({warnings} warning(s))")
     return 0
-
 
 def cmd_test():
     need_flatpak()
@@ -958,23 +1233,36 @@ def cmd_apply():
     need_flatpak()
 
     for name, url in parse_remotes():
-        run([
-            "flatpak", "remote-add", "--user", "--if-not-exists",
-            name, url,
-        ])
+        run(
+            [
+                "flatpak",
+                "remote-add",
+                "--user",
+                "--if-not-exists",
+                name,
+                url,
+            ]
+        )
 
-    for app in managed_apps():
+    for remote, app in managed_entries():
         if not installed_user(app):
-            print(f"Installing managed app: {app}")
-            run([
-                "flatpak", "install", "--user", "-y",
-                "flathub", app,
-            ])
+            print(f"Installing managed app: {remote} {app}")
+            run(
+                [
+                    "flatpak",
+                    "install",
+                    "--user",
+                    "-y",
+                    remote,
+                    app,
+                ]
+            )
 
         apply_override(app)
 
     for path in OVERRIDES.glob("*.conf"):
         app = path.stem
+
         if installed_user(app):
             apply_override(app)
         else:
@@ -983,9 +1271,11 @@ def cmd_apply():
                 file=sys.stderr,
             )
 
+    if sync_desktop_overrides():
+        print("Managed desktop overrides synchronized")
+
     print("\nApply complete. Running policy check...")
     return cmd_check()
-
 
 def build_parser():
     p = argparse.ArgumentParser(prog="wsflatpak")
@@ -997,8 +1287,17 @@ def build_parser():
         action="store_true",
         help="install without adding the app to managed state",
     )
+    q.add_argument(
+        "--remote",
+        default="flathub",
+        help="Flatpak remote to install from (default: flathub)",
+    )
     q.add_argument("app")
     q.add_argument("extra", nargs=argparse.REMAINDER)
+
+    q = sp.add_parser("remote-add")
+    q.add_argument("name")
+    q.add_argument("url")
 
     q = sp.add_parser("remove", aliases=["uninstall"])
     q.add_argument("--keep-data", action="store_true")
@@ -1076,6 +1375,8 @@ def main():
 
     if ns.cmd == "install":
         cmd_install(ns)
+    elif ns.cmd == "remote-add":
+        cmd_remote_add(ns.name, ns.url)
     elif ns.cmd in ("remove", "uninstall"):
         cmd_remove(ns)
     elif ns.cmd == "manage":
