@@ -1,6 +1,6 @@
 title: ws-roadmap
 section: 1
-date: 2026-09-24
+date: 2026-09-26
 source: Workstation
 volume: User Commands
 
@@ -20,10 +20,10 @@ volume: User Commands
 - Intel UHD 630 как primary GPU + AMD dGPU offload;
 - рабочий `deep/S3` suspend/resume;
 - ASPM `force` + `powersave`;
-- Touch Bar через `tiny-dfr`:
+- Touch Bar в родном режиме (`hid-appletb-kbd` + `ws-touchbar-fn`):
   - F1…F12 по умолчанию;
   - media/brightness при удержании Fn;
-  - `DoublePressSwitchLayers = 0`;
+  - без `tiny-dfr`/`appletbdrm`: режим дисплея Touch Bar ломал suspend;
 - финальный macOS-style keyboard layer:
   - EN/RU/UA;
   - CapsLock EN/RU и Fn+CapsLock -> UA;
@@ -48,8 +48,10 @@ volume: User Commands
    overrides, GTK/Qt6 integration, portals/PipeWire, associations,
    install/remove lifecycle и maintenance проверены.
 
-4. `helpws plan-dev`
-   Постоянный dev box, Python/uv, Node/Rust, VS Code и специализированные boxes.
+4. `helpws plan-dev` — **DONE**
+   Managed Distrobox/Podman layer завершён 2026-09-26: rootless Podman,
+   declarative `containers.ini`/`exports.ini`, `wsbox`, custom HOME,
+   WinBox export, destructive recovery и host NTSync provider проверены.
 
 5. `helpws plan-windows`
    Per-app Wine environments, launchers, Steam/Proton, optional GE-Proton.
@@ -63,8 +65,6 @@ volume: User Commands
 ## Рекомендуемый порядок
 
 ```text
-04 Distrobox development
-        ↓
 06 KVM / Unreal
         ↓
 05 Wine / Steam

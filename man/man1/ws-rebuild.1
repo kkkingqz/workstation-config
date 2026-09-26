@@ -1,5 +1,5 @@
 .\" -*- mode: troff; coding: utf-8 -*-
-.TH "ws-rebuild" "1" "2026-09-23" "Workstation" "User Commands"
+.TH "ws-rebuild" "1" "2026-09-26" "Workstation" "User Commands"
 .SH UBUNTU T2 WORKSTATION — REBUILD TO CURRENT BASELINE
 .SH 0. До удаления рабочей системы
 .LP
@@ -289,8 +289,154 @@ Qt5 -> native Wayland + QGnomePlatform automatically
 Qt6 -> native Wayland + QGnomePlatform automatically
 .EE
 .PP
-Qt внутри Distrobox относится к \f(CRplan-dev\fR.
-.SH 6.3. Keyboard / shortcuts
+Qt внутри Distrobox относится к managed Distrobox layer.
+.SH 6.3. Distrobox / Podman managed layer
+.LP
+Установить только host infrastructure:
+.LP
+.EX
+sudo apt install --no-install-recommends -y \e
+    podman distrobox uidmap fuse-overlayfs slirp4netns passt
+.EE
+.PP
+Восстановить runtime helper и Fish completion:
+.LP
+.EX
+repo=\(dq$HOME/.local/share/workstation-config\(dq
+
+mkdir -p \(dq$HOME/.local/bin\(dq \(dq$HOME/.config/fish/completions\(dq
+
+ln -sfn \(dq$repo/bin/wsbox\(dq \(dq$HOME/.local/bin/wsbox\(dq
+ln -sfn \e
+    \(dq$repo/config/fish/completions/wsbox.fish\(dq \e
+    \(dq$HOME/.config/fish/completions/wsbox.fish\(dq
+.EE
+.PP
+Host NTSync source of truth:
+.LP
+.EX
+config/distrobox/host/modules-load.d/ntsync.conf
+.EE
+.PP
+Применить:
+.LP
+.EX
+sudo install -Dm644 \e
+    \(dq$repo/config/distrobox/host/modules-load.d/ntsync.conf\(dq \e
+    /etc/modules-load.d/ntsync.conf
+
+sudo modprobe ntsync
+ls -l /dev/ntsync
+.EE
+.PP
+Создать/восстановить managed containers:
+.LP
+.EX
+wsbox apply
+wsbox status
+.EE
+.PP
+Managed set:
+.LP
+.EX
+ubuntu
+arch
+wine
+.EE
+.PP
+Custom HOME каждого box находится в \f(CR\(ti/.local/share/distrobox-homes/\fR и не
+удаляется \f(CRwsbox remove --force\fR/\f(CRrecreate\fR.
+.PP
+Для Arch перед установкой Wine/WinBox обязательно установить virtual provider
+host NTSync, чтобы pacman не тянул container-local kernel:
+.LP
+.EX
+wsbox enter arch
+
+sudo pacman -Syu --needed base-devel git
+
+cd \(ti/.local/share/workstation-config/config/distrobox/arch/wsbox-host-ntsync
+makepkg --clean --cleanbuild --force
+sudo pacman -U ./wsbox-host-ntsync-1-1-any.pkg.tar.zst
+.EE
+.PP
+Если \f(CRparu\fR ещё не установлен:
+.LP
+.EX
+set tmp (mktemp -d)
+git clone https://aur.archlinux.org/paru.git \(dq$tmp/paru\(dq
+cd \(dq$tmp/paru\(dq
+makepkg -si
+cd
+rm -rf \(dq$tmp\(dq
+.EE
+.PP
+Затем внутри \f(CRarch\fR:
+.LP
+.EX
+paru -S winbox3
+exit
+.EE
+.PP
+Восстановить managed export:
+.LP
+.EX
+wsbox apply arch
+wsbox apps arch
+.EE
+.PP
+Проверить, что Arch не содержит собственного kernel/initramfs stack:
+.LP
+.EX
+wsbox run arch bash -lc '
+pacman -Q wsbox-host-ntsync wine ntsync-autoload
+for p in linux mkinitcpio mkinitcpio-busybox
+do
+    pacman -Q \(dq$p\(dq 2>/dev/null || echo \(dq$p: absent\(dq
+done
+ls -l /dev/ntsync
+pacman -Dk
+\&'
+.EE
+.PP
+Если WinBox prefix новый, выставить текущий baseline 200%:
+.LP
+.EX
+wsbox run arch bash -lc '
+export WINEPREFIX=\(dq$HOME/.winbox/wine\(dq
+export WINEARCH=win64
+wineboot -u
+wine reg add \e
+    \(dqHKEY_CURRENT_USER\eControl Panel\eDesktop\(dq \e
+    /v LogPixels \e
+    /t REG_DWORD \e
+    /d 192 \e
+    /f
+wineserver -k 2>/dev/null || true
+\&'
+.EE
+.PP
+Существующий prefix в custom HOME сохраняется вместе с \f(CRLogPixels=0xc0\fR.
+.PP
+Контейнер \f(CRwine\fR сейчас должен оставаться чистым Ubuntu 26.04 base; полный Wine
+application layer относится к \f(CRplan-windows\fR.
+.PP
+Проверка:
+.LP
+.EX
+wsbox check
+.EE
+.PP
+На этой машине два unmanaged build containers (\f(CRt2bce-build\fR,
+\f(CRtouchbar-build\fR) дают ожидаемые WARN, но managed baseline должен иметь
+\f(CRFAIL=0\fR.
+.PP
+Подробности:
+.LP
+.EX
+helpws distrobox
+.EE
+.SH 6.4. Keyboard / shortcuts
 .LP
 После clone \f(CRworkstation-config\fR восстановить system-level keyboard state:
 .LP
@@ -303,8 +449,13 @@ Qt внутри Distrobox относится к \f(CRplan-dev\fR.
 .EX
 /etc/udev/rules.d/99-workstation-uinput.rules
 GDM/login layout = US only
-/etc/tiny-dfr/config.toml (если tiny-dfr уже установлен)
+/etc/udev/rules.d/90-touchbar-native.rules
+/etc/modprobe.d/tb.conf
+/etc/modprobe.d/touchbar-native.conf
+/usr/local/libexec/ws-touchbar-fn + ws-touchbar-fn.service
 .EE
+.PP
+При изменении modprobe-файлов он сам пересобирает initramfs.
 .PP
 Затем установить наши GNOME extensions:
 .LP
@@ -412,25 +563,15 @@ auto-cpufreq
 Touch Bar USB runtime PM специально не оптимизировать.
 .SH 9. Touch Bar
 .LP
-Текущий baseline — \f(CRtiny-dfr\fR, а не firmware-only \f(CRhid_appletb_kbd\fR.
+Baseline — родной режим Touch Bar: кнопки рисует T2, режимом управляет
+\f(CRhid-appletb-kbd\fR, Fn за xremap пробрасывает \f(CRws-touchbar-fn\fR. Отдельный
+пакет не нужен; \f(CRtiny-dfr\fR \fBне устанавливать\fR (причины: \f(CRhelpws touchbar\fR).
 .PP
-Установить пакет из используемого T2 repository:
-.LP
-.EX
-sudo apt install tiny-dfr
-.EE
-.PP
-Затем повторно применить system-level workstation config:
+Всё ставит system-level workstation config из раздела 6.4:
 .LP
 .EX
 ws-keyboard-system-apply
-.EE
-.PP
-Source/runtime config:
-.LP
-.EX
-config/tiny-dfr/config.toml
-/etc/tiny-dfr/config.toml
+sudo reboot
 .EE
 .PP
 Целевое поведение:
@@ -439,17 +580,20 @@ config/tiny-dfr/config.toml
 обычно          -> F1..F12
 держим Fn       -> media / brightness
 отпускаем Fn    -> F1..F12
-double Fn       -> layer не фиксируется
 .EE
 .PP
 Проверить:
 .LP
 .EX
-systemctl is-active tiny-dfr.service
-grep -E '\(ha(MediaLayerDefault|DoublePressSwitchLayers)'   /etc/tiny-dfr/config.toml
+cat /sys/bus/usb/devices/7-6/bConfigurationValue
+lsmod | grep appletbdrm
+systemctl is-active ws-touchbar-fn.service
 .EE
 .PP
-Не устанавливать одновременно другие Touch Bar renderer/daemon.
+Ожидается \f(CR1\fR, пустой вывод \f(CRlsmod\fR и \f(CRactive\fR.
+.PP
+Не устанавливать Touch Bar renderer/daemon, которые переводят Touch Bar в
+режим дисплея (\f(CRtiny-dfr\fR, \f(CRreact-drm\fR, \f(CRmac-touchbar-plus\fR).
 .LP
 \l'2i'
 .SH 10. GNOME extensions текущего baseline
@@ -512,8 +656,8 @@ closed pinned app + long file hover       -> application stays closed
 Nautilus -> application window drop       -> works
 .EE
 .PP
-\f(CRtiny-dfr\fR is validated separately in the Touch Bar/T2 layer and does not block
-the GNOME plan.
+The Touch Bar is validated separately in the T2 layer and does not block the
+GNOME plan.
 .LP
 \l'2i'
 .SH 11. Финальная проверка
@@ -574,7 +718,7 @@ Intel primary / AMD offload;
 .if t \
 .sp -0.25v
 .IP "\(bu" 3
-tiny-dfr F1…F12 / hold-Fn media;
+Touch Bar F1…F12 / hold-Fn media (родной режим);
 .if n \
 .sp -1
 .if t \

@@ -1,5 +1,5 @@
 .\" -*- mode: troff; coding: utf-8 -*-
-.TH "ws-workstation" "1" "2026-09-23" "Workstation" "User Commands"
+.TH "ws-workstation" "1" "2026-09-26" "Workstation" "User Commands"
 .SH UBUNTU T2 WORKSTATION — CURRENT BASELINE
 .LP
 \fBДата:\fR 2026-09-23
@@ -307,7 +307,6 @@ Source of truth:
 .EX
 config/keyboard/
 config/ghostty/
-config/tiny-dfr/config.toml
 
 bin/ws-keyboard*
 bin/ws-xremap
@@ -324,6 +323,11 @@ gnome/extensions/workstation-dock-spring@local/
 
 systemd/user/xremap.service
 system/udev/99-workstation-uinput.rules
+
+system/udev/90-touchbar-native.rules
+system/modprobe/
+system/usr/local/libexec/ws-touchbar-fn
+system/systemd/system/ws-touchbar-fn.service
 .EE
 .PP
 Generated \f(CRgschemas.compiled\fR, \f(CRstate/\fR и \f(CRruntime/\fR не являются source files и
@@ -433,22 +437,14 @@ pcie_aspm.policy=powersave
 \l'2i'
 .SH TOUCH BAR
 .LP
-Текущий renderer:
+Родной режим: кнопки рисует T2, режимом управляет \f(CRhid-appletb-kbd\fR.
+Touch Bar закреплён в USB configuration 1, \f(CRappletbdrm\fR не загружается.
 .LP
 .EX
-tiny-dfr
-.EE
-.PP
-Source config:
-.LP
-.EX
-config/tiny-dfr/config.toml
-.EE
-.PP
-Runtime config:
-.LP
-.EX
-/etc/tiny-dfr/config.toml
+/etc/modprobe.d/tb.conf                      mode=1 fntoggle=1 autodim=1 ...
+/etc/modprobe.d/touchbar-native.conf         blacklist appletbdrm
+/etc/udev/rules.d/90-touchbar-native.rules   USB configuration 1
+ws-touchbar-fn.service                       Fn bridge за xremap
 .EE
 .PP
 Текущий режим:
@@ -459,21 +455,16 @@ hold Fn      media / brightness
 release Fn   F1..F12
 .EE
 .PP
-Ключевые параметры:
-.LP
-.EX
-MediaLayerDefault = false
-DoublePressSwitchLayers = 0
-.EE
-.PP
 xremap пропускает \f(CRKEY_FN\fR (\f(CRskip_key_event: false\fR) и одновременно использует
-Fn для своего Apple \f(CRapple_fn\fR mode. tiny-dfr получает Fn через
-\f(CRworkstation-xremap\fR.
+Fn для своего Apple \f(CRapple_fn\fR mode. \f(CRws-touchbar-fn\fR слушает Fn на
+\f(CRworkstation-xremap\fR и переключает \f(CRhid-appletb-kbd\fR mode \(12.
 .PP
-Старый \f(CRws-touchbar-fn.service\fR и \f(CR/usr/local/libexec/ws-touchbar-fn\fR удалены.
+\f(CRtiny-dfr\fR (режим дисплея Touch Bar, \f(CRappletbdrm\fR) не используется: на этой
+машине все сбои suspend 2026-09-22..25 случились в режиме дисплея, в родном
+режиме их не было.
 .PP
-Исторические \f(CRreact-drm\fR, \f(CRmac-touchbar-plus\fR и firmware-only
-\f(CRhid_appletb_kbd\fR mode не являются current baseline.
+Исторические \f(CRreact-drm\fR, \f(CRmac-touchbar-plus\fR и \f(CRtiny-dfr\fR не являются current
+baseline.
 .PP
 Подробности:
 .LP
@@ -500,6 +491,55 @@ Host
 .EE
 .LP
 Host сознательно не используется как общий development environment.
+.SS
+Managed Distrobox layer
+.LP
+Source of truth:
+.LP
+.EX
+config/distrobox/containers.ini
+config/distrobox/exports.ini
+config/distrobox/host/modules-load.d/ntsync.conf
+config/distrobox/arch/wsbox-host-ntsync/
+bin/wsbox
+.EE
+.PP
+Managed containers:
+.LP
+.EX
+ubuntu   Ubuntu 26.04 base / compatibility
+arch     Arch rolling / AUR applications; WinBox 3.x
+wine     Ubuntu 26.04 empty base reserved for plan-windows
+.EE
+.PP
+Каждый box использует отдельный persistent HOME под
+\f(CR\(ti/.local/share/distrobox-homes/\fR. Rootfs считается disposable.
+.PP
+\f(CRarch\fR использует NTSync из host T2 kernel. Host загружает \f(CRntsync\fR, а
+\f(CRwsbox-host-ntsync\fR внутри Arch только удовлетворяет virtual dependency
+\f(CRNTSYNC-MODULE\fR, поэтому container-local \f(CRlinux\fR/\f(CRmkinitcpio\fR не нужны.
+.PP
+Управление и проверка:
+.LP
+.EX
+wsbox status
+wsbox apps
+wsbox check
+wsbox apply [NAME]
+.EE
+.PP
+WinBox prefix хранится в custom HOME и переживает destructive rebuild:
+.LP
+.EX
+\(ti/.local/share/distrobox-homes/arch/.winbox/wine
+LogPixels = 0xc0 = 192 DPI = 200%
+.EE
+.PP
+Подробности:
+.LP
+.EX
+helpws distrobox
+.EE
 .LP
 \l'2i'
 .SH TERMINAL ENVIRONMENT
@@ -832,16 +872,19 @@ workstation-config/
 │   └── ws-tiling-apply
 ├── config/
 │   ├── fish/
+│   ├── distrobox/
 │   ├── ghostty/
 │   ├── gnome/
 │   ├── keyboard/
-│   ├── micro-help/
-│   └── tiny-dfr/
+│   └── micro-help/
 ├── gnome/extensions/
 │   ├── workstation-input-source@local/
 │   └── workstation-smart-popup@local/
 ├── system/
-│   └── udev/99-workstation-uinput.rules
+│   ├── modprobe/tb.conf, touchbar-native.conf
+│   ├── systemd/system/ws-touchbar-fn.service
+│   ├── udev/90-touchbar-native.rules, 99-workstation-uinput.rules
+│   └── usr/local/libexec/ws-touchbar-fn
 ├── systemd/user/
 │   └── xremap.service
 ├── docs/
@@ -892,13 +935,7 @@ git diff --cached
 .if t \
 .sp -0.25v
 .IP "\(bu" 3
-старый \f(CRws-touchbar-fn.service\fR;
-.if n \
-.sp -1
-.if t \
-.sp -0.25v
-.IP "\(bu" 3
-отдельный custom Touch Bar bridge поверх \f(CRhid_appletb_kbd\fR;
+\f(CRtiny-dfr\fR и режим дисплея Touch Bar (\f(CRappletbdrm\fR);
 .if n \
 .sp -1
 .if t \
@@ -972,7 +1009,7 @@ Fisher как обязательный framework;
 .IP "\(bu" 3
 Neovim как часть terminal setup.
 .LP
-\f(CRtiny-dfr\fR \fBиспользуется\fR и является текущим Touch Bar baseline.
+Touch Bar работает в родном режиме: \f(CRhid-appletb-kbd\fR + \f(CRws-touchbar-fn\fR.
 .LP
 \l'2i'
 .SH CURRENT BASELINE
@@ -987,9 +1024,9 @@ Ubuntu 26.04.1 LTS
     ├── Camera
     ├── deep / S3 suspend
     ├── Btrfs + snapshots architecture
-    ├── tiny-dfr Touch Bar
+    ├── Touch Bar, родной режим (hid-appletb-kbd)
     │   ├── F1..F12 default
-    │   └── hold Fn -> media/brightness
+    │   └── hold Fn -> media/brightness (ws-touchbar-fn)
     ├── macOS-style keyboard layer
     │   ├── GNOME/Mutter system shortcuts
     │   ├── xremap GUI/Fn/Nautilus mappings

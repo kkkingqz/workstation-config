@@ -1,6 +1,6 @@
 title: ws-rebuild
 section: 1
-date: 2026-09-23
+date: 2026-09-26
 source: Workstation
 volume: User Commands
 
@@ -245,10 +245,158 @@ Qt5 -> native Wayland + QGnomePlatform automatically
 Qt6 -> native Wayland + QGnomePlatform automatically
 ```
 
-Qt внутри Distrobox относится к `plan-dev`.
+Qt внутри Distrobox относится к managed Distrobox layer.
 
 
-# 6.3. Keyboard / shortcuts
+# 6.3. Distrobox / Podman managed layer
+
+Установить только host infrastructure:
+
+```console
+sudo apt install --no-install-recommends -y \
+    podman distrobox uidmap fuse-overlayfs slirp4netns passt
+```
+
+Восстановить runtime helper и Fish completion:
+
+```console
+repo="$HOME/.local/share/workstation-config"
+
+mkdir -p "$HOME/.local/bin" "$HOME/.config/fish/completions"
+
+ln -sfn "$repo/bin/wsbox" "$HOME/.local/bin/wsbox"
+ln -sfn \
+    "$repo/config/fish/completions/wsbox.fish" \
+    "$HOME/.config/fish/completions/wsbox.fish"
+```
+
+Host NTSync source of truth:
+
+```text
+config/distrobox/host/modules-load.d/ntsync.conf
+```
+
+Применить:
+
+```console
+sudo install -Dm644 \
+    "$repo/config/distrobox/host/modules-load.d/ntsync.conf" \
+    /etc/modules-load.d/ntsync.conf
+
+sudo modprobe ntsync
+ls -l /dev/ntsync
+```
+
+Создать/восстановить managed containers:
+
+```console
+wsbox apply
+wsbox status
+```
+
+Managed set:
+
+```text
+ubuntu
+arch
+wine
+```
+
+Custom HOME каждого box находится в `~/.local/share/distrobox-homes/` и не
+удаляется `wsbox remove --force`/`recreate`.
+
+Для Arch перед установкой Wine/WinBox обязательно установить virtual provider
+host NTSync, чтобы pacman не тянул container-local kernel:
+
+```console
+wsbox enter arch
+
+sudo pacman -Syu --needed base-devel git
+
+cd ~/.local/share/workstation-config/config/distrobox/arch/wsbox-host-ntsync
+makepkg --clean --cleanbuild --force
+sudo pacman -U ./wsbox-host-ntsync-1-1-any.pkg.tar.zst
+```
+
+Если `paru` ещё не установлен:
+
+```fish
+set tmp (mktemp -d)
+git clone https://aur.archlinux.org/paru.git "$tmp/paru"
+cd "$tmp/paru"
+makepkg -si
+cd
+rm -rf "$tmp"
+```
+
+Затем внутри `arch`:
+
+```console
+paru -S winbox3
+exit
+```
+
+Восстановить managed export:
+
+```console
+wsbox apply arch
+wsbox apps arch
+```
+
+Проверить, что Arch не содержит собственного kernel/initramfs stack:
+
+```console
+wsbox run arch bash -lc '
+pacman -Q wsbox-host-ntsync wine ntsync-autoload
+for p in linux mkinitcpio mkinitcpio-busybox
+do
+    pacman -Q "$p" 2>/dev/null || echo "$p: absent"
+done
+ls -l /dev/ntsync
+pacman -Dk
+'
+```
+
+Если WinBox prefix новый, выставить текущий baseline 200%:
+
+```console
+wsbox run arch bash -lc '
+export WINEPREFIX="$HOME/.winbox/wine"
+export WINEARCH=win64
+wineboot -u
+wine reg add \
+    "HKEY_CURRENT_USER\Control Panel\Desktop" \
+    /v LogPixels \
+    /t REG_DWORD \
+    /d 192 \
+    /f
+wineserver -k 2>/dev/null || true
+'
+```
+
+Существующий prefix в custom HOME сохраняется вместе с `LogPixels=0xc0`.
+
+Контейнер `wine` сейчас должен оставаться чистым Ubuntu 26.04 base; полный Wine
+application layer относится к `plan-windows`.
+
+Проверка:
+
+```console
+wsbox check
+```
+
+На этой машине два unmanaged build containers (`t2bce-build`,
+`touchbar-build`) дают ожидаемые WARN, но managed baseline должен иметь
+`FAIL=0`.
+
+Подробности:
+
+```console
+helpws distrobox
+```
+
+
+# 6.4. Keyboard / shortcuts
 
 После clone `workstation-config` восстановить system-level keyboard state:
 
@@ -261,8 +409,13 @@ Qt внутри Distrobox относится к `plan-dev`.
 ```text
 /etc/udev/rules.d/99-workstation-uinput.rules
 GDM/login layout = US only
-/etc/tiny-dfr/config.toml (если tiny-dfr уже установлен)
+/etc/udev/rules.d/90-touchbar-native.rules
+/etc/modprobe.d/tb.conf
+/etc/modprobe.d/touchbar-native.conf
+/usr/local/libexec/ws-touchbar-fn + ws-touchbar-fn.service
 ```
+
+При изменении modprobe-файлов он сам пересобирает initramfs.
 
 Затем установить наши GNOME extensions:
 
@@ -358,25 +511,15 @@ Touch Bar USB runtime PM специально не оптимизировать.
 
 # 9. Touch Bar
 
-Текущий baseline — `tiny-dfr`, а не firmware-only `hid_appletb_kbd`.
+Baseline — родной режим Touch Bar: кнопки рисует T2, режимом управляет
+`hid-appletb-kbd`, Fn за xremap пробрасывает `ws-touchbar-fn`. Отдельный
+пакет не нужен; `tiny-dfr` **не устанавливать** (причины: `helpws touchbar`).
 
-Установить пакет из используемого T2 repository:
-
-```console
-sudo apt install tiny-dfr
-```
-
-Затем повторно применить system-level workstation config:
+Всё ставит system-level workstation config из раздела 6.4:
 
 ```console
 ws-keyboard-system-apply
-```
-
-Source/runtime config:
-
-```text
-config/tiny-dfr/config.toml
-/etc/tiny-dfr/config.toml
+sudo reboot
 ```
 
 Целевое поведение:
@@ -385,17 +528,20 @@ config/tiny-dfr/config.toml
 обычно          -> F1..F12
 держим Fn       -> media / brightness
 отпускаем Fn    -> F1..F12
-double Fn       -> layer не фиксируется
 ```
 
 Проверить:
 
 ```console
-systemctl is-active tiny-dfr.service
-grep -E '^(MediaLayerDefault|DoublePressSwitchLayers)'   /etc/tiny-dfr/config.toml
+cat /sys/bus/usb/devices/7-6/bConfigurationValue
+lsmod | grep appletbdrm
+systemctl is-active ws-touchbar-fn.service
 ```
 
-Не устанавливать одновременно другие Touch Bar renderer/daemon.
+Ожидается `1`, пустой вывод `lsmod` и `active`.
+
+Не устанавливать Touch Bar renderer/daemon, которые переводят Touch Bar в
+режим дисплея (`tiny-dfr`, `react-drm`, `mac-touchbar-plus`).
 
 ---
 
@@ -461,8 +607,8 @@ closed pinned app + long file hover       -> application stays closed
 Nautilus -> application window drop       -> works
 ```
 
-`tiny-dfr` is validated separately in the Touch Bar/T2 layer and does not block
-the GNOME plan.
+The Touch Bar is validated separately in the T2 layer and does not block the
+GNOME plan.
 
 ---
 
@@ -484,7 +630,7 @@ ws-workstation-verify --strict
 - camera;
 - Intel primary / AMD offload;
 - `deep/S3` suspend;
-- tiny-dfr F1…F12 / hold-Fn media;
+- Touch Bar F1…F12 / hold-Fn media (родной режим);
 - GNOME Overview / Dock / Quick Settings / Nautilus;
 - keyboard profile: Caps/UA/GDM/lock behavior;
 - Smart Popup / tiling / Window Control.

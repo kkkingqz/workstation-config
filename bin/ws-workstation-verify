@@ -545,7 +545,11 @@ for path in \
     config/gnome/settings.conf \
     config/fish/completions/ws-gnome.fish \
     docs/gnome.md \
-    config/tiny-dfr/config.toml \
+    system/udev/90-touchbar-native.rules \
+    system/modprobe/tb.conf \
+    system/modprobe/touchbar-native.conf \
+    system/usr/local/libexec/ws-touchbar-fn \
+    system/systemd/system/ws-touchbar-fn.service \
     gnome/extensions/workstation-smart-popup@local/metadata.json \
     gnome/extensions/workstation-smart-popup@local/extension.js \
     gnome/extensions/workstation-dock-spring@local/metadata.json \
@@ -577,8 +581,9 @@ contains_literal "$apply" 'bin/ws-tiling-apply' "apply installs ws-tiling-apply 
 contains_literal "$apply" 'ws-keyboard-install-extensions' "apply installs/reuses local GNOME extension sources"
 contains_literal "$apply" 'ws-tiling-apply' "apply reapplies Tiling Assistant private bindings"
 [[ -x "$repo/bin/ws-keyboard-system-apply" ]] \
-    && pass "system-level keyboard/uinput/tiny-dfr apply helper is executable" \
+    && pass "system-level keyboard/uinput/Touch Bar apply helper is executable" \
     || fail "bin/ws-keyboard-system-apply missing/not executable"
+[[ -e "$repo/system/usr/local/libexec/ws-touchbar-fn" ]] && check_exec_tracked "system/usr/local/libexec/ws-touchbar-fn"
 
 
 section "5.1 GNOME managed appearance"
@@ -637,6 +642,135 @@ done
 [[ "$qt_override_bad" == false ]] \
     && pass "no global Qt platform/theme/scale overrides"
 
+
+section "5.3 Managed Distrobox / Podman layer"
+
+for path in \
+    bin/wsbox \
+    config/fish/completions/wsbox.fish \
+    config/distrobox/containers.ini \
+    config/distrobox/exports.ini \
+    config/distrobox/host/modules-load.d/ntsync.conf \
+    config/distrobox/arch/wsbox-host-ntsync/PKGBUILD \
+    config/distrobox/arch/wsbox-host-ntsync/README.md \
+    docs/plans/development.md
+do
+    tracked "$path" "$path"
+done
+
+[[ -e "$repo/bin/wsbox" ]] && check_exec_tracked "bin/wsbox"
+
+if [[ -e "$repo/bin/wsbox" ]]; then
+    check_symlink_target \
+        "$HOME/.local/bin/wsbox" \
+        "$repo/bin/wsbox" \
+        "~/.local/bin/wsbox points into repo"
+fi
+
+if [[ -e "$repo/config/fish/completions/wsbox.fish" ]]; then
+    check_symlink_target \
+        "$HOME/.config/fish/completions/wsbox.fish" \
+        "$repo/config/fish/completions/wsbox.fish" \
+        "Fish wsbox completion points into repo"
+fi
+
+ntsync_source="$repo/config/distrobox/host/modules-load.d/ntsync.conf"
+ntsync_runtime="/etc/modules-load.d/ntsync.conf"
+compare_file "$ntsync_source" "$ntsync_runtime" \
+    "host NTSync modules-load config matches repo source"
+
+if lsmod 2>/dev/null | awk '$1 == "ntsync" { found=1 } END { exit !found }'; then
+    pass "host ntsync module loaded"
+else
+    fail "host ntsync module not loaded"
+fi
+
+[[ -c /dev/ntsync ]] \
+    && pass "/dev/ntsync character device present" \
+    || fail "/dev/ntsync character device missing"
+
+ntsync_pkgbuild="$repo/config/distrobox/arch/wsbox-host-ntsync/PKGBUILD"
+if [[ -r "$ntsync_pkgbuild" ]]; then
+    if bash -n "$ntsync_pkgbuild" >/dev/null 2>&1; then
+        pass "bash syntax: config/distrobox/arch/wsbox-host-ntsync/PKGBUILD"
+    else
+        fail "bash syntax error: config/distrobox/arch/wsbox-host-ntsync/PKGBUILD"
+    fi
+
+    contains_literal \
+        "$ntsync_pkgbuild" \
+        'provides=("NTSYNC-MODULE")' \
+        "Arch host-NTSync package provides NTSYNC-MODULE"
+fi
+
+if have podman && podman container exists arch >/dev/null 2>&1; then
+    arch_running="$(podman inspect -f '{{.State.Running}}' arch 2>/dev/null || true)"
+    if [[ "$arch_running" == "true" ]]; then
+        if podman exec arch pacman -Q wsbox-host-ntsync >/dev/null 2>&1; then
+            pass "arch: wsbox-host-ntsync installed"
+        else
+            fail "arch: wsbox-host-ntsync missing"
+        fi
+
+        ntsync_missing="$(
+            podman exec arch pacman -T NTSYNC-MODULE 2>/dev/null || true
+        )"
+        [[ -z "$ntsync_missing" ]] \
+            && pass "arch: NTSYNC-MODULE dependency satisfied" \
+            || fail "arch: NTSYNC-MODULE dependency unsatisfied: $ntsync_missing"
+
+        for pkg in linux mkinitcpio mkinitcpio-busybox; do
+            if podman exec arch pacman -Q "$pkg" >/dev/null 2>&1; then
+                fail "arch: container-local kernel/initramfs package should be absent: $pkg"
+            else
+                pass "arch: container-local package absent: $pkg"
+            fi
+        done
+
+        podman exec arch test -c /dev/ntsync >/dev/null 2>&1 \
+            && pass "arch: /dev/ntsync visible inside running container" \
+            || fail "arch: /dev/ntsync not visible inside running container"
+    else
+        info "arch container is not running; skipped read-only in-container NTSync checks"
+    fi
+else
+    info "arch container missing; wsbox layer check will report it when run"
+fi
+
+# wsbox check uses distrobox-enter to inspect managed export sources.  To keep
+# this global verifier read-only, only aggregate it when all managed containers
+# are already running; otherwise tell the operator to run wsbox check separately.
+wsbox_all_running=true
+wsbox_box_count=0
+if [[ -r "$repo/config/distrobox/containers.ini" ]] && have podman; then
+    while IFS= read -r box; do
+        [[ -n "$box" ]] || continue
+        ((wsbox_box_count++))
+        state="$(podman inspect -f '{{.State.Running}}' "$box" 2>/dev/null || true)"
+        [[ "$state" == "true" ]] || wsbox_all_running=false
+    done < <(sed -nE 's/^\[([^]]+)\]$/\1/p' "$repo/config/distrobox/containers.ini")
+else
+    wsbox_all_running=false
+fi
+
+if (( wsbox_box_count == 0 )); then
+    fail "Distrobox manifest contains no managed containers"
+elif [[ "$wsbox_all_running" == true ]] && have wsbox; then
+    wsbox_out="$(wsbox check 2>&1)"
+    wsbox_rc=$?
+
+    if (( wsbox_rc == 0 )); then
+        pass "wsbox check: no managed failures"
+    else
+        fail "wsbox check reported managed failures"
+    fi
+
+    printf '%s\n' "$wsbox_out" | sed 's/^/        /'
+else
+    info "wsbox check skipped to preserve READ-ONLY mode because not all managed containers are already running"
+    info "run separately when desired: wsbox check"
+fi
+
 section "6. Script / config syntax"
 
 bash_bad=false
@@ -680,20 +814,23 @@ while IFS= read -r -d '' path; do
     fi
 done < <(git -C "$repo" ls-files -z)
 
-if [[ -r "$repo/config/tiny-dfr/config.toml" ]]; then
-    if python3 - "$repo/config/tiny-dfr/config.toml" >/dev/null 2>&1 <<'PY'
-import pathlib, sys
-try:
-    import tomllib
-except Exception:
-    raise SystemExit(2)
-with open(sys.argv[1], 'rb') as f:
-    tomllib.load(f)
-PY
-    then
-        pass "TOML syntax: config/tiny-dfr/config.toml"
+fn_helper="$repo/system/usr/local/libexec/ws-touchbar-fn"
+if [[ -r "$fn_helper" ]]; then
+    fn_pyc="$(mktemp)"
+    if python3 -c 'import py_compile, sys; py_compile.compile(sys.argv[1], cfile=sys.argv[2], doraise=True)' \
+        "$fn_helper" "$fn_pyc" >/dev/null 2>&1; then
+        pass "Python syntax: system/usr/local/libexec/ws-touchbar-fn"
     else
-        warn "could not validate config/tiny-dfr/config.toml with Python tomllib"
+        fail "Python syntax error: system/usr/local/libexec/ws-touchbar-fn"
+    fi
+    rm -f -- "$fn_pyc"
+fi
+
+if have udevadm && [[ -r "$repo/system/udev/90-touchbar-native.rules" ]]; then
+    if udevadm verify --resolve-names=never "$repo/system/udev/90-touchbar-native.rules" >/dev/null 2>&1; then
+        pass "udev syntax: system/udev/90-touchbar-native.rules"
+    else
+        fail "udev syntax error: system/udev/90-touchbar-native.rules"
     fi
 fi
 
@@ -800,7 +937,7 @@ fi
 
 contains_literal "$repo/bin/ws-xremap" \
     'Dynamic Function Row Virtual Input Device' \
-    "xremap excludes tiny-dfr virtual keyboard"
+    "xremap excludes the Dynamic Function Row virtual keyboard (loop guard)"
 contains_literal "$repo/bin/ws-xremap" \
     '--output-device-name workstation-xremap' \
     "xremap output device has stable name"
@@ -973,6 +1110,7 @@ required_gnome_extensions=(
     ubuntu-dock@ubuntu.com
     web-search-provider@ubuntu.com
     window-control@carlo9890.github.io
+    window-monitor-pro@muhammed.hussien2030.gmail.com
     workstation-input-source@local
     workstation-smart-popup@local
     workstation-dock-spring@local
@@ -990,13 +1128,6 @@ if have gnome-extensions; then
             fail "required GNOME extension missing/disabled: $uuid"
         fi
     done
-
-    legacy_uuid="window-monitor-pro@muhammed.hussien2030.gmail.com"
-    if grep -Fxq "$legacy_uuid" <<<"$installed_gnome_extensions"; then
-        fail "legacy Window Monitor Pro should be absent"
-    else
-        pass "legacy Window Monitor Pro absent"
-    fi
 
     extra_extensions=()
     while IFS= read -r uuid; do
@@ -1122,31 +1253,69 @@ do
     fi
 done
 
-section "14. Touch Bar / tiny-dfr / udev"
+section "14. Touch Bar native mode / udev"
 
-systemctl is-active --quiet tiny-dfr.service 2>/dev/null \
-    && pass "tiny-dfr.service active" \
-    || fail "tiny-dfr.service not active"
-
-if have dpkg-query && dpkg-query -W -f='${Version}' tiny-dfr >/dev/null 2>&1; then
-    pass "tiny-dfr package installed: $(dpkg-query -W -f='${Version}' tiny-dfr)"
+tb_usb=""
+for dev in /sys/bus/usb/devices/*; do
+    if [[ "$(cat "$dev/idVendor" 2>/dev/null):$(cat "$dev/idProduct" 2>/dev/null)" == "05ac:8302" ]]; then
+        tb_usb="$dev"
+        break
+    fi
+done
+if [[ -n "$tb_usb" ]]; then
+    tb_cfg="$(cat "$tb_usb/bConfigurationValue" 2>/dev/null || true)"
+    [[ "$tb_cfg" == "1" ]] \
+        && pass "Touch Bar USB configuration 1 (native keyboard mode)" \
+        || fail "Touch Bar USB configuration is '${tb_cfg:-0}', expected 1"
 else
-    fail "tiny-dfr package not installed via dpkg"
+    fail "Touch Bar USB device 05ac:8302 not found"
 fi
 
-tiny_runtime="/etc/tiny-dfr/config.toml"
-[[ -r "$tiny_runtime" ]] && pass "$tiny_runtime present" || fail "$tiny_runtime missing"
+[[ -d /sys/module/appletbdrm ]] \
+    && fail "appletbdrm is loaded (Touch Bar display mode)" \
+    || pass "appletbdrm not loaded"
 
-grep -Eq '^[[:space:]]*MediaLayerDefault[[:space:]]*=[[:space:]]*false' "$tiny_runtime" 2>/dev/null \
-    && pass "tiny-dfr normal layer is F1..F12" \
-    || fail "tiny-dfr MediaLayerDefault is not false"
+tb_mode_node=""
+for node in /sys/bus/hid/drivers/hid-appletb-kbd/*/mode; do
+    [[ -r "$node" ]] && { tb_mode_node="$node"; break; }
+done
+if [[ -n "$tb_mode_node" ]]; then
+    tb_mode="$(cat "$tb_mode_node" 2>/dev/null || true)"
+    [[ "$tb_mode" == "1" ]] \
+        && pass "hid-appletb-kbd bound, mode 1 (F1..F12)" \
+        || warn "hid-appletb-kbd mode is '$tb_mode', expected 1 unless Fn is held"
+else
+    fail "hid-appletb-kbd is not bound to the Touch Bar"
+fi
 
-grep -Eq '^[[:space:]]*DoublePressSwitchLayers[[:space:]]*=[[:space:]]*0' "$tiny_runtime" 2>/dev/null \
-    && pass "tiny-dfr double-Fn layer lock disabled" \
-    || fail "tiny-dfr DoublePressSwitchLayers is not 0"
+if have dpkg-query && dpkg-query -W -f='${Status}' tiny-dfr 2>/dev/null | grep -q 'install ok installed'; then
+    fail "tiny-dfr is installed (it switches the Touch Bar to display mode)"
+else
+    pass "tiny-dfr not installed"
+fi
 
-[[ -r "$repo/config/tiny-dfr/config.toml" ]] \
-    && compare_file "$repo/config/tiny-dfr/config.toml" "$tiny_runtime" "runtime tiny-dfr config matches repo source"
+systemctl is-active --quiet ws-touchbar-fn.service 2>/dev/null \
+    && pass "ws-touchbar-fn.service active" \
+    || fail "ws-touchbar-fn.service not active"
+systemctl is-enabled --quiet ws-touchbar-fn.service 2>/dev/null \
+    && pass "ws-touchbar-fn.service enabled" \
+    || fail "ws-touchbar-fn.service not enabled"
+
+for pair in \
+    "system/udev/90-touchbar-native.rules:/etc/udev/rules.d/90-touchbar-native.rules" \
+    "system/modprobe/tb.conf:/etc/modprobe.d/tb.conf" \
+    "system/modprobe/touchbar-native.conf:/etc/modprobe.d/touchbar-native.conf" \
+    "system/usr/local/libexec/ws-touchbar-fn:/usr/local/libexec/ws-touchbar-fn" \
+    "system/systemd/system/ws-touchbar-fn.service:/etc/systemd/system/ws-touchbar-fn.service"
+do
+    compare_file "$repo/${pair%%:*}" "${pair#*:}" "runtime ${pair#*:} matches repo"
+done
+
+if [[ -e /etc/tiny-dfr/config.toml ]]; then
+    warn "obsolete runtime /etc/tiny-dfr/config.toml still exists (ws-keyboard-system-apply removes it)"
+else
+    pass "obsolete /etc/tiny-dfr/config.toml absent"
+fi
 
 udev_runtime="/etc/udev/rules.d/99-workstation-uinput.rules"
 if [[ -r "$udev_runtime" ]]; then
@@ -1209,7 +1378,7 @@ kdoc="$repo/docs/keyboard.md"
 tdoc="$repo/docs/touchbar.md"
 
 missing=()
-for concept in "Always on Top" "Smart Popup" "CapsLock" "Tile Editing Mode" "tiny-dfr" "unlock-dialog" "GDM/login" "EN -> RU -> UA -> EN"; do
+for concept in "Always on Top" "Smart Popup" "CapsLock" "Tile Editing Mode" "ws-touchbar-fn" "unlock-dialog" "GDM/login" "EN -> RU -> UA -> EN"; do
     grep -Fqi -- "$concept" "$kdoc" 2>/dev/null || missing+=("$concept")
 done
 if ((${#missing[@]} == 0)); then
@@ -1219,22 +1388,23 @@ else
 fi
 
 if [[ -r "$tdoc" ]]; then
-    if grep -Fqi 'Текущий Touch Bar renderer — **tiny-dfr**' "$tdoc" \
-       && grep -Fqi 'DoublePressSwitchLayers = 0' "$tdoc"; then
-        pass "docs/touchbar.md reflects tiny-dfr baseline"
+    if grep -Fqi 'Текущий режим Touch Bar — **родной**' "$tdoc" \
+       && grep -Fqi '90-touchbar-native.rules' "$tdoc" \
+       && grep -Fqi 'ws-touchbar-fn' "$tdoc"; then
+        pass "docs/touchbar.md reflects native Touch Bar baseline"
     else
-        fail "docs/touchbar.md does not describe the current tiny-dfr baseline"
+        fail "docs/touchbar.md does not describe the current native Touch Bar baseline"
     fi
 else
     fail "docs/touchbar.md missing"
 fi
 
-for doc in docs/workstation.md docs/rebuild.md docs/roadmap.md; do
+for doc in docs/keyboard.md docs/workstation.md docs/rebuild.md docs/roadmap.md; do
     if [[ -r "$repo/$doc" ]]; then
-        if grep -Eqi 'Не (используются|устанавливать).*tiny-dfr|штатн(ый|ого).*Touch Bar.*hid[_-]?appletb' "$repo/$doc"; then
-            fail "$doc still contains obsolete current-baseline claims about tiny-dfr/hid_appletb"
+        if grep -Eqi 'Текущ(ий|ее).*(renderer|baseline).*tiny-dfr|Touch Bar через `tiny-dfr`|sudo apt install tiny-dfr|config/tiny-dfr' "$repo/$doc"; then
+            fail "$doc still describes tiny-dfr as the current Touch Bar baseline"
         else
-            pass "$doc has no obsolete tiny-dfr/hid_appletb baseline claim"
+            pass "$doc has no obsolete tiny-dfr baseline claim"
         fi
     else
         fail "$doc missing"
@@ -1319,6 +1489,7 @@ legacy_repo_paths=(
     bin/ws-nautilus-go
     systemd/user/ws-touchbar-fn.service
     system/udev/70-workstation-uinput.rules
+    config/tiny-dfr/config.toml
 )
 for path in "${legacy_repo_paths[@]}"; do
     if is_tracked "$path"; then
@@ -1331,17 +1502,10 @@ for path in "${legacy_repo_paths[@]}"; do
     fi
 done
 
-if [[ -e /usr/local/libexec/ws-touchbar-fn || -L /usr/local/libexec/ws-touchbar-fn ]]; then
-    warn "obsolete runtime helper still exists: /usr/local/libexec/ws-touchbar-fn"
+if systemctl list-unit-files tiny-dfr-sleep.service 2>/dev/null | grep -q '^tiny-dfr-sleep\.service'; then
+    warn "obsolete tiny-dfr-sleep.service still installed"
 else
-    pass "obsolete /usr/local/libexec/ws-touchbar-fn absent"
-fi
-
-if systemctl list-unit-files ws-touchbar-fn.service >/dev/null 2>&1 \
-   && systemctl list-unit-files ws-touchbar-fn.service 2>/dev/null | grep -q '^ws-touchbar-fn\.service'; then
-    warn "obsolete ws-touchbar-fn.service still installed"
-else
-    pass "obsolete ws-touchbar-fn.service not installed"
+    pass "obsolete tiny-dfr-sleep.service not installed"
 fi
 
 section "18. Untracked files / cleanup candidates"

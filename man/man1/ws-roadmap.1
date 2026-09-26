@@ -1,5 +1,5 @@
 .\" -*- mode: troff; coding: utf-8 -*-
-.TH "ws-roadmap" "1" "2026-09-23" "Workstation" "User Commands"
+.TH "ws-roadmap" "1" "2026-09-26" "Workstation" "User Commands"
 .SH UBUNTU T2 WORKSTATION — ROADMAP
 .LP
 Этот набор продолжает уже реализованный baseline и \fBне повторяет\fR законченные работы.
@@ -20,7 +20,7 @@ GNOME 50 / Wayland / GDM3;
 .if t \
 .sp -0.25v
 .IP "\(bu" 3
-rEFInd + T2 kernel \f(CR7.2.6-1-t2-resolute\fR, generic kernel как fallback;
+rEFInd + T2 kernel \f(CR7.2.7-1-t2-resolute\fR;
 .if n \
 .sp -1
 .if t \
@@ -56,7 +56,7 @@ ASPM \f(CRforce\fR + \f(CRpowersave\fR;
 .if t \
 .sp -0.25v
 .IP "\(bu" 3
-Touch Bar через \f(CRtiny-dfr\fR:
+Touch Bar в родном режиме (\f(CRhid-appletb-kbd\fR + \f(CRws-touchbar-fn\fR):
 .RS
 .IP "\(bu" 3
 F1…F12 по умолчанию;
@@ -71,7 +71,7 @@ media/brightness при удержании Fn;
 .if t \
 .sp -0.25v
 .IP "\(bu" 3
-\f(CRDoublePressSwitchLayers = 0\fR;
+без \f(CRtiny-dfr\fR/\f(CRappletbdrm\fR: режим дисплея Touch Bar ломал suspend;
 .RE
 .if n \
 .sp -1
@@ -124,11 +124,16 @@ Touch ID, fan policy, battery audit, optional hibernate/suspend-then-hibernate.
 \f(CRhelpws plan-gnome\fR — \fBDONE\fR
 GNOME host layer завершён 2026-09-23: Retina scale, managed Yaru/Dock profile, host Qt5/Qt6 native Wayland integration, extension policy, portals/PipeWire, Dock Spring и полный smoke-test зафиксированы.
 .IP "3." 3
-\f(CRhelpws plan-flatpak\fR
-Flatpak application layer, permissions, portals, lifecycle и maintenance.
+\f(CRhelpws plan-flatpak\fR — \fBDONE\fR
+Flatpak application layer завершён 2026-09-24: user-only Flathub,
+managed-by-default \f(CRwsflatpak\fR, tracked filesystem/environment/D-Bus
+overrides, GTK/Qt6 integration, portals/PipeWire, associations,
+install/remove lifecycle и maintenance проверены.
 .IP "4." 3
-\f(CRhelpws plan-dev\fR
-Постоянный dev box, Python/uv, Node/Rust, VS Code и специализированные boxes.
+\f(CRhelpws plan-dev\fR — \fBDONE\fR
+Managed Distrobox/Podman layer завершён 2026-09-26: rootless Podman,
+declarative \f(CRcontainers.ini\fR/\f(CRexports.ini\fR, \f(CRwsbox\fR, custom HOME,
+WinBox export, destructive recovery и host NTSync provider проверены.
 .IP "5." 3
 \f(CRhelpws plan-windows\fR
 Per-app Wine environments, launchers, Steam/Proton, optional GE-Proton.
@@ -142,10 +147,6 @@ KVM/libvirt/virt-manager и user-managed Unreal Engine.
 Рекомендуемый порядок
 .LP
 .EX
-03 Flatpak desktop apps
-        ↓
-04 Distrobox development
-        ↓
 06 KVM / Unreal
         ↓
 05 Wine / Steam

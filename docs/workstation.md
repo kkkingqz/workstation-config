@@ -1,6 +1,6 @@
 title: ws-workstation
 section: 1
-date: 2026-09-23
+date: 2026-09-26
 source: Workstation
 volume: User Commands
 
@@ -242,7 +242,6 @@ Source of truth:
 ```text
 config/keyboard/
 config/ghostty/
-config/tiny-dfr/config.toml
 
 bin/ws-keyboard*
 bin/ws-xremap
@@ -259,6 +258,11 @@ gnome/extensions/workstation-dock-spring@local/
 
 systemd/user/xremap.service
 system/udev/99-workstation-uinput.rules
+
+system/udev/90-touchbar-native.rules
+system/modprobe/
+system/usr/local/libexec/ws-touchbar-fn
+system/systemd/system/ws-touchbar-fn.service
 ```
 
 Generated `gschemas.compiled`, `state/` и `runtime/` не являются source files и
@@ -332,22 +336,14 @@ pcie_aspm.policy=powersave
 
 # TOUCH BAR
 
-Текущий renderer:
+Родной режим: кнопки рисует T2, режимом управляет `hid-appletb-kbd`.
+Touch Bar закреплён в USB configuration 1, `appletbdrm` не загружается.
 
 ```text
-tiny-dfr
-```
-
-Source config:
-
-```text
-config/tiny-dfr/config.toml
-```
-
-Runtime config:
-
-```text
-/etc/tiny-dfr/config.toml
+/etc/modprobe.d/tb.conf                      mode=1 fntoggle=1 autodim=1 ...
+/etc/modprobe.d/touchbar-native.conf         blacklist appletbdrm
+/etc/udev/rules.d/90-touchbar-native.rules   USB configuration 1
+ws-touchbar-fn.service                       Fn bridge за xremap
 ```
 
 Текущий режим:
@@ -358,21 +354,16 @@ hold Fn      media / brightness
 release Fn   F1..F12
 ```
 
-Ключевые параметры:
-
-```text
-MediaLayerDefault = false
-DoublePressSwitchLayers = 0
-```
-
 xremap пропускает `KEY_FN` (`skip_key_event: false`) и одновременно использует
-Fn для своего Apple `apple_fn` mode. tiny-dfr получает Fn через
-`workstation-xremap`.
+Fn для своего Apple `apple_fn` mode. `ws-touchbar-fn` слушает Fn на
+`workstation-xremap` и переключает `hid-appletb-kbd` mode 1/2.
 
-Старый `ws-touchbar-fn.service` и `/usr/local/libexec/ws-touchbar-fn` удалены.
+`tiny-dfr` (режим дисплея Touch Bar, `appletbdrm`) не используется: на этой
+машине все сбои suspend 2026-09-22..25 случились в режиме дисплея, в родном
+режиме их не было.
 
-Исторические `react-drm`, `mac-touchbar-plus` и firmware-only
-`hid_appletb_kbd` mode не являются current baseline.
+Исторические `react-drm`, `mac-touchbar-plus` и `tiny-dfr` не являются current
+baseline.
 
 Подробности:
 
@@ -400,6 +391,55 @@ Host
 ```
 
 Host сознательно не используется как общий development environment.
+
+## Managed Distrobox layer
+
+Source of truth:
+
+```text
+config/distrobox/containers.ini
+config/distrobox/exports.ini
+config/distrobox/host/modules-load.d/ntsync.conf
+config/distrobox/arch/wsbox-host-ntsync/
+bin/wsbox
+```
+
+Managed containers:
+
+```text
+ubuntu   Ubuntu 26.04 base / compatibility
+arch     Arch rolling / AUR applications; WinBox 3.x
+wine     Ubuntu 26.04 empty base reserved for plan-windows
+```
+
+Каждый box использует отдельный persistent HOME под
+`~/.local/share/distrobox-homes/`. Rootfs считается disposable.
+
+`arch` использует NTSync из host T2 kernel. Host загружает `ntsync`, а
+`wsbox-host-ntsync` внутри Arch только удовлетворяет virtual dependency
+`NTSYNC-MODULE`, поэтому container-local `linux`/`mkinitcpio` не нужны.
+
+Управление и проверка:
+
+```console
+wsbox status
+wsbox apps
+wsbox check
+wsbox apply [NAME]
+```
+
+WinBox prefix хранится в custom HOME и переживает destructive rebuild:
+
+```text
+~/.local/share/distrobox-homes/arch/.winbox/wine
+LogPixels = 0xc0 = 192 DPI = 200%
+```
+
+Подробности:
+
+```console
+helpws distrobox
+```
 
 ---
 
@@ -666,16 +706,19 @@ workstation-config/
 │   └── ws-tiling-apply
 ├── config/
 │   ├── fish/
+│   ├── distrobox/
 │   ├── ghostty/
 │   ├── gnome/
 │   ├── keyboard/
-│   ├── micro-help/
-│   └── tiny-dfr/
+│   └── micro-help/
 ├── gnome/extensions/
 │   ├── workstation-input-source@local/
 │   └── workstation-smart-popup@local/
 ├── system/
-│   └── udev/99-workstation-uinput.rules
+│   ├── modprobe/tb.conf, touchbar-native.conf
+│   ├── systemd/system/ws-touchbar-fn.service
+│   ├── udev/90-touchbar-native.rules, 99-workstation-uinput.rules
+│   └── usr/local/libexec/ws-touchbar-fn
 ├── systemd/user/
 │   └── xremap.service
 ├── docs/
@@ -717,8 +760,7 @@ git diff --cached
 
 - `react-drm`;
 - `mac-touchbar-plus`;
-- старый `ws-touchbar-fn.service`;
-- отдельный custom Touch Bar bridge поверх `hid_appletb_kbd`;
+- `tiny-dfr` и режим дисплея Touch Bar (`appletbdrm`);
 - `powertop --auto-tune`;
 - TLP;
 - auto-cpufreq;
@@ -732,7 +774,7 @@ git diff --cached
 - Fisher как обязательный framework;
 - Neovim как часть terminal setup.
 
-`tiny-dfr` **используется** и является текущим Touch Bar baseline.
+Touch Bar работает в родном режиме: `hid-appletb-kbd` + `ws-touchbar-fn`.
 
 ---
 
@@ -748,9 +790,9 @@ Ubuntu 26.04.1 LTS
     ├── Camera
     ├── deep / S3 suspend
     ├── Btrfs + snapshots architecture
-    ├── tiny-dfr Touch Bar
+    ├── Touch Bar, родной режим (hid-appletb-kbd)
     │   ├── F1..F12 default
-    │   └── hold Fn -> media/brightness
+    │   └── hold Fn -> media/brightness (ws-touchbar-fn)
     ├── macOS-style keyboard layer
     │   ├── GNOME/Mutter system shortcuts
     │   ├── xremap GUI/Fn/Nautilus mappings

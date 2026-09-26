@@ -18,6 +18,7 @@ case "$topic" in
     gnome|desktop) open_md "$repo/docs/gnome.md" ;;
     rebuild|reinstall|install) open_md "$repo/docs/rebuild.md" ;;
     roadmap|plans) open_md "$repo/docs/roadmap.md" ;;
+    distrobox|box|boxes|wsbox) open_md "$repo/docs/plans/development.md" ;;
     plan-t2) open_md "$repo/docs/plans/t2-optional.md" ;;
     plan-gnome) open_md "$repo/docs/plans/gnome.md" ;;
     plan-flatpak) open_md "$repo/docs/plans/flatpak.md" ;;
@@ -25,6 +26,7 @@ case "$topic" in
     plan-windows) open_md "$repo/docs/plans/windows-gaming.md" ;;
     plan-virt) open_md "$repo/docs/plans/virtualization-unreal.md" ;;
     plan-final) open_md "$repo/docs/plans/finalization.md" ;;
+    plan-nix) open_md "$repo/docs/plans/nix-migration.md" ;;
     man)
         page="${2:-ws-terminal}"
         tmp="$(mktemp "${TMPDIR:-/tmp}/helpws.XXXXXX")"
@@ -44,15 +46,17 @@ Core:
   gnome            GNOME desktop status / baseline work
   rebuild          Reinstall to current baseline
   roadmap          Remaining workstation roadmap
+  distrobox        Managed Distrobox / Podman layer
 
 Plans:
   plan-t2          T2 optional / power / auth
   plan-gnome       GNOME visual / input / portals
   plan-flatpak     Flatpak desktop apps
-  plan-dev         Distrobox development
+  plan-dev         Distrobox / Podman managed layer (completed)
   plan-windows     Wine / Steam / Proton
   plan-virt        KVM / libvirt / Unreal Engine
   plan-final       Backup / inventory / finalization
+  plan-nix         Nix + home-manager migration
 
 Other:
   man PAGE         Open generated man page in Micro

@@ -1,229 +1,393 @@
 .\" -*- mode: troff; coding: utf-8 -*-
-.TH "ws-plan-dev" "1" "2026-09-21" "Workstation" "User Commands"
-.SH PLAN — DISTROBOX DEVELOPMENT
+.TH "ws-plan-dev" "1" "2026-09-26" "Workstation" "User Commands"
+.SH DISTROBOX / PODMAN — MANAGED APPLICATION & DEVELOPMENT LAYER
 .SS
-Цель
+Статус
 .LP
-Создать постоянный development слой без Python/Node/Rust/SDK clutter на Ubuntu host.
+Слой завершён и проверен 2026-09-26.
 .PP
-Distrobox/Podman уже доказали работоспособность во время сборки \f(CRreact-drm\fR; теперь нужно оформить это как постоянную архитектуру.
+Цель — держать containerized applications и toolchains вне Ubuntu host, при этом
+сохранять понятный lifecycle, отдельный HOME для каждого managed box и
+воспроизводимые desktop exports.
 .SH 1. Host infrastructure
 .LP
-На host допускаются только container integration packages:
+На host устанавливаются только integration packages из Ubuntu repository:
 .LP
 .EX
-sudo apt install podman distrobox uidmap fuse-overlayfs slirp4netns passt
+sudo apt install --no-install-recommends -y \e
+    podman distrobox uidmap fuse-overlayfs slirp4netns passt
 .EE
 .PP
-Проверить rootless setup:
+Проверка:
 .LP
 .EX
 podman info --format '{{.Host.Security.Rootless}}'
 grep \(dq\(ha$USER:\(dq /etc/subuid /etc/subgid
 .EE
-.LP
-\l'2i'
-.SH 2. Основной dev box
-.LP
-Создать отдельный HOME:
+.PP
+Ожидается rootless Podman.
+.SH 2. Source of truth
 .LP
 .EX
-mkdir -p \(ti/.local/share/distrobox-homes/dev
+config/distrobox/containers.ini
+config/distrobox/exports.ini
+config/fish/completions/wsbox.fish
+bin/wsbox
 .EE
-.PP
-Создать box:
+.LP
+Managed containers:
 .LP
 .EX
-distrobox create \e
-  --name dev \e
-  --image docker.io/library/ubuntu:26.04 \e
-  --home \(dq$HOME/.local/share/distrobox-homes/dev\(dq
+ubuntu
+arch
+wine
 .EE
 .PP
-Назначение:
-.IP "\(bu" 3
-Git;
-.if n \
-.sp -1
-.if t \
-.sp -0.25v
-.IP "\(bu" 3
-compilers;
-.if n \
-.sp -1
-.if t \
-.sp -0.25v
-.IP "\(bu" 3
-CMake/Ninja;
-.if n \
-.sp -1
-.if t \
-.sp -0.25v
-.IP "\(bu" 3
-Python/uv;
-.if n \
-.sp -1
-.if t \
-.sp -0.25v
-.IP "\(bu" 3
-Node;
-.if n \
-.sp -1
-.if t \
-.sp -0.25v
-.IP "\(bu" 3
-Rust;
-.if n \
-.sp -1
-.if t \
-.sp -0.25v
-.IP "\(bu" 3
-debugger/toolchain utilities.
-.LP
-\l'2i'
-.SH 3. Базовые packages внутри dev
-.LP
-Внутри box:
+Каждый использует отдельный persistent HOME:
 .LP
 .EX
-sudo apt update
-sudo apt install \e
-  build-essential git curl wget ca-certificates \e
-  pkg-config cmake ninja-build clang lldb gdb \e
-  python3 python3-venv fish
+\(ti/.local/share/distrobox-homes/ubuntu
+\(ti/.local/share/distrobox-homes/arch
+\(ti/.local/share/distrobox-homes/wine
 .EE
 .PP
-Node/Rust добавлять только если реально нужны проектам.
+Rootfs контейнера считается disposable. Custom HOME считается persistent state.
+.SH 3. wsbox
 .LP
-\l'2i'
-.SH 4. Python / uv
-.LP
-\f(CRuv\fR ставить \fBв dev box\fR, не в host.
-.PP
-Принцип:
+Runtime helper:
 .LP
 .EX
-dev box
-  └── project
-      └── .venv / uv-managed Python
+\(ti/.local/bin/wsbox -> \(ti/.local/share/workstation-config/bin/wsbox
 .EE
 .PP
-Для каждого Python проекта:
-.IP "\(bu" 3
-собственный Python pin;
-.if n \
-.sp -1
-.if t \
-.sp -0.25v
-.IP "\(bu" 3
-project-local dependencies;
-.if n \
-.sp -1
-.if t \
-.sp -0.25v
-.IP "\(bu" 3
-никаких глобальных \f(CRpip install --user\fR на host.
-.LP
-\l'2i'
-.SH 5. VS Code
-.LP
-Если выбираем VS Code как основной IDE:
-.IP "1." 3
-установить его внутри \f(CRdev\fR;
-.if n \
-.sp -1
-.if t \
-.sp -0.25v
-.IP "2." 3
-проверить Wayland;
-.if n \
-.sp -1
-.if t \
-.sp -0.25v
-.IP "3." 3
-экспортировать desktop entry:
-\f(CRbash
-distrobox-export --app code
-\fR
-.if n \
-.sp -1
-.if t \
-.sp -0.25v
-.IP "4." 3
-проекты хранить на host, например:
-\f(CRtext
-\(ti/Projects
-\fR
-.if n \
-.sp -1
-.if t \
-.sp -0.25v
-.IP "5." 3
-toolchain остаётся внутри box.
-.LP
-\l'2i'
-.SH 6. Specialized boxes
-.LP
-Не создавать заранее всё возможное.
-.PP
-Создавать по потребности:
+Основные команды:
 .LP
 .EX
-dev        → generic development
-python-ai  → AI / PyTorch / ComfyUI tooling
-legacy     → старый userspace
-net-tools  → специальные network utilities
+wsbox list
+wsbox status [NAME]
+wsbox check
+wsbox dry-run [NAME]
+wsbox apply [NAME]
+wsbox create NAME
+wsbox enter NAME
+wsbox run NAME COMMAND [ARG...]
+wsbox stop NAME
+wsbox remove --force NAME
+wsbox recreate NAME
+wsbox apps [NAME]
+wsbox export NAME APP
+wsbox unexport NAME APP
 .EE
 .PP
-Для тяжёлых boxes использовать отдельный custom HOME.
+\f(CRapply\fR не заменяет существующий container и поэтому idempotent.
+\f(CRrecreate\fR/\f(CRremove --force\fR затрагивают rootfs, но не удаляют managed definition
+и custom HOME.
+.SH 4. Declarative desktop exports
 .LP
-\l'2i'
-.SH 7. Lifecycle
-.LP
-Для каждого box должно быть понятно:
-.IP "\(bu" 3
-зачем он нужен;
-.if n \
-.sp -1
-.if t \
-.sp -0.25v
-.IP "\(bu" 3
-где его HOME;
-.if n \
-.sp -1
-.if t \
-.sp -0.25v
-.IP "\(bu" 3
-какие projects он использует;
-.if n \
-.sp -1
-.if t \
-.sp -0.25v
-.IP "\(bu" 3
-можно ли его удалить целиком без повреждения host.
-.LP
-Периодически:
+Desired exports задаются только в:
 .LP
 .EX
-distrobox list
-podman ps -a
-podman images
+config/distrobox/exports.ini
 .EE
 .PP
-Удалять abandoned boxes и unused images осознанно.
+Текущий managed export:
 .LP
-\l'2i'
-.SH 8. Host boundary
+.EX
+arch / winbox3
+    source: /usr/share/applications/winbox3.desktop
+    host:   \(ti/.local/share/applications/arch-winbox3.desktop
+.EE
+.PP
+\f(CRwsbox apply\fR восстанавливает отсутствующий launcher, если source desktop file
+есть внутри контейнера.
+.PP
+Если после destructive rebuild приложение ещё не переустановлено, source
+считается \f(CRmissing-source\fR; это \f(CRWARN\fR, а не повреждение контейнера.
+.SH 5. Назначение containers
+.SS
+ubuntu
 .LP
-На host \fBне ставить без необходимости\fR:
+Чистый Ubuntu 26.04 base box для Ubuntu-specific tools и compatibility tests.
+.SS
+arch
+.LP
+Rolling Arch box для приложений/пакетов, которые удобнее получать из Arch/AUR.
+Текущий production use case — WinBox 3.x.
+.SS
+wine
+.LP
+Чистый Ubuntu 26.04 base box, зарезервированный для будущего \f(CRplan-windows\fR.
+Wine stack в нём пока намеренно не установлен.
+.PP
+WinBox сейчас остаётся в \f(CRarch\fR, потому что используется пакет \f(CRwinbox3\fR из AUR.
+.SH 6. Arch / WinBox 3.x
+.LP
+После чистого rebuild Arch сначала подготовить AUR tooling:
+.LP
+.EX
+wsbox enter arch
+sudo pacman -Syu --needed base-devel git
+.EE
+.PP
+Затем установить repo-managed NTSync provider из раздела 7 и только после этого
+ставить Wine/WinBox.
+.PP
+Обычный \f(CRparu\fR можно собрать из AUR:
+.LP
+.EX
+set tmp (mktemp -d)
+git clone https://aur.archlinux.org/paru.git \(dq$tmp/paru\(dq
+cd \(dq$tmp/paru\(dq
+makepkg -si
+cd
+rm -rf \(dq$tmp\(dq
+.EE
+.PP
+После этого:
+.LP
+.EX
+paru -S winbox3
+.EE
+.PP
+Экспорт launcher выполняет не \f(CRparu\fR, а \f(CRwsbox\fR:
+.LP
+.EX
+wsbox apply arch
+.EE
+.SH 7. Host NTSync и Arch virtual provider
+.LP
+Wine использует NTSync из \fBhost kernel\fR. Distrobox не имеет собственного
+работающего kernel.
+.PP
+Host source of truth:
+.LP
+.EX
+config/distrobox/host/modules-load.d/ntsync.conf
+.EE
+.PP
+Runtime:
+.LP
+.EX
+/etc/modules-load.d/ntsync.conf
+.EE
+.PP
+Применение:
+.LP
+.EX
+sudo install -Dm644 \e
+    \(ti/.local/share/workstation-config/config/distrobox/host/modules-load.d/ntsync.conf \e
+    /etc/modules-load.d/ntsync.conf
+
+sudo modprobe ntsync
+ls -l /dev/ntsync
+.EE
+.PP
+Arch \f(CRwine\fR зависит от \f(CRntsync-autoload\fR, а тот требует virtual dependency:
+.LP
+.EX
+NTSYNC-MODULE
+.EE
+.PP
+Если provider отсутствует, pacman/paru предлагает container-local Arch kernel,
+что для Distrobox не нужно и приводит к лишним \f(CRlinux\fR, \f(CRmkinitcpio\fR,
+\f(CRvmlinuz-linux\fR и \f(CRinitramfs-linux.img\fR.
+.PP
+Repo-managed provider:
+.LP
+.EX
+config/distrobox/arch/wsbox-host-ntsync/PKGBUILD
+config/distrobox/arch/wsbox-host-ntsync/README.md
+.EE
+.PP
+Сборка внутри \f(CRarch\fR:
+.LP
+.EX
+cd \(ti/.local/share/workstation-config/config/distrobox/arch/wsbox-host-ntsync
+makepkg --clean --cleanbuild --force
+sudo pacman -U ./wsbox-host-ntsync-1-1-any.pkg.tar.zst
+.EE
+.PP
+Пакет намеренно не содержит kernel module и только объявляет:
+.LP
+.EX
+Provides: NTSYNC-MODULE
+.EE
+.PP
+Реальный module/device предоставляет host.
+.PP
+Целевое состояние:
+.LP
+.EX
+wsbox-host-ntsync   installed
+ntsync-autoload     installed
+wine                installed
+
+linux               absent
+mkinitcpio          absent
+mkinitcpio-busybox  absent
+
+/dev/ntsync         present
+.EE
+.PP
+Проверка package database:
+.LP
+.EX
+pacman -T NTSYNC-MODULE
+pacman -Dk
+.EE
+.PP
+\f(CRpacman -T\fR не должен ничего выводить, \f(CRpacman -Dk\fR должен сообщать, что ошибок
+database нет.
+.PP
+Во время запуска WinBox \f(CRwinbox.exe\fR, \f(CRwineserver\fR и \f(CRwinedevice.exe\fR реально
+держат \f(CR/dev/ntsync\fR открытым; это было проверено 2026-09-26.
+.SH 8. WinBox persistent state и scale
+.LP
+Wrapper \f(CRwinbox3\fR использует prefix:
+.LP
+.EX
+$HOME/.winbox/wine
+.EE
+.PP
+Так как \f(CR$HOME\fR у \f(CRarch\fR — custom HOME Distrobox, prefix находится на host здесь:
+.LP
+.EX
+\(ti/.local/share/distrobox-homes/arch/.winbox/wine
+.EE
+.PP
+Prefix переживает \f(CRwsbox remove --force arch\fR и \f(CRwsbox recreate arch\fR.
+.PP
+Текущий DPI baseline:
+.LP
+.EX
+LogPixels = 192 decimal = 0xc0
+scale     = 200%
+.EE
+.PP
+Проверка:
+.LP
+.EX
+wsbox run arch bash -lc '
+export WINEPREFIX=\(dq$HOME/.winbox/wine\(dq
+wine reg query \(dqHKEY_CURRENT_USER\eControl Panel\eDesktop\(dq /v LogPixels
+\&'
+.EE
+.PP
+Если prefix новый, baseline выставляется так:
+.LP
+.EX
+wsbox run arch bash -lc '
+export WINEPREFIX=\(dq$HOME/.winbox/wine\(dq
+export WINEARCH=win64
+wineboot -u
+wine reg add \e
+    \(dqHKEY_CURRENT_USER\eControl Panel\eDesktop\(dq \e
+    /v LogPixels \e
+    /t REG_DWORD \e
+    /d 192 \e
+    /f
+wineserver -k 2>/dev/null || true
+\&'
+.EE
+.SH 9. GUI validation
+.LP
+Distrobox GUI integration проверена реальными desktop applications.
+.PP
+WinBox 3.x:
 .IP "\(bu" 3
-project Python versions;
+exported launcher запускается из GNOME;
 .if n \
 .sp -1
 .if t \
 .sp -0.25v
 .IP "\(bu" 3
-pipx;
+persistent Wine prefix работает;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+200% scale работает;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+NTSync используется фактически.
+.LP
+Krita использовалась как временный Qt6/Wayland diagnostic application.
+Первый запуск был медленным из-за Btrfs writeback/fdatasync; последующие старты
+были быстрыми. После проверки Krita удалена и не является managed app.
+.SH 10. Recovery contract
+.LP
+Проверенный destructive recovery:
+.LP
+.EX
+containers.ini
+    -> wsbox apply
+    -> recreates disposable runtime container
+
+custom HOME
+    -> survives remove/recreate
+
+exports.ini
+    -> restores launcher when source app exists
+.EE
+.PP
+Для \f(CRarch\fR после rootfs rebuild:
+.LP
+.EX
+winbox3 package       disappears
+$HOME/.winbox/wine    survives
+LogPixels 0xc0        survives
+desktop export        removed with container
+.EE
+.PP
+После \f(CRwsbox apply arch\fR до переустановки WinBox:
+.LP
+.EX
+arch/winbox3 -> missing-source
+.EE
+.PP
+Это ожидаемый \f(CRWARN\fR.
+.PP
+После переустановки \f(CRwsbox-host-ntsync\fR, \f(CRparu\fR/\f(CRwinbox3\fR и повторного
+\f(CRwsbox apply arch\fR export восстанавливается.
+.SH 11. Validation
+.LP
+Полная проверка managed layer:
+.LP
+.EX
+wsbox status
+wsbox apps
+wsbox check
+.EE
+.PP
+Текущий ожидаемый managed result:
+.LP
+.EX
+FAIL=0
+.EE
+.PP
+На этой машине дополнительно существуют unmanaged build containers:
+.LP
+.EX
+t2bce-build
+touchbar-build
+.EE
+.PP
+Поэтому \f(CRwsbox check\fR сейчас показывает два ожидаемых warning:
+.LP
+.EX
+FAIL=0 WARN=2
+.EE
+.PP
+Они не принадлежат managed Distrobox application layer.
+.SH 12. Host boundary
+.LP
+На Ubuntu host без необходимости не ставятся:
+.IP "\(bu" 3
+project Python versions и \f(CRpipx\fR;
 .if n \
 .sp -1
 .if t \
@@ -241,47 +405,78 @@ Node version managers;
 .if t \
 .sp -0.25v
 .IP "\(bu" 3
-random SDKs;
+random SDKs/compilers;
 .if n \
 .sp -1
 .if t \
 .sp -0.25v
 .IP "\(bu" 3
-project compilers.
+Wine.
 .LP
-Исключения — только tools, тесно связанные с kernel/hardware/desktop/virtualization.
+Исключения — infrastructure, kernel/hardware, desktop integration и
+virtualization.
+.SH DONE
 .LP
-\l'2i'
-.SH DONE WHEN
+Проверено:
 .IP "\(bu" 3
-есть один рабочий \f(CRdev\fR box;
+rootless Podman;
 .if n \
 .sp -1
 .if t \
 .sp -0.25v
 .IP "\(bu" 3
-Python/uv project работает внутри него;
+Ubuntu и Arch lifecycle;
 .if n \
 .sp -1
 .if t \
 .sp -0.25v
 .IP "\(bu" 3
-compiler stack работает;
+отдельный custom HOME;
 .if n \
 .sp -1
 .if t \
 .sp -0.25v
 .IP "\(bu" 3
-IDE запускается как desktop app;
+idempotent \f(CRwsbox apply\fR;
 .if n \
 .sp -1
 .if t \
 .sp -0.25v
 .IP "\(bu" 3
-Projects доступны без копирования;
+managed desktop export/unexport/restore;
 .if n \
 .sp -1
 .if t \
 .sp -0.25v
 .IP "\(bu" 3
-удаление box не ломает Ubuntu host.
+empty \f(CRwine\fR base box;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+destructive recovery \f(CRwine\fR и \f(CRarch\fR;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+persistent WinBox prefix;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+host NTSync + Arch virtual provider без container-local kernel;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+фактическое использование \f(CR/dev/ntsync\fR Wine;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+\f(CRwsbox check\fR без managed failures.
