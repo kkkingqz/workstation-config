@@ -185,25 +185,41 @@ systemctl --user is-active wireplumber
 Не ставить SwayNC/SwayOSD/swaylock/swayidle и не заменять штатные GNOME components.
 
 
-# 6.0. Пользовательский слой одной командой
+# 6.0. Bootstrap и слои
 
-Когда есть Nix и выполнен `ws switch` (`helpws plan-nix`), владельцы слоёв
-вызываются по порядку одной командой, без sudo:
+После разделов 2–5 (Ubuntu, Btrfs, T2, rEFInd) и штатного GNOME вся
+конфигурация ставится так (`helpws plan-nix`):
 
 ```console
+sudo apt install git
+git clone https://github.com/kkkingqz/workstation-config.git ~/.local/share/workstation-config
+~/.local/share/workstation-config/bootstrap.sh
+# logout/login: группа nix-users, PATH из 00-nix.fish, fish как login shell
+ws system apply     # системные файлы (sudo); затем reboot, если менялись modprobe/udev/cmdline
 ws apply            # расширения → tiling → клавиатура → GNOME → Flatpak → Distrobox
 # logout/login: новые расширения GNOME активируются только в новой сессии
 ws apply            # шаг keyboard, не прошедший preflight в первый раз
-ws check            # verify, wsflatpak, wsbox, ws-gnome, ws-suspend, ws system: итог FAIL/WARN
+ws check            # verify, wsflatpak, wsbox, ws-gnome, ws-suspend, ws system, apt
 ```
 
-Шаг, чей preflight не прошёл (exit 69), выводится в конце как `PREFLIGHT`.
+`bootstrap.sh` (от пользователя, sudo вызывает сам; `--dry-run` только
+показывает шаги): subvolume `@nix` и строка `/nix` в fstab → пакеты из
+`hosts/apt.txt` и `hosts/<host>/apt.txt` (с PPA fish) → `nix-users` → fish
+как login shell → первый `ws switch` (заменяемые файлы сохраняются как
+`*.pre-hm`). Хост определяется по hostname (`ws host`); для новой машины —
+`WS_HOST=<name>` и каталог `hosts/<name>/`. Повторный запуск ничего не
+меняет.
+
+Шаг `ws apply`, чей preflight не прошёл (exit 69), выводится в конце как
+`PREFLIGHT`; отдельный шаг — `ws apply keyboard`.
 
 `ws system diff` сравнивает системные файлы (`/etc`, `/boot`, `/usr/local`,
 `/usr/lib/systemd/system-sleep`), собранные Nix из `modules/system/`, с
 установленными; ничего не меняет. Пустой вывод — система совпадает с repo.
-Отдельный шаг: `ws apply keyboard`. Разделы 6.1, 6.3, 6.4 и 10 ниже
-описывают те же шаги вручную.
+`ws check apt` сравнивает списки apt с установленными пакетами и только
+сообщает о различиях.
+
+Разделы 6.1–10 ниже описывают те же шаги по отдельности.
 
 # 6.1. Managed GNOME appearance
 
@@ -690,3 +706,19 @@ ws-workstation-verify --strict
 - Dock Spring: closed app remains closed on hover.
 
 После этого установка считается восстановленной до текущего baseline.
+
+# 12. Recovery
+
+Из проверенного состояния (после раздела 11) обновить recovery:
+
+```console
+sudo system-backup-snapshot
+```
+
+Он делает `/.snapshots/backup-ro` и загружаемый `/.snapshots/recovery`
+(предыдущее поколение — `*.previous`) и пункт в меню GRUB. Проверить один
+раз: загрузиться в recovery через GRUB и вернуться.
+
+`/nix` лежит в отдельном `@nix`: откат `@` не ломает ссылки home-manager в
+`/nix/store`. Возврат `@` из recovery — `helpws plan-nix`, раздел
+«Возврат `@` из recovery».

@@ -21,7 +21,7 @@ jobs:
               '#!'*python3*) python3 -m py_compile "$f" || status=1 ;;
               '#!'*bash*|'#!'*sh) bash -n "$f" || status=1 ;;
             esac
-          done < <(git ls-files -z bin system)
+          done < <(git ls-files -z bin system bootstrap.sh)
           while IFS= read -r -d '' f; do
             fish -n "$f" || status=1
           done < <(git ls-files -z '*.fish')
@@ -32,5 +32,5 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: cachix/install-nix-action@v31
-      - name: nix flake check (builds every home configuration)
+      - name: nix flake check (builds every home configuration and system tree)
         run: nix flake check --print-build-logs

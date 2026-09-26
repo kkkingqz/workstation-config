@@ -13,7 +13,7 @@ Usage:
   ws switch [HOME-MANAGER-ARG...]
   ws diff
   ws apply [STEP...]
-  ws check [-v]
+  ws check [-v] | ws check apt
   ws system diff|check|apply
   ws baseline capture|diff|list ...
   ws host
@@ -32,9 +32,11 @@ apply     run the layer owners in order, as by hand (no sudo steps):
           logout/login) is reported at the end; on a new machine:
           ws apply, log out and in, ws apply
 check     run the owners' checks (ws-workstation-verify, wsflatpak check,
-          wsbox check, ws-gnome check, ws-suspend status, ws system check)
-          and summarize;
-          shows WARN/FAIL lines only, -v shows the full output
+          wsbox check, ws-gnome check, ws-suspend status, ws system check,
+          ws check apt) and summarize;
+          shows WARN/FAIL lines only, -v shows the full output;
+          check apt compares hosts/apt.txt and hosts/<host>/apt.txt (the
+          lists of bootstrap.sh) with the installed packages, report only
 system    build the host system file tree (modules/system) and compare it
           with the live system, read-only: diff shows file differences,
           check also unit states and prints OK/DIFFERS/MISSING per entry;
@@ -489,7 +491,41 @@ check_steps=(
     "gnome ws-gnome check"
     "suspend ws-suspend status"
     "system ws system check"
+    "apt ws check apt"
 )
+
+# The apt lists of bootstrap.sh against the installed system; reports only.
+# A listed package that is missing or only auto-installed (apt autoremove
+# could take it) is a WARN; manual packages outside the lists are listed.
+cmd_check_apt() {
+    local h pkg status
+    local -a want=() extra=()
+    local -A listed=() manual=()
+
+    h="$(host)"
+    mapfile -t want < <(cat "$repo/hosts/apt.txt" "$repo/hosts/$h/apt.txt" 2>/dev/null \
+        | sed -e 's/#.*//' -e 's/[[:space:]]//g' -e '/^$/d' -e '/^ppa:/d' | sort -u)
+    while read -r pkg; do
+        manual[$pkg]=1
+    done < <(apt-mark showmanual)
+
+    for pkg in "${want[@]}"; do
+        listed[$pkg]=1
+        status="$(dpkg-query -W -f='${Status}' "$pkg" 2>/dev/null || true)"
+        if [[ "$status" != *" ok installed" ]]; then
+            printf 'WARN    not installed: %s\n' "$pkg"
+        elif [[ -z "${manual[$pkg]:-}" ]]; then
+            printf 'WARN    auto-installed, apt autoremove could remove it: %s (sudo apt-mark manual %s)\n' "$pkg" "$pkg"
+        else
+            printf 'OK      %s\n' "$pkg"
+        fi
+    done
+    for pkg in "${!manual[@]}"; do
+        [[ -n "${listed[$pkg]:-}" ]] || extra+=("$pkg")
+    done
+    printf '\nINFO    %d manual packages are not in hosts/apt.txt or hosts/%s/apt.txt:\n' "${#extra[@]}" "$h"
+    printf '%s\n' "${extra[@]}" | sort | fmt -w 78 | sed 's/^/        /'
+}
 
 cmd_check() {
     local verbose=false step name cmd rc out warn fail
@@ -497,6 +533,7 @@ cmd_check() {
     local total_warn=0 total_fail=0
 
     case "${1:-}" in
+        apt) cmd_check_apt; return ;;
         -v|--verbose) verbose=true ;;
         "") ;;
         *) die "unknown check option: $1" ;;

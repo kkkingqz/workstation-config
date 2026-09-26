@@ -72,6 +72,7 @@ Subvolumes
 @cache
 @tmp
 @log
+@nix          /nix: Nix store, отдельно от @ (откат @ не трогает /nix)
 \&.snapshots
 .EE
 .SS
@@ -862,7 +863,17 @@ Shebang:
 .LP
 .EX
 workstation-config/
+├── bootstrap.sh          новая машина: @nix → apt → nix-users → fish → ws switch
+├── flake.nix, flake.lock nixpkgs 26.05 + home-manager, версии закреплены
+├── hosts/
+│   ├── apt.txt           apt-пакеты всех хостов
+│   └── mbp16/            facts.nix, home.nix, apt.txt
+├── modules/
+│   ├── home/             ссылки на checkout, CLI из Nix, xremap
+│   └── system/           дерево системных файлов (common, boot/, hardware/)
+├── pkgs/xremap.nix
 ├── bin/
+│   ├── ws                switch, diff, apply, check, system, baseline
 │   ├── dotgit
 │   ├── helpws
 │   ├── ws-doc-build
@@ -901,6 +912,13 @@ workstation-config/
 ├── docs/
 └── man/man1/
 .EE
+.PP
+Nix доставляет, владельцы слоёв не меняются (\f(CRhelpws plan-nix\fR):
+home-manager ставит ссылки на checkout (\f(CR\(ti/.local/bin\fR, fish, Ghostty, man)
+и CLI (fzf, zoxide, eza, micro, nvd, xremap); \f(CRws system apply\fR ставит копии
+системных файлов из сборки \f(CRmodules/system\fR; GNOME, Flatpak, Distrobox,
+клавиатура — прежние \f(CRbin/\fR-владельцы, их по порядку вызывает \f(CRws apply\fR.
+Основная проверка — \f(CRws check\fR.
 .PP
 Runtime helper paths в \f(CR\(ti/.local/bin\fR используют symlink на repository.
 GNOME extension runtime copies являются реальными directories в

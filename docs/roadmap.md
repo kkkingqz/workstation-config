@@ -29,6 +29,9 @@ volume: User Commands
   - CapsLock EN/RU и Fn+CapsLock -> UA;
   - GDM/login EN и GNOME lock screen EN;
   - Tiling Assistant, Tile Editing Mode, Always on Top и Smart Popup;
+- Nix + home-manager поверх Ubuntu (`helpws plan-nix`, тег `nix-v1`):
+  `bootstrap.sh` → `ws switch` → `ws system apply` → `ws apply`, проверка —
+  `ws check`; задачи после миграции — там же, «После миграции»;
 - development/toolchains не должны расползаться по host;
 - не использовать `powertop --auto-tune`, TLP, auto-cpufreq и агрессивный USB runtime PM для Touch Bar.
 

@@ -1568,6 +1568,19 @@ if [[ -d /nix/var/nix ]]; then
             && pass "$tool from Nix profile" \
             || warn "$tool does not resolve to ~/.nix-profile/bin ($(command -v "$tool" 2>/dev/null || echo missing))"
     done
+    # Removed from apt in phase 5: a second copy would shadow Nix for sudo and
+    # non-fish shells, and its fish vendor files would load too.
+    for pkg in fzf zoxide eza micro; do
+        dpkg-query -W -f='${Status}' "$pkg" 2>/dev/null | grep -q ' ok installed$' \
+            && warn "apt package $pkg still installed; Nix provides it (sudo apt remove $pkg)" \
+            || pass "apt package $pkg not installed (Nix provides it)"
+    done
+    [[ -r "$repo/bootstrap.sh" && -x "$repo/bootstrap.sh" ]] \
+        && pass "bootstrap.sh present and executable" \
+        || fail "bootstrap.sh missing or not executable"
+    for path in bootstrap.sh hosts/apt.txt hosts/mbp16/apt.txt; do
+        tracked "$path" "$path"
+    done
     [[ "$(command -v lowdown 2>/dev/null)" == /usr/bin/lowdown ]] \
         && pass "lowdown from apt (man/ is generated with it)" \
         || warn "lowdown resolves to $(command -v lowdown 2>/dev/null || echo missing), not /usr/bin/lowdown"

@@ -41,6 +41,7 @@ Root работает на **Btrfs**.
 @cache
 @tmp
 @log
+@nix          /nix: Nix store, отдельно от @ (откат @ не трогает /nix)
 .snapshots
 ```
 
@@ -696,7 +697,17 @@ Shebang:
 
 ```text
 workstation-config/
+├── bootstrap.sh          новая машина: @nix → apt → nix-users → fish → ws switch
+├── flake.nix, flake.lock nixpkgs 26.05 + home-manager, версии закреплены
+├── hosts/
+│   ├── apt.txt           apt-пакеты всех хостов
+│   └── mbp16/            facts.nix, home.nix, apt.txt
+├── modules/
+│   ├── home/             ссылки на checkout, CLI из Nix, xremap
+│   └── system/           дерево системных файлов (common, boot/, hardware/)
+├── pkgs/xremap.nix
 ├── bin/
+│   ├── ws                switch, diff, apply, check, system, baseline
 │   ├── dotgit
 │   ├── helpws
 │   ├── ws-doc-build
@@ -735,6 +746,13 @@ workstation-config/
 ├── docs/
 └── man/man1/
 ```
+
+Nix доставляет, владельцы слоёв не меняются (`helpws plan-nix`):
+home-manager ставит ссылки на checkout (`~/.local/bin`, fish, Ghostty, man)
+и CLI (fzf, zoxide, eza, micro, nvd, xremap); `ws system apply` ставит копии
+системных файлов из сборки `modules/system`; GNOME, Flatpak, Distrobox,
+клавиатура — прежние `bin/`-владельцы, их по порядку вызывает `ws apply`.
+Основная проверка — `ws check`.
 
 Runtime helper paths в `~/.local/bin` используют symlink на repository.
 GNOME extension runtime copies являются реальными directories в

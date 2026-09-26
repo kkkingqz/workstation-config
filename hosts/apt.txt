@@ -1,0 +1,42 @@
+# apt packages every host needs on top of a standard Ubuntu desktop.
+# One package per line; `ppa:OWNER/NAME` adds an Ubuntu PPA first.
+# Installed by bootstrap.sh; `ws check apt` compares with apt-mark showmanual.
+# Host packages: hosts/<name>/apt.txt.
+
+# Nix: delivers the user layer (docs/plans/nix-migration.md)
+nix-bin
+nix-setup-systemd
+
+# Login shell (fish 4.x: config/fish), terminal, repository
+ppa:fish-shell/release-4
+fish
+ghostty
+git
+curl
+
+# man pages from docs/ (bin/ws-doc-build; lowdown 3.x from Nix changes man/)
+lowdown
+
+# Python helpers use the host PyGObject and AT-SPI (ws-nautilus-current)
+python3-gi
+gir1.2-atspi-2.0
+
+# Qt applications under GNOME (rebuild.md 6.2)
+qgnomeplatform-qt5
+qgnomeplatform-qt6
+qtwayland5
+qt6-wayland
+
+# Distrobox / Podman (rebuild.md 6.3)
+podman
+distrobox
+uidmap
+fuse-overlayfs
+slirp4netns
+passt
+
+# Flatpak applications (wsflatpak)
+flatpak
+
+# Btrfs subvolumes, snapshots and recovery (system-backup-snapshot)
+btrfs-progs

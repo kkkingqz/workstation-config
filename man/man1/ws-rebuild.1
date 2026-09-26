@@ -232,25 +232,41 @@ systemctl --user is-active wireplumber
 .EE
 .PP
 Не ставить SwayNC/SwayOSD/swaylock/swayidle и не заменять штатные GNOME components.
-.SH 6.0. Пользовательский слой одной командой
+.SH 6.0. Bootstrap и слои
 .LP
-Когда есть Nix и выполнен \f(CRws switch\fR (\f(CRhelpws plan-nix\fR), владельцы слоёв
-вызываются по порядку одной командой, без sudo:
+После разделов 2–5 (Ubuntu, Btrfs, T2, rEFInd) и штатного GNOME вся
+конфигурация ставится так (\f(CRhelpws plan-nix\fR):
 .LP
 .EX
+sudo apt install git
+git clone https://github.com/kkkingqz/workstation-config.git \(ti/.local/share/workstation-config
+\(ti/.local/share/workstation-config/bootstrap.sh
+# logout/login: группа nix-users, PATH из 00-nix.fish, fish как login shell
+ws system apply     # системные файлы (sudo); затем reboot, если менялись modprobe/udev/cmdline
 ws apply            # расширения → tiling → клавиатура → GNOME → Flatpak → Distrobox
 # logout/login: новые расширения GNOME активируются только в новой сессии
 ws apply            # шаг keyboard, не прошедший preflight в первый раз
-ws check            # verify, wsflatpak, wsbox, ws-gnome, ws-suspend, ws system: итог FAIL/WARN
+ws check            # verify, wsflatpak, wsbox, ws-gnome, ws-suspend, ws system, apt
 .EE
 .PP
-Шаг, чей preflight не прошёл (exit 69), выводится в конце как \f(CRPREFLIGHT\fR.
+\f(CRbootstrap.sh\fR (от пользователя, sudo вызывает сам; \f(CR--dry-run\fR только
+показывает шаги): subvolume \f(CR@nix\fR и строка \f(CR/nix\fR в fstab → пакеты из
+\f(CRhosts/apt.txt\fR и \f(CRhosts/<host>/apt.txt\fR (с PPA fish) → \f(CRnix-users\fR → fish
+как login shell → первый \f(CRws switch\fR (заменяемые файлы сохраняются как
+\f(CR*.pre-hm\fR). Хост определяется по hostname (\f(CRws host\fR); для новой машины —
+\f(CRWS_HOST=<name>\fR и каталог \f(CRhosts/<name>/\fR. Повторный запуск ничего не
+меняет.
+.PP
+Шаг \f(CRws apply\fR, чей preflight не прошёл (exit 69), выводится в конце как
+\f(CRPREFLIGHT\fR; отдельный шаг — \f(CRws apply keyboard\fR.
 .PP
 \f(CRws system diff\fR сравнивает системные файлы (\f(CR/etc\fR, \f(CR/boot\fR, \f(CR/usr/local\fR,
 \f(CR/usr/lib/systemd/system-sleep\fR), собранные Nix из \f(CRmodules/system/\fR, с
 установленными; ничего не меняет. Пустой вывод — система совпадает с repo.
-Отдельный шаг: \f(CRws apply keyboard\fR. Разделы 6.1, 6.3, 6.4 и 10 ниже
-описывают те же шаги вручную.
+\f(CRws check apt\fR сравнивает списки apt с установленными пакетами и только
+сообщает о различиях.
+.PP
+Разделы 6.1–10 ниже описывают те же шаги по отдельности.
 .SH 6.1. Managed GNOME appearance
 .LP
 После clone repository сначала проверить текущий desktop state:
@@ -802,3 +818,18 @@ Dock Spring: running app activates after \(ti1.3 s hover;
 Dock Spring: closed app remains closed on hover.
 .LP
 После этого установка считается восстановленной до текущего baseline.
+.SH 12. Recovery
+.LP
+Из проверенного состояния (после раздела 11) обновить recovery:
+.LP
+.EX
+sudo system-backup-snapshot
+.EE
+.PP
+Он делает \f(CR/.snapshots/backup-ro\fR и загружаемый \f(CR/.snapshots/recovery\fR
+(предыдущее поколение — \f(CR*.previous\fR) и пункт в меню GRUB. Проверить один
+раз: загрузиться в recovery через GRUB и вернуться.
+.PP
+\f(CR/nix\fR лежит в отдельном \f(CR@nix\fR: откат \f(CR@\fR не ломает ссылки home-manager в
+\f(CR/nix/store\fR. Возврат \f(CR@\fR из recovery — \f(CRhelpws plan-nix\fR, раздел
+«Возврат \f(CR@\fR из recovery».
