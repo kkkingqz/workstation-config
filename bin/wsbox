@@ -3,6 +3,7 @@ set -euo pipefail
 
 repo="${WORKSTATION_CONFIG:-$HOME/.local/share/workstation-config}"
 manifest="$repo/config/distrobox/containers.ini"
+exports_manifest="$repo/config/distrobox/exports.ini"
 
 usage() {
     cat <<'USAGE'
@@ -18,6 +19,9 @@ Usage:
   wsbox stop NAME
   wsbox remove --force NAME
   wsbox recreate NAME
+  wsbox apps [NAME]
+  wsbox export NAME APP
+  wsbox unexport NAME APP
 USAGE
 }
 
@@ -35,14 +39,15 @@ ensure_base() {
     need distrobox
     need distrobox-assemble
     [[ -r "$manifest" ]] || die "manifest not found: $manifest"
+    [[ -r "$exports_manifest" ]] || die "exports manifest not found: $exports_manifest"
 }
 
 managed_boxes() {
     sed -nE 's/^\[([^]]+)\]$/\1/p' "$manifest"
 }
 
-manifest_value() {
-    local section="$1" key="$2" value
+ini_value() {
+    local file="$1" section="$2" key="$3" value
 
     value="$({
         awk -F= -v section="[$section]" -v key="$key" '
@@ -66,7 +71,7 @@ manifest_value() {
                     exit
                 }
             }
-        ' "$manifest"
+        ' "$file"
     } || true)"
 
     value="${value#\"}"
@@ -76,6 +81,44 @@ manifest_value() {
     printf '%s\n' "$value"
 }
 
+manifest_value() {
+    ini_value "$manifest" "$1" "$2"
+}
+
+export_sections() {
+    sed -nE 's/^\[([^]]+)\]$/\1/p' "$exports_manifest"
+}
+
+export_aliases() {
+    local name="$1"
+
+    awk -F= -v section="[$name]" '
+        $0 == section {
+            inside=1
+            next
+        }
+
+        inside && /^\[/ {
+            exit
+        }
+
+        inside {
+            line=$0
+            sub(/[[:space:]]*[#;].*$/, "", line)
+            if (line !~ /=/) next
+
+            split(line, parts, "=")
+            key=parts[1]
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", key)
+            if (key != "") print key
+        }
+    ' "$exports_manifest"
+}
+
+export_source() {
+    ini_value "$exports_manifest" "$1" "$2"
+}
+
 is_managed() {
     managed_boxes | grep -Fxq -- "$1"
 }
@@ -83,6 +126,19 @@ is_managed() {
 require_managed() {
     [[ -n "${1:-}" ]] || die "container name required"
     is_managed "$1" || die "not a managed container: $1"
+}
+
+is_managed_export() {
+    local name="$1" alias="$2"
+    export_aliases "$name" | grep -Fxq -- "$alias"
+}
+
+require_managed_export() {
+    local name="$1" alias="$2"
+
+    [[ -n "$alias" ]] || die "managed app alias required"
+    is_managed_export "$name" "$alias" \
+        || die "not a managed export: $name/$alias"
 }
 
 container_exists() {
@@ -107,6 +163,139 @@ container_image() {
             "$1" \
             2>/dev/null \
         || printf 'unknown\n'
+}
+
+container_exec() {
+    local name="$1"
+    shift
+
+    distrobox enter \
+        --name "$name" \
+        -- "$@"
+}
+
+export_source_exists() {
+    local name="$1" source="$2"
+
+    container_exec "$name" test -f "$source" \
+        >/dev/null 2>&1
+}
+
+export_host_path() {
+    local name="$1" source="$2"
+    printf '%s/.local/share/applications/%s-%s\n' \
+        "$HOME" "$name" "$(basename "$source")"
+}
+
+export_launcher_targets() {
+    local name="$1" launcher="$2" exec_line
+
+    [[ -f "$launcher" ]] || return 1
+    exec_line="$(grep -m1 '^Exec=' "$launcher" 2>/dev/null || true)"
+
+    [[ "$exec_line" == *distrobox-enter* ]] || return 1
+    [[ "$exec_line" == *"-n $name"* ]] || return 1
+}
+
+export_state() {
+    local name="$1" source="$2" launcher
+
+    if ! export_source_exists "$name" "$source"; then
+        printf 'missing-source\n'
+        return 0
+    fi
+
+    launcher="$(export_host_path "$name" "$source")"
+
+    if [[ ! -f "$launcher" ]]; then
+        printf 'not-exported\n'
+    elif export_launcher_targets "$name" "$launcher"; then
+        printf 'exported\n'
+    else
+        printf 'drift\n'
+    fi
+}
+
+export_one() {
+    local name="$1" alias="$2" source launcher
+
+    require_managed "$name"
+    require_managed_export "$name" "$alias"
+    container_exists "$name" || die "container does not exist: $name"
+
+    source="$(export_source "$name" "$alias")"
+    [[ -n "$source" ]] || die "empty export source: $name/$alias"
+
+    export_source_exists "$name" "$source" \
+        || die "managed export source missing: $name/$alias: $source"
+
+    launcher="$(export_host_path "$name" "$source")"
+
+    if export_launcher_targets "$name" "$launcher"; then
+        printf 'Already exported: %s/%s\n' "$name" "$alias"
+        return 0
+    fi
+
+    rm -f -- "$launcher"
+
+    container_exec "$name" distrobox-export \
+        --app "$source" \
+        --export-label none
+
+    export_launcher_targets "$name" "$launcher" \
+        || die "export did not create a valid launcher: $launcher"
+
+    printf 'Exported: %s/%s -> %s\n' "$name" "$alias" "$launcher"
+}
+
+unexport_one() {
+    local name="$1" alias="$2" source launcher
+
+    require_managed "$name"
+    require_managed_export "$name" "$alias"
+    container_exists "$name" || die "container does not exist: $name"
+
+    source="$(export_source "$name" "$alias")"
+    [[ -n "$source" ]] || die "empty export source: $name/$alias"
+    launcher="$(export_host_path "$name" "$source")"
+
+    if export_source_exists "$name" "$source"; then
+        container_exec "$name" distrobox-export \
+            --app "$source" \
+            --delete \
+            >/dev/null 2>&1 \
+            || true
+    fi
+
+    rm -f -- "$launcher"
+    printf 'Unexported: %s/%s\n' "$name" "$alias"
+}
+
+apply_exports_for() {
+    local name="$1" alias source state
+
+    container_exists "$name" || return 0
+
+    while IFS= read -r alias; do
+        [[ -n "$alias" ]] || continue
+        source="$(export_source "$name" "$alias")"
+
+        if [[ -z "$source" ]] || ! export_source_exists "$name" "$source"; then
+            printf '  WARN  managed export source missing: %s/%s: %s\n' \
+                "$name" "$alias" "${source:-<empty>}"
+            continue
+        fi
+
+        state="$(export_state "$name" "$source")"
+
+        if [[ "$state" == exported ]]; then
+            printf '  PASS  managed export already present: %s/%s\n' \
+                "$name" "$alias"
+            continue
+        fi
+
+        export_one "$name" "$alias"
+    done < <(export_aliases "$name")
 }
 
 status_one() {
@@ -184,6 +373,33 @@ cmd_status() {
     fi
 }
 
+check_exports_for() {
+    local name="$1" alias source launcher
+
+    container_exists "$name" || return 0
+
+    while IFS= read -r alias; do
+        [[ -n "$alias" ]] || continue
+        source="$(export_source "$name" "$alias")"
+
+        if [[ -z "$source" ]] || ! export_source_exists "$name" "$source"; then
+            warn "managed export source missing: $name/$alias: ${source:-<empty>}"
+            continue
+        fi
+
+        pass "managed export source exists: $name/$alias"
+        launcher="$(export_host_path "$name" "$source")"
+
+        if [[ ! -f "$launcher" ]]; then
+            fail "managed export missing: $name/$alias: $launcher"
+        elif export_launcher_targets "$name" "$launcher"; then
+            pass "managed export launcher valid: $name/$alias"
+        else
+            fail "managed export launcher drift: $name/$alias: $launcher"
+        fi
+    done < <(export_aliases "$name")
+}
+
 cmd_check() {
     local failures=0
     local warnings=0
@@ -241,6 +457,21 @@ cmd_check() {
         fail "manifest missing"
     fi
 
+    if [[ -r "$exports_manifest" ]]; then
+        pass "exports manifest present"
+
+        while IFS= read -r name; do
+            [[ -n "$name" ]] || continue
+            if is_managed "$name"; then
+                pass "exports section targets managed container: $name"
+            else
+                fail "exports section targets unmanaged container: $name"
+            fi
+        done < <(export_sections)
+    else
+        fail "exports manifest missing"
+    fi
+
     while IFS= read -r name; do
         [[ -n "$name" ]] || continue
 
@@ -268,6 +499,7 @@ cmd_check() {
             fail "$name custom HOME missing: $expected_home"
         fi
 
+        check_exports_for "$name"
     done < <(managed_boxes)
 
     while IFS= read -r name; do
@@ -310,6 +542,7 @@ cmd_dry_run() {
 
 cmd_apply() {
     local name="${1:-}"
+    local box
     local args=(
         create
         --file "$manifest"
@@ -321,6 +554,14 @@ cmd_apply() {
     fi
 
     distrobox assemble "${args[@]}"
+
+    if [[ -n "$name" ]]; then
+        apply_exports_for "$name"
+    else
+        while IFS= read -r box; do
+            [[ -n "$box" ]] && apply_exports_for "$box"
+        done < <(managed_boxes)
+    fi
 }
 
 cmd_create() {
@@ -440,6 +681,74 @@ cmd_recreate() {
         --name "$name"
 }
 
+show_managed_exports() {
+    local name="$1" alias source state launcher
+
+    printf '%-16s %-16s %-18s %-52s %s\n' \
+        BOX APP STATE SOURCE HOST_LAUNCHER
+
+    while IFS= read -r alias; do
+        [[ -n "$alias" ]] || continue
+        source="$(export_source "$name" "$alias")"
+
+        if container_exists "$name"; then
+            state="$(export_state "$name" "$source")"
+        else
+            state="container-missing"
+        fi
+
+        launcher="$(export_host_path "$name" "$source")"
+        printf '%-16s %-16s %-18s %-52s %s\n' \
+            "$name" "$alias" "$state" "$source" "$launcher"
+    done < <(export_aliases "$name")
+}
+
+cmd_apps() {
+    local name="${1:-}" box
+
+    if [[ -n "$name" ]]; then
+        require_managed "$name"
+        show_managed_exports "$name"
+
+        if container_exists "$name"; then
+            echo
+            echo "Available desktop files in $name:"
+            container_exec "$name" find \
+                /usr/share/applications \
+                -maxdepth 1 \
+                -type f \
+                -name '*.desktop' \
+                -printf '%f\n' \
+                2>/dev/null \
+                | sort
+        fi
+        return 0
+    fi
+
+    while IFS= read -r box; do
+        [[ -n "$box" ]] || continue
+        show_managed_exports "$box"
+    done < <(managed_boxes)
+}
+
+cmd_export() {
+    local name="${1:-}" alias="${2:-}"
+
+    require_managed "$name"
+    [[ -n "$alias" ]] || die "managed app alias required"
+    [[ $# -eq 2 ]] || die "Usage: wsbox export NAME APP"
+    export_one "$name" "$alias"
+}
+
+cmd_unexport() {
+    local name="${1:-}" alias="${2:-}"
+
+    require_managed "$name"
+    [[ -n "$alias" ]] || die "managed app alias required"
+    [[ $# -eq 2 ]] || die "Usage: wsbox unexport NAME APP"
+    unexport_one "$name" "$alias"
+}
+
 main() {
     ensure_base
 
@@ -495,6 +804,18 @@ main() {
 
         recreate)
             cmd_recreate "$@"
+            ;;
+
+        apps)
+            cmd_apps "$@"
+            ;;
+
+        export)
+            cmd_export "$@"
+            ;;
+
+        unexport)
+            cmd_unexport "$@"
             ;;
 
         -h|--help|help)

@@ -10,13 +10,73 @@ function __wsbox_using_command
     and test "$cmd[2]" = "$argv[1]"
 end
 
+function __wsbox_needs_box
+    set -l cmd (commandline -opc)
+
+    test (count $cmd) -eq 2
+    and test "$cmd[2]" = "$argv[1]"
+end
+
+
+function __wsbox_remove_needs_box
+    set -l cmd (commandline -opc)
+
+    test (count $cmd) -eq 3
+    and test "$cmd[2]" = remove
+    and test "$cmd[3]" = --force
+end
+
 function __wsbox_managed_boxes
-    set -l manifest \
-        ~/.local/share/workstation-config/config/distrobox/containers.ini
+    set -l repo ~/.local/share/workstation-config
+
+    if set -q WORKSTATION_CONFIG
+        set repo $WORKSTATION_CONFIG
+    end
+
+    set -l manifest $repo/config/distrobox/containers.ini
 
     if test -f $manifest
         string match -rg '^\[([^]]+)\]$' < $manifest
     end
+end
+
+function __wsbox_export_aliases_for_box
+    set -l box $argv[1]
+    set -l repo ~/.local/share/workstation-config
+
+    if set -q WORKSTATION_CONFIG
+        set repo $WORKSTATION_CONFIG
+    end
+
+    set -l manifest $repo/config/distrobox/exports.ini
+
+    if test -f $manifest
+        awk -F= -v section="[$box]" '
+            $0 == section {
+                inside=1
+                next
+            }
+
+            inside && /^\[/ {
+                exit
+            }
+
+            inside && /=/ {
+                key=$1
+                gsub(/^[[:space:]]+|[[:space:]]+$/, "", key)
+                if (key != "") print key
+            }
+        ' $manifest
+    end
+end
+
+function __wsbox_current_export_aliases
+    set -l cmd (commandline -opc)
+
+    test (count $cmd) -eq 3; or return
+    contains -- $cmd[2] export unexport; or return
+
+    __wsbox_export_aliases_for_box $cmd[3]
 end
 
 complete -c wsbox -f
@@ -44,7 +104,7 @@ complete -c wsbox \
 complete -c wsbox \
     -n '__wsbox_needs_command' \
     -a apply \
-    -d 'Create missing managed containers'
+    -d 'Create missing containers and apply managed exports'
 
 complete -c wsbox \
     -n '__wsbox_needs_command' \
@@ -76,9 +136,24 @@ complete -c wsbox \
     -a recreate \
     -d 'Recreate container from manifest'
 
-for cmd in status dry-run apply create enter run stop remove recreate
+complete -c wsbox \
+    -n '__wsbox_needs_command' \
+    -a apps \
+    -d 'Show managed exports and available desktop files'
+
+complete -c wsbox \
+    -n '__wsbox_needs_command' \
+    -a export \
+    -d 'Export one managed desktop application'
+
+complete -c wsbox \
+    -n '__wsbox_needs_command' \
+    -a unexport \
+    -d 'Remove one managed desktop export'
+
+for cmd in status dry-run apply create enter run stop remove recreate apps export unexport
     complete -c wsbox \
-        -n "__wsbox_using_command $cmd" \
+        -n "__wsbox_needs_box $cmd" \
         -a '(__wsbox_managed_boxes)'
 end
 
@@ -86,3 +161,17 @@ complete -c wsbox \
     -n '__wsbox_using_command remove' \
     -l force \
     -d 'Allow removal of managed container'
+
+complete -c wsbox \
+    -n '__wsbox_remove_needs_box' \
+    -a '(__wsbox_managed_boxes)'
+
+complete -c wsbox \
+    -n '__wsbox_using_command export' \
+    -a '(__wsbox_current_export_aliases)' \
+    -d 'Managed application alias'
+
+complete -c wsbox \
+    -n '__wsbox_using_command unexport' \
+    -a '(__wsbox_current_export_aliases)' \
+    -d 'Managed application alias'
