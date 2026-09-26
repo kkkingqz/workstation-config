@@ -522,6 +522,7 @@ ppa:fish-shell/release-4
 
 ```text
 ~/.config/fish/config.fish
+~/.config/fish/conf.d/00-nix.fish
 ~/.config/fish/conf.d/eza.fish
 ~/.config/fish/conf.d/fzf-options.fish
 ~/.config/fish/conf.d/git-prompt.fish

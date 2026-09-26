@@ -71,7 +71,8 @@ CI собирает конфигурации всех хостов.
 .SH КЛЮЧЕВЫЕ РЕШЕНИЯ
 .LP
 .EX
-Nix              официальный multi-user installer, flakes в /etc/nix/nix.conf
+Nix              apt: nix-bin + nix-setup-systemd (universe, 2.34.x);
+                 flakes в \(ti/.config/nix/nix.conf (config/nix/nix.conf)
 /nix             отдельный subvolume @nix: откат @ и recovery не ломают
                  ссылки пользовательского слоя в /nix/store
 Каналы           nixos-26.05 + home-manager release-26.05, версии в flake.lock
@@ -82,7 +83,7 @@ bin/             ссылки на checkout через mkOutOfStoreSymlink; sheb
                  раскладывает копии с бэкапом и выполняет те же действия после
                  установки, что сейчас делают apply-скрипты
 ESP              rEFInd и GRUB EFI: только захват и check
-Остаётся в apt   ядро и T2, rEFInd, GRUB, dracut, GDM, GNOME Shell, fish,
+Остаётся в apt   сам Nix, ядро и T2, rEFInd, GRUB, dracut, GDM, GNOME Shell, fish,
                  ghostty, python3-gi, podman, distrobox, flatpak, glib/dconf
 Из Nix           fzf, zoxide, eza, lowdown, micro, nvd; бинарник xremap
 Фикс t2bce       как сейчас: ws-suspend, podman-сборка, kernel/t2bce/
@@ -631,9 +632,9 @@ installed: window-monitor-pro»: противоречит verify 10.1, где р
 \l'2i'
 .SH ФАЗА 0 — @NIX, NIX, СКЕЛЕТ FLAKE, WS, CI
 .IP "1." 3
-\fBЭталон с sudo\fR — до установки Nix, потому что установщик меняет
-\f(CR/etc/bash.bashrc\fR и другие файлы: \f(CRdpkg --verify\fR,
-\f(CRlsinitrd /boot/initrd.img-$(uname -r)\fR → в \f(CRbaseline/pre-nix/\fR.
+\fBЭталон с sudo\fR — до установки Nix (пакеты, группы, fstab меняются):
+\f(CRdpkg --verify\fR, \f(CRlsinitrd /boot/initrd.img-$(uname -r)\fR → в
+\f(CRbaseline/pre-nix/\fR. Сделано при закрытии фазы −1.
 .IP "2." 3
 \fBSubvolume \f(CB@nix\fB:\fR
 .LP
@@ -653,62 +654,97 @@ UUID=0cfd2add-849f-47b9-865d-2ac821ca529c  /nix  btrfs  subvol=@nix,noatime,comp
 .IP
 \f(CRsudo systemctl daemon-reload && sudo mount /nix && findmnt /nix\fR.
 .IP "3." 3
-\fBУстановить Nix:\fR
+\fBУстановить Nix из apt\fR (решение 2026-09-26 вместо официального
+установщика):
 .LP
 .EX
-curl --proto '=https' --tlsv1.2 -L https://nixos.org/nix/install -o /tmp/nix-install
-sh /tmp/nix-install --daemon
+sudo apt install nix-bin nix-setup-systemd
+sudo usermod -aG nix-users king
 .EE
 .IP
-Затем в \f(CR/etc/nix/nix.conf\fR строка
-\f(CRexperimental-features = nix-command flakes\fR и
-\f(CRsudo systemctl restart nix-daemon\fR.
+\f(CR/nix\fR монтируется до установки, поэтому хранилище создаётся в \f(CR@nix\fR.
+Почему apt: юниты лежат в \f(CR/usr/lib/systemd/system\fR с
+\f(CRRequiresMountsFor=/nix/store\fR (ссылки установщика в \f(CR/nix\fR при
+отдельном \f(CR/nix\fR висели бы при загрузке); \f(CR/etc/bash.bashrc\fR, \f(CR/etc/zshrc\fR
+и \f(CR/etc/profile.d\fR не меняются; нет \f(CRcurl | sh\fR; удаление — \f(CRapt purge\fR,
+целостность — \f(CRdpkg --verify\fR; Nix попадает в общий apt-список хостов.
+Цена: версия 2.34.x на весь срок LTS (для flakes, nixpkgs 26.05 и
+home-manager достаточно; новее — через профиль Nix), пакет из universe,
+группа \f(CRnix-users\fR действует после перелогина, \f(CR\(ti/.nix-profile\fR ведёт в
+\f(CR/nix/var/nix/profiles/per-user/king/profile\fR (старое место — проверить
+при первом switch).
+.IP
+\f(CR/etc/nix/nix.conf\fR — conffile пакета (\f(CRsandbox = true\fR), не правится.
+\f(CRexperimental-features = nix-command flakes\fR — в своём
+\f(CRconfig/nix/nix.conf\fR, ссылка \f(CR\(ti/.config/nix/nix.conf\fR: flakes
+вычисляются на стороне клиента.
 .IP "4." 3
-\fBNix в login shell.\fR GNOME-сессия строит окружение через \f(CRfish -l\fR, а
-\f(CR/etc/fish/conf.d\fR пуст. Добавить \f(CRconfig/fish/conf.d/00-nix.fish\fR и
-ссылку на него в \f(CR\(ti/.config/fish/conf.d/\fR, как у остальных файлов:
+\fBNix в login shell.\fR GNOME-сессия строит окружение через \f(CRfish -l\fR.
+Пакет задаёт \f(CRPATH\fR/\f(CRNIX_REMOTE\fR для systemd user manager
+(\f(CR/usr/lib/environment.d/nix-daemon.conf\fR), но fish строит PATH сам.
+\f(CRconfig/fish/conf.d/00-nix.fish\fR и ссылка на него в
+\f(CR\(ti/.config/fish/conf.d/\fR:
 .LP
 .EX
-# Nix для login shell. GNOME строит окружение сессии через \(gafish -l\(ga,
-# поэтому файл должен быть быстрым, без сети и безопасным без Nix.
-if test -e /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.fish
-   source /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.fish
-else if test -d /nix/var/nix/profiles/default/bin
-   fish_add_path --global --path $HOME/.nix-profile/bin /nix/var/nix/profiles/default/bin
+if test -d /nix/var/nix
+   set -q NIX_REMOTE; or set -gx NIX_REMOTE daemon
+   fish_add_path --global --path $HOME/.nix-profile/bin
 end
 .EE
 .IP
-\f(CRuser-bin.fish\fR идёт после и оставляет \f(CR\(ti/.local/bin\fR первым в PATH, как
-сейчас. Переменные окружения задаются только в fish:
-\f(CRhome.sessionVariables\fR до fish не доходят. После перелогина проверить
-\f(CRsystemctl --user show-environment\fR и \f(CRfish -l -c 'command -v nix'\fR.
+\f(CR/usr/bin/nix\fR уже в PATH. \f(CRuser-bin.fish\fR идёт после и оставляет
+\f(CR\(ti/.local/bin\fR первым в PATH, как сейчас. Переменные окружения задаются
+только в fish: \f(CRhome.sessionVariables\fR до fish не доходят. После
+перелогина проверить \f(CRsystemctl --user show-environment\fR и
+\f(CRfish -l -c 'command -v nix'\fR.
 .IP "5." 3
 \fBСкелет flake.\fR Inputs: \f(CRnixpkgs\fR (\f(CRnixos-26.05\fR), \f(CRhome-manager\fR
 (\f(CRrelease-26.05\fR, follows nixpkgs). Минимальный home для \f(CRking@mbp16\fR:
-\f(CRtargets.genericLinux.enable = true\fR, \f(CRprograms.home-manager.enable = true\fR.
+\f(CRprograms.home-manager.enable = true\fR, а всё, что меняет сессию или
+подменяет инструменты apt, выключено:
 .RS
 .IP "\(bu" 3
-Новые файлы — \f(CRgit add\fR до сборки: flake видит только файлы из git.
+\f(CRtargets.genericLinux.enable = false\fR: иначе
+\f(CR\(ti/.config/environment.d/10-home-manager.conf\fR переписывает
+\f(CRXDG_DATA_DIRS\fR, \f(CRNIX_PATH\fR, \f(CRTERMINFO_DIRS\fR всей GNOME-сессии, а
+\f(CRgpu\fR тянет mesa и требует настройки от root. GUI — из apt и Flatpak;
 .if n \
 .sp -1
 .if t \
 .sp -0.25v
 .IP "\(bu" 3
-В \f(CR.gitignore\fR добавить \f(CRresult\fR и \f(CRresult-*\fR, сборки — с
+\f(CRprograms.man.enable = false\fR: \f(CRman\fR из Nix встал бы перед
+\f(CR/usr/bin/man\fR;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+\f(CRxdg.mime.enable = false\fR: \f(CRupdate-mime-database\fR из Nix по
+\f(CR\(ti/.local/share/mime\fR.
+.RE
+.IP
+Остаются: \f(CR\(ti/.config/environment.d/10-home-manager.conf\fR только с
+\f(CRLOCALE_ARCHIVE_2_27\fR (её читает лишь glibc из Nix; CLI из Nix в фазе 1
+без неё не найдут локали) и инертный \f(CRtray.target\fR (без \f(CR[Install]\fR).
+- Новые файлы — \f(CRgit add\fR до сборки: flake видит только файлы из git.
+- В \f(CR.gitignore\fR добавить \f(CRresult\fR и \f(CRresult-*\fR, сборки — с
 \f(CR--no-link\fR: висящая ссылка \f(CRresult\fR — FAIL в verify («broken symlink
 in repo tree»).
-.RE
 .IP
 Первый запуск:
 .LP
 .EX
-nix run home-manager/release-26.05 -- switch --flake \(ti/.local/share/workstation-config#king@mbp16
+ws switch
 .EE
+.IP
+\f(CRws switch\fR запускает \f(CRhome-manager\fR из flake (\f(CRpackages.home-manager\fR,
+версия из \f(CRflake.lock\fR), а не из канала.
 .IP "6." 3
 \fB\f(CBbin/ws\fB\fR — bash, как остальные \f(CRbin/\fR: \f(CRws switch\fR (home-manager
 switch), \f(CRws diff\fR (сборка и \f(CRnvd diff\fR), \f(CRws baseline\fR (обёртка
 \f(CRws-baseline\fR). \f(CRws\fR запускается от пользователя и сам вызывает sudo там,
-где нужно: \f(CRsudo ws\fR не сработает, secure_path не видит профиль Nix.
+где нужно: home-manager и профиль пользовательские, \f(CRsudo ws\fR их не видит.
 .IP "7." 3
 \fBCI\fR (GitHub Actions): \f(CRnix flake check\fR, сборка всех
 \f(CRhomeConfigurations\fR, \f(CRbash -n\fR/\f(CRfish -n\fR/\f(CRpython3 -m py_compile\fR по
@@ -721,8 +757,21 @@ switch), \f(CRws diff\fR (сборка и \f(CRnvd diff\fR), \f(CRws baseline\fR
 GNOME-сессии; \f(CRws baseline diff pre-nix phase-0\fR — только ожидаемое (новые
 файлы Nix, строка fstab); CI зелёный; тег \f(CRnix-phase-0\fR.
 .PP
-\fBОткат:\fR удалить Nix по официальной инструкции для multi-user, убрать
-строку \f(CR@nix\fR из fstab, удалить subvolume. \f(CR00-nix.fish\fR без Nix ничего не
+\fBИтог (2026-09-26):\fR Nix 2.34.3 из apt, \f(CR/nix\fR из \f(CR@nix\fR монтируется при
+загрузке, сокет и демон стартуют, \f(CRnix-users\fR в сессии; flake.lock:
+nixpkgs \f(CRf5c082a4\fR (2026-09-25), home-manager \f(CRa6631107\fR (2026-09-24);
+первое поколение home-manager активировано. \f(CRws baseline diff pre-nix
+phase-0\fR — только ожидаемое: новые проверки verify, fstab, \f(CRnix-daemon\fR,
+\f(CRnix.mount\fR, ссылки \f(CRws\fR/\f(CR00-nix.fish\fR/\f(CRnix.conf\fR, файлы home-manager
+(см. шаг 5), PATH с \f(CR\(ti/.nix-profile/bin\fR, \f(CRNIX_REMOTE\fR/\f(CRNIX_PATH\fR из пакета;
+\f(CRapfs\fR не загружен (строка \f(CR/mnt/apple\fR удалена в фазе −1). \f(CRws-baseline\fR
+теперь сравнивает verify без строк состояния git и без встроенного
+\f(CRwsbox check\fR (он зависит от того, запущены ли контейнеры, и сравнивается
+отдельно). CI — после push.
+.PP
+\fBОткат:\fR \f(CRsudo apt purge nix-bin nix-setup-systemd\fR, убрать строку
+\f(CR@nix\fR из fstab, удалить subvolume \f(CR@nix\fR, группу \f(CRnix-users\fR и ссылки
+\f(CR\(ti/.nix-profile\fR, \f(CR\(ti/.config/nix/nix.conf\fR. \f(CR00-nix.fish\fR без Nix ничего не
 делает.
 .LP
 \l'2i'
@@ -1039,8 +1088,9 @@ recovery → \f(CRpre-phase4-root\fR.
 \l'2i'
 .SH ФАЗА 5 — ПЕРЕКЛЮЧЕНИЕ И УБОРКА
 .IP "\(bu" 3
-\f(CRbootstrap.sh\fR: apt из общего списка и \f(CRhosts/<name>/apt.txt\fR → \f(CR@nix\fR →
-Nix → первый switch. \f(CRws check apt\fR сравнивает с \f(CRapt-mark showmanual\fR и
+\f(CRbootstrap.sh\fR: \f(CR@nix\fR в fstab → apt из общего списка (с \f(CRnix-bin\fR,
+\f(CRnix-setup-systemd\fR) и \f(CRhosts/<name>/apt.txt\fR → \f(CRnix-users\fR → первый
+switch. \f(CRws check apt\fR сравнивает с \f(CRapt-mark showmanual\fR и
 только сообщает о различиях.
 .if n \
 .sp -1

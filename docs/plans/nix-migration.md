@@ -56,7 +56,8 @@ DKMS) — не часть миграции. Это отдельные задач
 # КЛЮЧЕВЫЕ РЕШЕНИЯ
 
 ```text
-Nix              официальный multi-user installer, flakes в /etc/nix/nix.conf
+Nix              apt: nix-bin + nix-setup-systemd (universe, 2.34.x);
+                 flakes в ~/.config/nix/nix.conf (config/nix/nix.conf)
 /nix             отдельный subvolume @nix: откат @ и recovery не ломают
                  ссылки пользовательского слоя в /nix/store
 Каналы           nixos-26.05 + home-manager release-26.05, версии в flake.lock
@@ -67,7 +68,7 @@ bin/             ссылки на checkout через mkOutOfStoreSymlink; sheb
                  раскладывает копии с бэкапом и выполняет те же действия после
                  установки, что сейчас делают apply-скрипты
 ESP              rEFInd и GRUB EFI: только захват и check
-Остаётся в apt   ядро и T2, rEFInd, GRUB, dracut, GDM, GNOME Shell, fish,
+Остаётся в apt   сам Nix, ядро и T2, rEFInd, GRUB, dracut, GDM, GNOME Shell, fish,
                  ghostty, python3-gi, podman, distrobox, flatpak, glib/dconf
 Из Nix           fzf, zoxide, eza, lowdown, micro, nvd; бинарник xremap
 Фикс t2bce       как сейчас: ws-suspend, podman-сборка, kernel/t2bce/
@@ -511,9 +512,9 @@ bin/, config/, system/, kernel/, gnome/, docs/, man/, state/   — как сей
 
 # ФАЗА 0 — @NIX, NIX, СКЕЛЕТ FLAKE, WS, CI
 
-1. **Эталон с sudo** — до установки Nix, потому что установщик меняет
-   `/etc/bash.bashrc` и другие файлы: `dpkg --verify`,
-   `lsinitrd /boot/initrd.img-$(uname -r)` → в `baseline/pre-nix/`.
+1. **Эталон с sudo** — до установки Nix (пакеты, группы, fstab меняются):
+   `dpkg --verify`, `lsinitrd /boot/initrd.img-$(uname -r)` → в
+   `baseline/pre-nix/`. Сделано при закрытии фазы −1.
 
 2. **Subvolume `@nix`:**
 
@@ -533,39 +534,66 @@ bin/, config/, system/, kernel/, gnome/, docs/, man/, state/   — как сей
 
    `sudo systemctl daemon-reload && sudo mount /nix && findmnt /nix`.
 
-3. **Установить Nix:**
+3. **Установить Nix из apt** (решение 2026-09-26 вместо официального
+   установщика):
 
    ```console
-   curl --proto '=https' --tlsv1.2 -L https://nixos.org/nix/install -o /tmp/nix-install
-   sh /tmp/nix-install --daemon
+   sudo apt install nix-bin nix-setup-systemd
+   sudo usermod -aG nix-users king
    ```
 
-   Затем в `/etc/nix/nix.conf` строка
-   `experimental-features = nix-command flakes` и
-   `sudo systemctl restart nix-daemon`.
+   `/nix` монтируется до установки, поэтому хранилище создаётся в `@nix`.
+   Почему apt: юниты лежат в `/usr/lib/systemd/system` с
+   `RequiresMountsFor=/nix/store` (ссылки установщика в `/nix` при
+   отдельном `/nix` висели бы при загрузке); `/etc/bash.bashrc`, `/etc/zshrc`
+   и `/etc/profile.d` не меняются; нет `curl | sh`; удаление — `apt purge`,
+   целостность — `dpkg --verify`; Nix попадает в общий apt-список хостов.
+   Цена: версия 2.34.x на весь срок LTS (для flakes, nixpkgs 26.05 и
+   home-manager достаточно; новее — через профиль Nix), пакет из universe,
+   группа `nix-users` действует после перелогина, `~/.nix-profile` ведёт в
+   `/nix/var/nix/profiles/per-user/king/profile` (старое место — проверить
+   при первом switch).
 
-4. **Nix в login shell.** GNOME-сессия строит окружение через `fish -l`, а
-   `/etc/fish/conf.d` пуст. Добавить `config/fish/conf.d/00-nix.fish` и
-   ссылку на него в `~/.config/fish/conf.d/`, как у остальных файлов:
+   `/etc/nix/nix.conf` — conffile пакета (`sandbox = true`), не правится.
+   `experimental-features = nix-command flakes` — в своём
+   `config/nix/nix.conf`, ссылка `~/.config/nix/nix.conf`: flakes
+   вычисляются на стороне клиента.
+
+4. **Nix в login shell.** GNOME-сессия строит окружение через `fish -l`.
+   Пакет задаёт `PATH`/`NIX_REMOTE` для systemd user manager
+   (`/usr/lib/environment.d/nix-daemon.conf`), но fish строит PATH сам.
+   `config/fish/conf.d/00-nix.fish` и ссылка на него в
+   `~/.config/fish/conf.d/`:
 
    ```fish
-   # Nix для login shell. GNOME строит окружение сессии через `fish -l`,
-   # поэтому файл должен быть быстрым, без сети и безопасным без Nix.
-   if test -e /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.fish
-       source /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.fish
-   else if test -d /nix/var/nix/profiles/default/bin
-       fish_add_path --global --path $HOME/.nix-profile/bin /nix/var/nix/profiles/default/bin
+   if test -d /nix/var/nix
+       set -q NIX_REMOTE; or set -gx NIX_REMOTE daemon
+       fish_add_path --global --path $HOME/.nix-profile/bin
    end
    ```
 
-   `user-bin.fish` идёт после и оставляет `~/.local/bin` первым в PATH, как
-   сейчас. Переменные окружения задаются только в fish:
-   `home.sessionVariables` до fish не доходят. После перелогина проверить
-   `systemctl --user show-environment` и `fish -l -c 'command -v nix'`.
+   `/usr/bin/nix` уже в PATH. `user-bin.fish` идёт после и оставляет
+   `~/.local/bin` первым в PATH, как сейчас. Переменные окружения задаются
+   только в fish: `home.sessionVariables` до fish не доходят. После
+   перелогина проверить `systemctl --user show-environment` и
+   `fish -l -c 'command -v nix'`.
 
 5. **Скелет flake.** Inputs: `nixpkgs` (`nixos-26.05`), `home-manager`
    (`release-26.05`, follows nixpkgs). Минимальный home для `king@mbp16`:
-   `targets.genericLinux.enable = true`, `programs.home-manager.enable = true`.
+   `programs.home-manager.enable = true`, а всё, что меняет сессию или
+   подменяет инструменты apt, выключено:
+   - `targets.genericLinux.enable = false`: иначе
+     `~/.config/environment.d/10-home-manager.conf` переписывает
+     `XDG_DATA_DIRS`, `NIX_PATH`, `TERMINFO_DIRS` всей GNOME-сессии, а
+     `gpu` тянет mesa и требует настройки от root. GUI — из apt и Flatpak;
+   - `programs.man.enable = false`: `man` из Nix встал бы перед
+     `/usr/bin/man`;
+   - `xdg.mime.enable = false`: `update-mime-database` из Nix по
+     `~/.local/share/mime`.
+
+   Остаются: `~/.config/environment.d/10-home-manager.conf` только с
+   `LOCALE_ARCHIVE_2_27` (её читает лишь glibc из Nix; CLI из Nix в фазе 1
+   без неё не найдут локали) и инертный `tray.target` (без `[Install]`).
    - Новые файлы — `git add` до сборки: flake видит только файлы из git.
    - В `.gitignore` добавить `result` и `result-*`, сборки — с
      `--no-link`: висящая ссылка `result` — FAIL в verify («broken symlink
@@ -574,13 +602,16 @@ bin/, config/, system/, kernel/, gnome/, docs/, man/, state/   — как сей
    Первый запуск:
 
    ```console
-   nix run home-manager/release-26.05 -- switch --flake ~/.local/share/workstation-config#king@mbp16
+   ws switch
    ```
+
+   `ws switch` запускает `home-manager` из flake (`packages.home-manager`,
+   версия из `flake.lock`), а не из канала.
 
 6. **`bin/ws`** — bash, как остальные `bin/`: `ws switch` (home-manager
    switch), `ws diff` (сборка и `nvd diff`), `ws baseline` (обёртка
    `ws-baseline`). `ws` запускается от пользователя и сам вызывает sudo там,
-   где нужно: `sudo ws` не сработает, secure_path не видит профиль Nix.
+   где нужно: home-manager и профиль пользовательские, `sudo ws` их не видит.
 
 7. **CI** (GitHub Actions): `nix flake check`, сборка всех
    `homeConfigurations`, `bash -n`/`fish -n`/`python3 -m py_compile` по
@@ -593,8 +624,21 @@ bin/, config/, system/, kernel/, gnome/, docs/, man/, state/   — как сей
 GNOME-сессии; `ws baseline diff pre-nix phase-0` — только ожидаемое (новые
 файлы Nix, строка fstab); CI зелёный; тег `nix-phase-0`.
 
-**Откат:** удалить Nix по официальной инструкции для multi-user, убрать
-строку `@nix` из fstab, удалить subvolume. `00-nix.fish` без Nix ничего не
+**Итог (2026-09-26):** Nix 2.34.3 из apt, `/nix` из `@nix` монтируется при
+загрузке, сокет и демон стартуют, `nix-users` в сессии; flake.lock:
+nixpkgs `f5c082a4` (2026-09-25), home-manager `a6631107` (2026-09-24);
+первое поколение home-manager активировано. `ws baseline diff pre-nix
+phase-0` — только ожидаемое: новые проверки verify, fstab, `nix-daemon`,
+`nix.mount`, ссылки `ws`/`00-nix.fish`/`nix.conf`, файлы home-manager
+(см. шаг 5), PATH с `~/.nix-profile/bin`, `NIX_REMOTE`/`NIX_PATH` из пакета;
+`apfs` не загружен (строка `/mnt/apple` удалена в фазе −1). `ws-baseline`
+теперь сравнивает verify без строк состояния git и без встроенного
+`wsbox check` (он зависит от того, запущены ли контейнеры, и сравнивается
+отдельно). CI — после push.
+
+**Откат:** `sudo apt purge nix-bin nix-setup-systemd`, убрать строку
+`@nix` из fstab, удалить subvolume `@nix`, группу `nix-users` и ссылки
+`~/.nix-profile`, `~/.config/nix/nix.conf`. `00-nix.fish` без Nix ничего не
 делает.
 
 ---
@@ -808,8 +852,9 @@ recovery → `pre-phase4-root`.
 
 # ФАЗА 5 — ПЕРЕКЛЮЧЕНИЕ И УБОРКА
 
-- `bootstrap.sh`: apt из общего списка и `hosts/<name>/apt.txt` → `@nix` →
-  Nix → первый switch. `ws check apt` сравнивает с `apt-mark showmanual` и
+- `bootstrap.sh`: `@nix` в fstab → apt из общего списка (с `nix-bin`,
+  `nix-setup-systemd`) и `hosts/<name>/apt.txt` → `nix-users` → первый
+  switch. `ws check apt` сравнивает с `apt-mark showmanual` и
   только сообщает о различиях.
 - Удалить apt-версии fzf, zoxide, eza, micro, lowdown, если в фазах 1–4 не
   понадобились.

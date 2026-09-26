@@ -13,3 +13,7 @@ gnome/extensions/*/schemas/gschemas.compiled
 # Python bytecode/cache
 __pycache__/
 *.pyc
+
+# nix build output links (build with --no-link)
+result
+result-*

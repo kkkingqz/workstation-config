@@ -112,6 +112,11 @@ cmd_capture() {
     } > "$dir/meta.txt"
 
     echo "== owner checks"
+    # wsbox check first: it starts the containers, and verify runs its
+    # in-container checks only when they are already running.
+    if [[ "$boxes" == true ]]; then
+        run_to "$dir/checks/wsbox-check.txt" "$repo/bin/wsbox" check
+    fi
     run_to "$dir/checks/ws-workstation-verify.txt" "$repo/bin/ws-workstation-verify" --strict
     run_to "$dir/checks/wsflatpak-check.txt" "$repo/bin/wsflatpak" check
     run_to "$dir/checks/ws-gnome-check.txt" "$repo/bin/ws-gnome" check
@@ -119,9 +124,6 @@ cmd_capture() {
     run_to "$dir/checks/ws-suspend-status.txt" "$repo/bin/ws-suspend" status
     run_to "$dir/checks/ws-keyboard-status.txt" "$repo/bin/ws-keyboard-status"
     run_to "$dir/checks/ws-input-source-status.txt" "$repo/bin/ws-input-source" status
-    if [[ "$boxes" == true ]]; then
-        run_to "$dir/checks/wsbox-check.txt" "$repo/bin/wsbox" check
-    fi
 
     echo "== GNOME"
     run_to "$dir/gnome/dconf.ini" dconf dump /
@@ -148,6 +150,8 @@ cmd_capture() {
         "$HOME/.config/fish" \
         "$HOME/.config/ghostty" \
         "$HOME/.config/systemd/user" \
+        "$HOME/.config/environment.d" \
+        "$HOME/.config/nix" \
         "$HOME/.config/xdg-terminals.list" \
         "$HOME/.config/ubuntu-xdg-terminals.list" \
         "$HOME/.local/share/gnome-shell/extensions" \
@@ -227,6 +231,28 @@ normalize_check() {
     fi
 }
 
+# verify without what depends on the moment, not on the workstation:
+# - Git state of the checkout (clean tree, pushed or not);
+# - `wsbox check` and in-container NTSync checks, which verify embeds only
+#   when the containers happen to be running (wsbox-check.txt has them
+#   in every baseline).
+normalize_verify() {
+    local base="$1" boxes
+    boxes="$(normalize_check "$base/checks/wsbox-check.txt" 2>/dev/null \
+        | grep -E '^(PASS|WARN|FAIL) ' || true)"
+    normalize_check "$base/checks/ws-workstation-verify.txt" \
+        | grep -vE '^(PASS|WARN|FAIL) (working tree|HEAD |local HEAD|wsbox check:|arch: )' \
+        | grep -vxF -e "${boxes:-@@none@@}"
+}
+
+# Active user units without what depends on open apps and devices: app and
+# container scopes, device units, snap namespace mounts. Names only.
+normalize_units() {
+    awk '{ print $1 }' "$1" \
+        | grep -vE '\.(scope|device)$|^run-snapd-ns-' \
+        | sort -u
+}
+
 cmd_diff() {
     local a="$root/${1:-}" b="$root/${2:-}" rel changed=0 tmp
     [[ -n "${1:-}" && -n "${2:-}" ]] || die "diff needs A and B"
@@ -248,9 +274,21 @@ cmd_diff() {
         fi
         case "$rel" in
             meta.txt) continue ;;
+            checks/ws-workstation-verify.txt)
+                normalize_verify "$a" > "$tmp/a"
+                normalize_verify "$b" > "$tmp/b"
+                ;;
             checks/*)
                 normalize_check "$a/$rel" > "$tmp/a"
                 normalize_check "$b/$rel" > "$tmp/b"
+                ;;
+            gnome/extensions-enabled.txt)
+                sort "$a/$rel" > "$tmp/a"
+                sort "$b/$rel" > "$tmp/b"
+                ;;
+            user/units-active.txt)
+                normalize_units "$a/$rel" > "$tmp/a"
+                normalize_units "$b/$rel" > "$tmp/b"
                 ;;
             *)
                 cp "$a/$rel" "$tmp/a"

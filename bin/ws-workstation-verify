@@ -584,6 +584,7 @@ check_runtime_helper ws-suspend
 
 # Functional baseline / regression gate of the Nix migration.
 check_runtime_helper ws-baseline
+check_runtime_helper ws
 for path in system/usr/local/sbin/broadcom-aspm-suspend-guard system/usr/lib/systemd/system-sleep/80-broadcom-aspm; do
     [[ -e "$repo/$path" ]] && check_exec_tracked "$path"
 done
@@ -1487,6 +1488,54 @@ tracked "config/xdg-terminals/ghostty-open-here.desktop" "config/xdg-terminals/g
 check_symlink_target "$HOME/.local/share/applications/ghostty-open-here.desktop" \
     "$repo/config/xdg-terminals/ghostty-open-here.desktop" \
     "ghostty-open-here.desktop points into repo"
+
+section "14.4 Nix layer (docs/plans/nix-migration.md)"
+
+for path in flake.nix hosts/mbp16/facts.nix hosts/mbp16/home.nix \
+    config/fish/conf.d/00-nix.fish config/nix/nix.conf .github/workflows/check.yml; do
+    tracked "$path" "$path"
+done
+check_symlink_target "$HOME/.config/fish/conf.d/00-nix.fish" \
+    "$repo/config/fish/conf.d/00-nix.fish" "~/.config/fish/conf.d/00-nix.fish points into repo"
+check_symlink_target "$HOME/.config/nix/nix.conf" \
+    "$repo/config/nix/nix.conf" "~/.config/nix/nix.conf points into repo"
+
+if [[ -d /nix/var/nix ]]; then
+    nix_source="$(findmnt -rno SOURCE /nix 2>/dev/null || true)"
+    [[ "$nix_source" == *"[/@nix]" ]] \
+        && pass "/nix is mounted from subvolume @nix" \
+        || fail "/nix is not a separate @nix mount (${nix_source:-not mounted}); @ rollback would lose it"
+    grep -Eq '^[^#]*[[:space:]]/nix[[:space:]].*subvol=@nix' /etc/fstab \
+        && pass "fstab mounts @nix at /nix" \
+        || fail "fstab has no @nix entry for /nix"
+
+    for pkg in nix-bin nix-setup-systemd; do
+        dpkg-query -W -f='${Status}' "$pkg" 2>/dev/null | grep -q 'install ok installed' \
+            && pass "apt package installed: $pkg" \
+            || fail "apt package missing: $pkg"
+    done
+    id -nG | tr ' ' '\n' | grep -Fxq nix-users \
+        && pass "user session is in group nix-users" \
+        || fail "user session not in group nix-users (usermod -aG nix-users, then log in again)"
+    systemctl is-enabled --quiet nix-daemon.socket 2>/dev/null \
+        && pass "nix-daemon.socket enabled" \
+        || fail "nix-daemon.socket not enabled"
+    systemctl is-active --quiet nix-daemon.socket 2>/dev/null \
+        && pass "nix-daemon.socket active" \
+        || fail "nix-daemon.socket not active"
+
+    if have nix; then
+        pass "nix in PATH: $(nix --version 2>/dev/null)"
+        nix config show experimental-features 2>/dev/null | grep -qw flakes \
+            && pass "nix: flakes enabled" \
+            || fail "nix: experimental-features lack flakes"
+    else
+        fail "nix-bin installed but nix not in PATH"
+    fi
+    tracked flake.lock flake.lock
+else
+    warn "Nix not installed yet (phase 0 of docs/plans/nix-migration.md)"
+fi
 
 section "15. Extension schema source / generated files"
 
