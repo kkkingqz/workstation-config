@@ -1201,6 +1201,26 @@ switch. \f(CRws check apt\fR сравнивает с \f(CRapt-mark showmanual\fR
 .IP "\(bu" 3
 Тег \f(CRnix-v1\fR.
 .LP
+\fBИтог (2026-09-26), миграция завершена:\fR \f(CRbootstrap.sh\fR (\f(CR46d77d8\fR) —
+\f(CR@nix\fR и fstab → apt из \f(CRhosts/apt.txt\fR и \f(CRhosts/<host>/apt.txt\fR (PPA fish)
+→ \f(CRnix-users\fR → fish как login shell → первый \f(CRws switch\fR через
+\f(CRsg nix-users\fR (\f(CR-b pre-hm\fR); повторный запуск ничего не меняет,
+\f(CR--dry-run\fR на этой машине показал только \f(CRws switch\fR. \f(CRws check apt\fR
+сравнивает списки с \f(CRapt-mark showmanual\fR и только сообщает (входит в
+\f(CRws check\fR). apt-версии fzf, zoxide, eza, micro удалены (lowdown остаётся:
+фаза 1); \f(CRpython3-gi\fR и \f(CRgir1.2-atspi-2.0\fR помечены manual. verify
+предупреждает, если apt-копии вернутся. \f(CRrebuild.md\fR начинается с
+\f(CRbootstrap.sh\fR и получил раздел 12 «Recovery»; \f(CRworkstation.md\fR и
+\f(CRroadmap.md\fR описывают слой Nix. \f(CRws check\fR: FAIL 0, WARN 2 (неуправляемые
+контейнеры \f(CRt2bce-build\fR, \f(CRtouchbar-build\fR — задача «После миграции»).
+\f(CRws baseline diff pre-nix phase-5\fR: verify — только новые PASS, ни одного
+потерянного; остальное — ожидаемое (слой Nix, fstab, \f(CRnix-daemon\fR, ссылки
+home-manager, fzf 0.72 и zoxide 0.9.9 из Nix, xremap из store с тем же
+sha256). \f(CRphase-5\fR снят без \f(CR--with-sudo\fR: dpkg verify, initrd, get-default и
+ESP сравнены не были (ни одна фаза их не меняла: \f(CRws system apply\fR не
+изменил файлов, initramfs и ESP не пересобирались). Критерий «recovery
+проверен» не выполнен по решению пользователя. Тег \f(CRnix-v1\fR.
+.LP
 \l'2i'
 .SH ФАЗА 6 — ВТОРОЕ ЖЕЛЕЗО
 .IP "\(bu" 3

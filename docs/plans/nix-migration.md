@@ -930,6 +930,26 @@ initramfs, ни `update-grub` не запускались. Ошибка в ко�
   `state/keyboard/gsettings-backup.tsv`.
 - Тег `nix-v1`.
 
+**Итог (2026-09-26), миграция завершена:** `bootstrap.sh` (`46d77d8`) —
+`@nix` и fstab → apt из `hosts/apt.txt` и `hosts/<host>/apt.txt` (PPA fish)
+→ `nix-users` → fish как login shell → первый `ws switch` через
+`sg nix-users` (`-b pre-hm`); повторный запуск ничего не меняет,
+`--dry-run` на этой машине показал только `ws switch`. `ws check apt`
+сравнивает списки с `apt-mark showmanual` и только сообщает (входит в
+`ws check`). apt-версии fzf, zoxide, eza, micro удалены (lowdown остаётся:
+фаза 1); `python3-gi` и `gir1.2-atspi-2.0` помечены manual. verify
+предупреждает, если apt-копии вернутся. `rebuild.md` начинается с
+`bootstrap.sh` и получил раздел 12 «Recovery»; `workstation.md` и
+`roadmap.md` описывают слой Nix. `ws check`: FAIL 0, WARN 2 (неуправляемые
+контейнеры `t2bce-build`, `touchbar-build` — задача «После миграции»).
+`ws baseline diff pre-nix phase-5`: verify — только новые PASS, ни одного
+потерянного; остальное — ожидаемое (слой Nix, fstab, `nix-daemon`, ссылки
+home-manager, fzf 0.72 и zoxide 0.9.9 из Nix, xremap из store с тем же
+sha256). `phase-5` снят без `--with-sudo`: dpkg verify, initrd, get-default и
+ESP сравнены не были (ни одна фаза их не меняла: `ws system apply` не
+изменил файлов, initramfs и ESP не пересобирались). Критерий «recovery
+проверен» не выполнен по решению пользователя. Тег `nix-v1`.
+
 ---
 
 # ФАЗА 6 — ВТОРОЕ ЖЕЛЕЗО
