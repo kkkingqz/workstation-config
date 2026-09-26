@@ -1,0 +1,510 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo="${WORKSTATION_CONFIG:-$HOME/.local/share/workstation-config}"
+manifest="$repo/config/distrobox/containers.ini"
+
+usage() {
+    cat <<'USAGE'
+Usage:
+  wsbox list
+  wsbox status [NAME]
+  wsbox check
+  wsbox dry-run [NAME]
+  wsbox apply [NAME]
+  wsbox create NAME
+  wsbox enter NAME
+  wsbox run NAME COMMAND [ARG...]
+  wsbox stop NAME
+  wsbox remove --force NAME
+  wsbox recreate NAME
+USAGE
+}
+
+die() {
+    printf 'wsbox: %s\n' "$*" >&2
+    exit 1
+}
+
+need() {
+    command -v "$1" >/dev/null 2>&1 || die "missing command: $1"
+}
+
+ensure_base() {
+    need podman
+    need distrobox
+    need distrobox-assemble
+    [[ -r "$manifest" ]] || die "manifest not found: $manifest"
+}
+
+managed_boxes() {
+    sed -nE 's/^\[([^]]+)\]$/\1/p' "$manifest"
+}
+
+manifest_value() {
+    local section="$1" key="$2" value
+
+    value="$({
+        awk -F= -v section="[$section]" -v key="$key" '
+            $0 == section {
+                inside=1
+                next
+            }
+
+            inside && /^\[/ {
+                exit
+            }
+
+            inside {
+                k=$1
+                gsub(/^[[:space:]]+|[[:space:]]+$/, "", k)
+
+                if (k == key) {
+                    sub(/^[^=]*=/, "", $0)
+                    gsub(/^[[:space:]]+|[[:space:]]+$/, "", $0)
+                    print $0
+                    exit
+                }
+            }
+        ' "$manifest"
+    } || true)"
+
+    value="${value#\"}"
+    value="${value%\"}"
+    value="${value//\$\{HOME\}/$HOME}"
+
+    printf '%s\n' "$value"
+}
+
+is_managed() {
+    managed_boxes | grep -Fxq -- "$1"
+}
+
+require_managed() {
+    [[ -n "${1:-}" ]] || die "container name required"
+    is_managed "$1" || die "not a managed container: $1"
+}
+
+container_exists() {
+    podman container exists "$1" >/dev/null 2>&1
+}
+
+container_state() {
+    podman inspect \
+        --format '{{.State.Status}}' \
+        "$1" \
+        2>/dev/null \
+        || printf 'unknown\n'
+}
+
+container_image() {
+    podman inspect \
+        --format '{{.ImageName}}' \
+        "$1" \
+        2>/dev/null \
+        || podman inspect \
+            --format '{{.Config.Image}}' \
+            "$1" \
+            2>/dev/null \
+        || printf 'unknown\n'
+}
+
+status_one() {
+    local name="$1"
+    local expected_image
+    local expected_home
+    local state
+    local actual_image
+    local home_state
+
+    expected_image="$(manifest_value "$name" image)"
+    expected_home="$(manifest_value "$name" home)"
+
+    if container_exists "$name"; then
+        state="$(container_state "$name")"
+        actual_image="$(container_image "$name")"
+    else
+        state="missing"
+        actual_image="-"
+    fi
+
+    if [[ -d "$expected_home" ]]; then
+        home_state="present"
+    else
+        home_state="absent"
+    fi
+
+    printf '%-10s %-12s %-38s %-8s %s\n' \
+        "$name" \
+        "$state" \
+        "$actual_image" \
+        "$home_state" \
+        "$expected_home"
+}
+
+cmd_list() {
+    distrobox list --no-color
+}
+
+cmd_status() {
+    local name="${1:-}"
+
+    printf '%-10s %-12s %-38s %-8s %s\n' \
+        NAME STATE IMAGE HOME PATH
+
+    printf '%s\n' \
+        '-----------------------------------------------------------------------------------------------'
+
+    if [[ -n "$name" ]]; then
+        require_managed "$name"
+        status_one "$name"
+    else
+        while IFS= read -r name; do
+            [[ -n "$name" ]] && status_one "$name"
+        done < <(managed_boxes)
+    fi
+
+    local extras=""
+
+    extras="$(
+        podman ps -a \
+            --filter label=manager=distrobox \
+            --format '{{.Names}}' \
+            2>/dev/null \
+        | while IFS= read -r name; do
+            [[ -n "$name" ]] || continue
+            is_managed "$name" || printf '%s\n' "$name"
+        done
+    )"
+
+    if [[ -n "$extras" ]]; then
+        echo
+        echo "Unmanaged Distrobox containers:"
+        printf '  %s\n' $extras
+    fi
+}
+
+cmd_check() {
+    local failures=0
+    local warnings=0
+    local name
+    local expected_image
+    local actual_image
+    local expected_home
+
+    pass() {
+        printf '  PASS  %s\n' "$*"
+    }
+
+    warn() {
+        ((warnings+=1))
+        printf '  WARN  %s\n' "$*"
+    }
+
+    fail() {
+        ((failures+=1))
+        printf '  FAIL  %s\n' "$*"
+    }
+
+    for p in \
+        podman \
+        distrobox \
+        uidmap \
+        fuse-overlayfs \
+        slirp4netns \
+        passt
+    do
+        if dpkg-query -W -f='${Status}' "$p" 2>/dev/null \
+            | grep -qx 'install ok installed'
+        then
+            pass "package installed: $p"
+        else
+            fail "package missing: $p"
+        fi
+    done
+
+    if [[ "$(
+        podman info \
+            --format '{{.Host.Security.Rootless}}' \
+            2>/dev/null \
+            || true
+    )" == "true" ]]
+    then
+        pass "Podman rootless"
+    else
+        fail "Podman is not rootless"
+    fi
+
+    if [[ -r "$manifest" ]]; then
+        pass "manifest present"
+    else
+        fail "manifest missing"
+    fi
+
+    while IFS= read -r name; do
+        [[ -n "$name" ]] || continue
+
+        expected_image="$(manifest_value "$name" image)"
+        expected_home="$(manifest_value "$name" home)"
+
+        if ! container_exists "$name"; then
+            fail "managed container missing: $name"
+            continue
+        fi
+
+        pass "managed container exists: $name"
+
+        actual_image="$(container_image "$name")"
+
+        if [[ "$actual_image" == "$expected_image" ]]; then
+            pass "$name image matches manifest"
+        else
+            fail "$name image drift: got $actual_image, expected $expected_image"
+        fi
+
+        if [[ -d "$expected_home" ]]; then
+            pass "$name custom HOME exists"
+        else
+            fail "$name custom HOME missing: $expected_home"
+        fi
+
+    done < <(managed_boxes)
+
+    while IFS= read -r name; do
+        [[ -n "$name" ]] || continue
+
+        if ! is_managed "$name"; then
+            warn "unmanaged Distrobox container: $name"
+        fi
+
+    done < <(
+        podman ps -a \
+            --filter label=manager=distrobox \
+            --format '{{.Names}}' \
+            2>/dev/null
+    )
+
+    echo
+    printf 'FAIL=%d WARN=%d\n' \
+        "$failures" \
+        "$warnings"
+
+    (( failures == 0 ))
+}
+
+cmd_dry_run() {
+    local name="${1:-}"
+    local args=(
+        create
+        --file "$manifest"
+        --dry-run
+    )
+
+    if [[ -n "$name" ]]; then
+        require_managed "$name"
+        args+=(--name "$name")
+    fi
+
+    distrobox assemble "${args[@]}"
+}
+
+cmd_apply() {
+    local name="${1:-}"
+    local args=(
+        create
+        --file "$manifest"
+    )
+
+    if [[ -n "$name" ]]; then
+        require_managed "$name"
+        args+=(--name "$name")
+    fi
+
+    distrobox assemble "${args[@]}"
+}
+
+cmd_create() {
+    local name="${1:-}"
+
+    require_managed "$name"
+
+    container_exists "$name" \
+        && die "container already exists: $name"
+
+    distrobox assemble create \
+        --file "$manifest" \
+        --name "$name"
+}
+
+cmd_enter() {
+    local name="${1:-}"
+
+    require_managed "$name"
+
+    container_exists "$name" \
+        || die "container does not exist: $name"
+
+    exec distrobox enter \
+        --name "$name"
+}
+
+cmd_run() {
+    local name="${1:-}"
+
+    [[ -n "$name" ]] \
+        || die "container name required"
+
+    shift || true
+
+    require_managed "$name"
+
+    container_exists "$name" \
+        || die "container does not exist: $name"
+
+    (($# > 0)) \
+        || die "command required"
+
+    exec distrobox enter \
+        --name "$name" \
+        -- "$@"
+}
+
+cmd_stop() {
+    local name="${1:-}"
+
+    require_managed "$name"
+
+    container_exists "$name" \
+        || die "container does not exist: $name"
+
+    distrobox stop \
+        --yes \
+        "$name"
+}
+
+cmd_remove() {
+    local force=false
+    local name=""
+
+    while (($#)); do
+        case "$1" in
+            --force)
+                force=true
+                ;;
+
+            -h|--help)
+                echo "Usage: wsbox remove --force NAME"
+                return 0
+                ;;
+
+            -*)
+                die "unknown remove option: $1"
+                ;;
+
+            *)
+                [[ -z "$name" ]] \
+                    || die "only one container may be removed at a time"
+
+                name="$1"
+                ;;
+        esac
+
+        shift
+    done
+
+    require_managed "$name"
+
+    [[ "$force" == true ]] \
+        || die "managed container removal requires --force"
+
+    container_exists "$name" \
+        || die "container does not exist: $name"
+
+    distrobox rm \
+        --force \
+        --yes \
+        "$name"
+
+    echo \
+        "Managed definition and custom HOME were kept. Use 'wsbox apply $name' to recreate it."
+}
+
+cmd_recreate() {
+    local name="${1:-}"
+
+    require_managed "$name"
+
+    distrobox assemble create \
+        --replace \
+        --file "$manifest" \
+        --name "$name"
+}
+
+main() {
+    ensure_base
+
+    local cmd="${1:-}"
+
+    if [[ -z "$cmd" ]]; then
+        usage
+        exit 0
+    fi
+
+    shift || true
+
+    case "$cmd" in
+        list)
+            cmd_list "$@"
+            ;;
+
+        status)
+            cmd_status "$@"
+            ;;
+
+        check)
+            cmd_check "$@"
+            ;;
+
+        dry-run)
+            cmd_dry_run "$@"
+            ;;
+
+        apply)
+            cmd_apply "$@"
+            ;;
+
+        create)
+            cmd_create "$@"
+            ;;
+
+        enter)
+            cmd_enter "$@"
+            ;;
+
+        run)
+            cmd_run "$@"
+            ;;
+
+        stop)
+            cmd_stop "$@"
+            ;;
+
+        remove|rm)
+            cmd_remove "$@"
+            ;;
+
+        recreate)
+            cmd_recreate "$@"
+            ;;
+
+        -h|--help|help)
+            usage
+            ;;
+
+        *)
+            die "unknown command: $cmd"
+            ;;
+    esac
+}
+
+main "$@"
