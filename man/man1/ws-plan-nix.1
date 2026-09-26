@@ -1,0 +1,1228 @@
+.\" -*- mode: troff; coding: utf-8 -*-
+.TH "ws-plan-nix" "1" "2026-09-26" "Workstation" "User Commands"
+.SH PLAN — NIX + HOME-MANAGER (UBUNTU ОСТАЁТСЯ)
+.LP
+\fBВерсия 3, 2026-09-26.\fR Сверена с репозиторием на \f(CR0b50385\fR (managed
+Flatpak, Distrobox, suspend/T2 layer) и с живой системой. Главное отличие от
+версии 2: Nix только доставляет, владельцы слоёв не меняются.
+.SS
+Цель
+.LP
+Одна flake-конфигурация в этом репозитории поднимает все workstation.
+Ubuntu остаётся основой системы. Nix ставит CLI, раскладывает ссылки на
+checkout, закрепляет бинарники и собирает системные файлы для каждого хоста.
+Различия железа описаны в \f(CRhosts/<name>/facts.nix\fR.
+.SS
+Принцип: Nix доставляет, владельцы не меняются
+.LP
+Каждый слой уже имеет инструмент-владельца с \f(CRapply\fR и \f(CRcheck\fR. Миграция их
+не заменяет:
+.LP
+.EX
+Слой                     Владелец (остаётся)                   Что делает Nix
+Терминал                 config/fish, config/ghostty           ссылки, CLI-пакеты
+Команды ws-*             bin/                                  ссылки в \(ti/.local/bin
+Внешний вид GNOME        ws-gnome + config/gnome/settings.conf ссылка на команду
+Flatpak                  wsflatpak + config/flatpak/           ссылка на команду
+Distrobox                wsbox + config/distrobox/             ссылка на команду
+Клавиатура               ws-keyboard*, ws-tiling-apply,        бинарник xremap
+                         ws-keyboard-install-extensions
+Suspend / t2bce          ws-suspend status|t2bce-*             —
+Системные файлы          system/ (источник)                    сборка дерева хоста,
+                                                               ws system diff|check|apply
+Проверка                 ws-workstation-verify                 —
+.EE
+.PP
+Замена владельцев модулями home-manager (dconf, nix-flatpak, systemd-модули,
+DKMS) — не часть миграции. Это отдельные задачи после неё, см. «После
+миграции».
+.SS
+Критерии завершения
+.IP "\(bu" 3
+Новая машина поднимается так: Ubuntu (для Mac — T2-репозиторий и rEFInd)
+→ \f(CRbootstrap.sh\fR → \f(CRws switch\fR → \f(CRws system apply\fR → \f(CRws apply\fR →
+logout/login → \f(CRws apply\fR. После этого \f(CRws check\fR зелёный.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+\f(CRws system diff\fR пуст: системные файлы совпадают со сборкой байт в байт.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+На текущей машине \f(CRws baseline diff pre-nix now\fR не показывает регрессий.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Recovery через GRUB проверен на каждой машине.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+CI собирает конфигурации всех хостов.
+.LP
+\l'2i'
+.SH КЛЮЧЕВЫЕ РЕШЕНИЯ
+.LP
+.EX
+Nix              официальный multi-user installer, flakes в /etc/nix/nix.conf
+/nix             отдельный subvolume @nix: откат @ и recovery не ломают
+                 ссылки пользовательского слоя в /nix/store
+Каналы           nixos-26.05 + home-manager release-26.05, версии в flake.lock
+Пользователь     home-manager standalone: homeConfigurations.\(dq<user>@<host>\(dq
+bin/             ссылки на checkout через mkOutOfStoreSymlink; shebang и код
+                 скриптов не меняются (Python-хелперам нужен python3-gi из apt)
+Система          Nix собирает дерево файлов хоста из system/; ws system
+                 раскладывает копии с бэкапом и выполняет те же действия после
+                 установки, что сейчас делают apply-скрипты
+ESP              rEFInd и GRUB EFI: только захват и check
+Остаётся в apt   ядро и T2, rEFInd, GRUB, dracut, GDM, GNOME Shell, fish,
+                 ghostty, python3-gi, podman, distrobox, flatpak, glib/dconf
+Из Nix           fzf, zoxide, eza, lowdown, micro, nvd; бинарник xremap
+Фикс t2bce       как сейчас: ws-suspend, podman-сборка, kernel/t2bce/
+.EE
+.LP
+Почему не system-manager: он работает только с \f(CR/etc\fR и systemd, а здесь
+файлы лежат ещё и в \f(CR/boot\fR, \f(CR/usr/lib/systemd/system-sleep\fR и \f(CR/usr/local\fR;
+кроме того, он ставит ссылки в \f(CR/nix/store\fR, а modprobe-файлы читаются из
+initramfs.
+.PP
+Почему \f(CRgsettings\fR, \f(CRgdbus\fR, \f(CRbusctl\fR, \f(CRpython3\fR берутся с хоста: версии из
+Nix не видят схем GSettings хоста и PyGObject/Atspi из apt. Скрипты не
+упаковываются через \f(CRwriteShellApplication\fR и не проходят \f(CRpatchShebangs\fR.
+.SS
+Правила на всю миграцию
+.IP "\(bu" 3
+\fBОдин владелец.\fR Перенос части и удаление старого механизма — в одном
+коммите.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+\fBПеренос ≠ улучшение.\fR Механизмы, пути, содержимое файлов и поведение
+не меняются. Особенно всё, что касается suspend, загрузки и клавиатуры.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+\fBverify вместе с переносом.\fR \f(CRws-workstation-verify\fR проверяет конкретные
+пути и содержимое. Если перенос меняет то, что он проверяет, verify
+правится в том же коммите. verify не удаляется.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+\fBРегрессионный контроль.\fR Каждая фаза заканчивается
+\f(CRws baseline capture phase-N\fR и \f(CRws baseline diff pre-nix phase-N\fR без
+регрессий (раздел «Эталон функционала»).
+.LP
+\l'2i'
+.SH ЗАГРУЗКА И ОТКАТ
+.SS
+Схема
+.LP
+.EX
+Обычная загрузка  rEFInd — Boot0080, \eEFI\eBOOT\eBOOTX64.EFI (раздел 3)
+                    ядро T2 из /boot, параметры из /boot/refind_linux.conf
+Recovery          rEFInd → GRUB — \eEFI\eubuntu\eshimx64.efi (раздел 1)
+                    другие ядра (7.2.6-1 T2, generic)
+                    «Ubuntu — Backup snapshot» → .snapshots/recovery
+.EE
+.SS
+Что найдено при проверке 2026-09-26
+.LP
+Recovery в нынешнем виде, скорее всего, не поднимется:
+.IP "\(bu" 3
+snapshot \f(CRrecovery\fR сделан 2026-09-18, в нём только generic-ядра
+7.0.0-30/31: без t2bce (встроенная клавиатура и трекпад не работают после
+старта ядра) и без модуля \f(CRapfs\fR;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+в его \f(CR/etc/fstab\fR (и в текущем) строка \f(CR/mnt/apple\fR (apfs) записана как
+\f(CRdefaults 0 1\fR, без \f(CRnofail\fR: без модуля apfs монтирование упадёт и
+система уйдёт в emergency mode, а при заблокированном root shell там не
+дадут;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+\f(CRsystem-backup-snapshot\fR копирует в пункт GRUB весь \f(CR/proc/cmdline\fR,
+включая \f(CRinitrd=boot\einitrd.img-…\fR от rEFInd;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+ядро для recovery выбирается как самое новое по \f(CRsort -V\fR, без
+предпочтения T2;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+\f(CRGRUB_TIMEOUT_STYLE=hidden\fR и \f(CRGRUB_TIMEOUT=0\fR: меню с другими ядрами и
+snapshot\(cqом приходится ловить клавишей Esc.
+.LP
+Всё это исправляется в фазе −1.
+.SS
+\f(CR/nix\fR на отдельном subvolume
+.LP
+Пользовательский слой в \f(CR@home\fR после фазы 1 состоит из ссылок в
+\f(CR/nix/store\fR. Если бы \f(CR/nix\fR лежал внутри \f(CR@\fR, возврат \f(CR@\fR из snapshot\(cqа или
+загрузка recovery, сделанного до последнего switch, оставили бы эти ссылки
+висящими: fish без конфигурации, пустой \f(CR\(ti/.local/bin\fR. Поэтому \f(CR/nix\fR — это
+subvolume \f(CR@nix\fR, который не откатывается вместе с \f(CR@\fR:
+.IP "\(bu" 3
+откат \f(CR@\fR возвращает систему (\f(CR/etc/nix\fR, unit\(cqы nix-daemon, системные
+файлы), а store и ссылки в \f(CR@home\fR остаются согласованными;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+recovery-snapshot, сделанный после фазы 0, монтирует \f(CR@nix\fR по своему
+fstab;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+\f(CR@nix\fR snapshot\(cqится отдельно перед фазами (\f(CRpre-phaseN-nix\fR).
+.SS
+Уровни отката
+.LP
+.EX
+1. Пользовательский слой (фазы 1–3)
+   home-manager generations → activate предыдущего поколения
+   ссылки *.hm-bak от первого switch; копии из /.snapshots/pre-nix-home
+
+2. Системные файлы (фаза 4)
+   заменённые файлы лежат в /var/backups/workstation/<время>/
+   вернуть их или выполнить ws system apply из предыдущего коммита
+
+3. Не грузится или не просыпается
+   rEFInd → GRUB → предыдущее ядро T2 или «Backup snapshot»
+   из recovery — вернуть @ из именованного snapshot'а (ниже)
+.EE
+.SS
+Возврат \f(CR@\fR из recovery
+.LP
+Загрузиться в «Backup snapshot», открыть TTY (Ctrl+Alt+F3):
+.LP
+.EX
+sudo mkdir -p /run/btrfs-top
+sudo mount -o subvolid=5 UUID=0cfd2add-849f-47b9-865d-2ac821ca529c /run/btrfs-top
+sudo mv /run/btrfs-top/@ /run/btrfs-top/@.broken
+sudo btrfs subvolume snapshot /run/btrfs-top/.snapshots/pre-nix-root /run/btrfs-top/@
+sudo btrfs subvolume get-default /run/btrfs-top
+.EE
+.PP
+Если \f(CRget-default\fR показывает \f(CR@.broken\fR, перенести default на новый \f(CR@\fR:
+default-subvolume хранится по ID, и rEFInd иначе возьмёт ядро и initrd из
+старого корня.
+.LP
+.EX
+sudo btrfs subvolume list /run/btrfs-top
+sudo btrfs subvolume set-default <ID нового @> /run/btrfs-top
+.EE
+.PP
+Затем \f(CRsudo umount /run/btrfs-top\fR, перезагрузка через rEFInd и новый
+\f(CRsudo system-backup-snapshot\fR. \f(CR@.broken\fR удалить, когда всё проверено.
+.PP
+Если \f(CR@\fR вернули в состояние до фазы 0, в fstab нет строки \f(CR@nix\fR: store не
+смонтирован, ссылки home-manager в \f(CR@home\fR висят. Тогда либо вернуть строку
+\f(CR@nix\fR в fstab (Nix-слой снова работает без переустановки), либо откатить и
+пользовательский слой — \f(CR\(ti/.local/state/workstation/baseline/pre-nix/\fR
+содержит прежние ссылки на checkout.
+.PP
+\f(CR@home\fR возвращается из \f(CRpre-nix-home\fR только вне пользовательской сессии и
+с потерей всех пользовательских данных после snapshot\(cqа — последнее
+средство.
+.LP
+\l'2i'
+.SH ЭТАЛОН ФУНКЦИОНАЛА
+.LP
+Эталон — это состояние на теге \f(CRpre-nix\fR. Регрессия — любое отличие от него,
+которого нет в списке ожидаемых изменений фазы.
+.PP
+\f(CRbin/ws-baseline\fR (новый, фаза −1):
+.LP
+.EX
+ws-baseline capture NAME   → \(ti/.local/state/workstation/baseline/NAME/
+ws-baseline diff A B       → различия, без изменчивых строк
+.EE
+.PP
+Что снимает \f(CRcapture\fR:
+.LP
+.EX
+Проверки владельцев   ws-workstation-verify --strict, wsflatpak check,
+                      wsbox check, ws-gnome check, ws-gnome test (автоматическая
+                      часть), ws-suspend status, ws-keyboard-status,
+                      ws-input-source status
+                      (сравниваются множества PASS/WARN/FAIL-строк)
+GNOME                 dconf dump /, gnome-extensions list --enabled
+Flatpak               flatpak list --user --app, remotes, override --show
+                      по каждому приложению, ссылки в \(ti/.local/share/applications
+Distrobox             podman ps -a (имя, образ, ID), distrobox list
+Пользователь          \(ti/.local/bin, \(ti/.config/{fish,ghostty,systemd/user},
+                      \(ti/.local/share/gnome-shell/extensions: путь → readlink -f,
+                      sha256 содержимого; systemctl --user list-unit-files
+                      --state=enabled; systemctl --user show-environment;
+                      *xdg-terminals.list (без \(ti/.config/autostart/)
+Система               sha256 файлов из описи системного слоя, включённые
+                      system unit'ы, /proc/cmdline, lsmod (t2bce, appletb,
+                      ntsync, apple-gmux), /sys/power/mem_sleep
+Инструменты           command -v и --version: xremap, fzf, zoxide, eza,
+                      lowdown, micro, fish, ghostty
+.EE
+.PP
+\f(CRwsbox check\fR запускает контейнеры (distrobox enter), поэтому \f(CRcapture\fR не
+полностью read-only. Он пишет только в свой каталог.
+.PP
+\f(CRdiff\fR сравнивает по смыслу, а не по байтам. Например, смена
+\f(CR\(ti/.local/bin/wsbox → checkout\fR на \f(CR\(ti/.local/bin/wsbox → /nix/store/… →
+checkout\fR не регрессия, если \f(CRreadlink -f\fR и sha256 совпадают.
+.PP
+Ручная матрица (после reboot и после suspend) — как в \f(CRkeyboard.md\fR и в
+разделе 11 \f(CRrebuild.md\fR: CapsLock EN↔RU, Fn+CapsLock → UA, Ctrl+Space по
+кругу, Super+C/V в Ghostty и Nautilus, Cmd+Q/H/M, Finder-шорткаты,
+Shift+Super+3/4/5, Ctrl+←/→, Fn+Ctrl+стрелки, Tile Editing Mode, Always on
+Top, Smart Popup, Dock Spring, EN на экране блокировки и в GDM, Touch Bar
+F1…F12 / Fn → media, Wi-Fi после resume, WinBox из arch, Claude с
+масштабом 1.5.
+.LP
+\l'2i'
+.SH ЦЕЛЕВАЯ СТРУКТУРА
+.LP
+.EX
+flake.nix, flake.lock
+bootstrap.sh              Ubuntu → apt → @nix → Nix → первый switch
+hosts/mbp16/
+  facts.nix               чем машина отличается от других
+  home.nix                пользовательский слой хоста
+  system.nix              опись системных файлов хоста
+  apt.txt                 пакеты apt хоста
+modules/home/             cli.nix, links.nix, xremap.nix
+modules/system/
+  common/                 uinput, NTSync modules-load
+  boot/refind-grub-recovery/
+  hardware/t2-mbp16/      udev, modprobe, sleep, NCM, Touch Bar, ASPM,
+                          modules-load t2, get-apple-firmware
+pkgs/xremap.nix           тот же zip v0.15.13 с GitHub, по hash
+bin/, config/, system/, kernel/, gnome/, docs/, man/, state/   — как сейчас
+.EE
+.LP
+.EX
+# hosts/mbp16/facts.nix
+{
+  user = \(dqking\(dq;
+  hardware = \(dqt2-mbp16\(dq;           # t2-mbp16 | generic-pc
+  boot = \(dqrefind-grub-recovery\(dq;   # refind-grub-recovery | grub
+  kernelParams = [ \(dqquiet\(dq \(dqsplash\(dq \(dqintel_iommu=on\(dq \(dqiommu=pt\(dq \(dqpm_async=off\(dq ];
+}
+.EE
+.LP
+Новые факты добавляются, когда второй машине действительно нужно другое
+значение (фаза 6), а не заранее.
+.LP
+\l'2i'
+.SH ФАЗЫ
+.LP
+.EX
+ #   Фаза                                   Риск      sudo       ≈ вечеров
+−1   Стабилизация, recovery, пробелы        средний   да         2–3
+ 0   @nix, Nix, скелет flake, ws, CI        низкий    да         2
+ 1   Терминал и доставка команд             низкий    нет        1–2
+ 2   Оркестратор ws apply / ws check        низкий    нет        1
+ 3   Бинарник xremap                        средний   нет        1
+ 4   Системный слой                         высокий   да         2–3
+ 5   Переключение и уборка                  низкий    частично   1
+ 6   Второе железо: VM, потом машина        средний   да         1–2
+.EE
+.LP
+После любой фазы можно остановиться и жить в смешанном режиме. Шаги с sudo
+выполняются в своём терминале: sudo спрашивает пароль.
+.LP
+\l'2i'
+.SH ФАЗА −1 — СТАБИЛИЗАЦИЯ, RECOVERY, ПРОБЕЛЫ
+.LP
+\fBВход:\fR suspend в текущей конфигурации подтверждён — не меньше 20 чистых
+циклов в native-режиме Touch Bar. Счёт по \f(CR/var/log/kern.log\fR записать в
+эталон.
+.IP "1." 4
+\fBУдержать ядро.\fR Фикс t2bce собран только для 7.2.7-1:
+.LP
+.EX
+sudo apt-mark hold linux-t2
+.EE
+.IP
+В том же коммите поправить \f(CRdocs/suspend.md\fR, раздел «Обновление ядра»:
+обновление — это снять hold, собрать модули, вернуть hold.
+\f(CRws-suspend status\fR уже показывает \f(CRheld\fR.
+.IP "2." 4
+\fBfstab.\fR Строку \f(CR/mnt/apple\fR привести к
+\f(CRdefaults,nofail,x-systemd.device-timeout=5s 0 0\fR, проверить
+\f(CRsudo findmnt --verify\fR. Делается до обновления recovery, чтобы
+исправленный fstab попал в snapshot.
+.IP "3." 4
+\fBGRUB как меню восстановления.\fR В \f(CR/etc/default/grub\fR:
+\f(CRGRUB_TIMEOUT_STYLE=menu\fR, \f(CRGRUB_TIMEOUT=10\fR, затем \f(CRsudo update-grub\fR.
+Обычную загрузку это не замедляет: она идёт через rEFInd.
+.IP "4." 4
+\fB\f(CBsystem-backup-snapshot\fB.\fR Сначала захватить как есть в
+\f(CRsystem/usr/local/sbin/system-backup-snapshot\fR (отдельный коммит), затем
+исправить:
+.RS
+.IP "\(bu" 3
+добавить \f(CRinitrd=*\fR к аргументам, которые не копируются из
+\f(CR/proc/cmdline\fR;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+выбирать для recovery ядро T2 (\f(CRvmlinuz-*-t2-*\fR), generic — только если
+T2 нет.
+.RE
+.IP
+Установить: \f(CRsudo install -m0755 … /usr/local/sbin/system-backup-snapshot\fR.
+.IP "5." 4
+\fBRoot и emergency mode.\fR Статус root без sudo не читается:
+\f(CRsudo passwd -S root\fR. Если \f(CRL\fR, emergency mode shell не даст.
+Рекомендация — задать пароль root: диск не зашифрован, физический доступ
+и так равен полному. Последний запасной путь — флешка с T2-ISO.
+.IP "6." 4
+\fBЗахватить остальной системный слой\fR — байт в байт, без установки:
+.LP
+.EX
+/etc/udev/rules.d/30-amdgpu-pm.rules              → system/udev/
+/etc/udev/rules.d/99-network-t2-ncm.rules         → system/udev/
+/etc/NetworkManager/conf.d/99-network-t2-ncm.conf → system/NetworkManager/conf.d/
+/etc/modprobe.d/apple-gmux.conf                   → system/modprobe/
+/etc/modules-load.d/t2.conf                       → system/modules-load.d/
+/etc/systemd/system/get-apple-firmware.service    → system/systemd/system/
+/boot/refind_linux.conf                           → system/boot/
+/etc/default/grub                                 → system/default/  (после шага 3)
+refind.conf с раздела rEFInd                      → system/esp/  (только check)
+.EE
+.IP
+Уже в репозитории: suspend layer (\f(CRws-suspend\fR), Touch Bar и uinput
+(\f(CRws-keyboard-system-apply\fR), \f(CRntsync.conf\fR
+(\f(CRconfig/distrobox/host/modules-load.d/\fR), патч t2bce (\f(CRkernel/t2bce/\fR).
+\f(CRget-apple-firmware.service\fR пришёл из T2-установщика, его \f(CRExecStart\fR
+принадлежит пакету \f(CRapple-firmware-script\fR: захватывается только unit.
+\f(CR/usr/local/sbin/pm-processors-test\fR — отладочный скрипт, не переносится.
+.IP
+verify: добавить эти файлы в список tracked и \f(CRcompare_file\fR с runtime.
+.IP "7." 4
+\fBЗакрыть пробелы, которые миграция иначе закрепила бы:\fR
+.RS
+.IP "\(bu" 3
+\fBTiling Assistant.\fR Биндинги \f(CR<Shift><Control><Alt><Super>\fR +
+Left/Right/Up/Down/f/c/r (tile-*, center, restore), \f(CRe\fR
+(tile-edit-mode) и \f(CRt\fR (toggle-always-on-top) живут только в dconf: ни
+один скрипт их не ставит, verify их только проверяет. Добавить их в
+\f(CRws-tiling-apply\fR рядом с F13–F19, тем же способом (дописать в массив,
+не заменять), и проверить на текущей машине, что повторный запуск
+ничего не меняет.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+\fB\f(CBman ws-*\fB.\fR Сейчас не находится: \f(CR\(ti/.local/share/man/man1\fR пуст.
+Решается в фазе 1 ссылкой на \f(CRman/man1\fR checkout\(cqа; до этого не
+обещать \f(CRman ws-…\fR в документах.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+\fBhelpws.\fR Документы ссылаются на \f(CRhelpws suspend\fR и
+\f(CRhelpws distrobox\fR, таких тем нет. Добавить: \f(CRsuspend\fR →
+\f(CRdocs/suspend.md\fR, \f(CRdistrobox\fR → \f(CRdocs/plans/development.md\fR.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+\fBТерминал по умолчанию.\fR GNOME на Ubuntu открывает терминал через
+\f(CRxdg-terminal-exec\fR («Открыть в терминале» в Nautilus, \f(CR.desktop\fR с
+\f(CRTerminal=true\fR). Выбор Ghostty задают три файла вне репозитория:
+.LP
+.EX
+\(ti/.config/ubuntu-xdg-terminals.list                   → ghostty-open-here.desktop
+\(ti/.config/xdg-terminals.list                          → ghostty-open-here.desktop
+\(ti/.local/share/applications/ghostty-open-here.desktop   --gtk-single-instance=false
+.EE
+.IP
+Захватить как есть в \f(CRconfig/xdg-terminals/\fR и разложить ссылками, как
+fish и ghostty (с фазы 1 — home-manager). verify: оба \f(CR.list\fR
+указывают на \f(CRghostty-open-here.desktop\fR, ссылки ведут в репозиторий.
+Отсутствие \f(CRNoDisplay\fR (второй пункт в сетке приложений) и \f(CRssh-env\fR
+не исправлять — это улучшение после миграции.
+.IP "\(bu" 3
+\fB\f(CB\(ti/.config/autostart/remmina-applet.desktop\fB\fR — служебный файл
+Remmina (\f(CRHidden=true\fR, автозапуск выключен; системного автозапуска
+нет). Не захватывать; \f(CRws-baseline\fR не сравнивает \f(CR\(ti/.config/autostart/\fR,
+кроме файлов, которые положит сам репозиторий.
+.IP "\(bu" 3
+\fBСсылки в \f(CB\(ti/.local/bin\fB.\fR Их создаёт не один скрипт: часть делает
+\f(CRws-keyboard-apply\fR, \f(CRwsbox\fR — \f(CRrebuild.md\fR, а \f(CRws-suspend\fR,
+\f(CRwsflatpak\fR, \f(CRhelpws\fR, \f(CRdotgit\fR, \f(CRws-gnome*\fR не создаёт никто. Записать
+полный список в эталон; с фазы 1 их создаёт home-manager.
+.RE
+.IP "8." 4
+\fB\f(CBbin/ws-baseline\fB\fR (раздел «Эталон функционала»), с проверкой
+\f(CRbash -n\fR и shellcheck в verify.
+.IP "9." 4
+\fBКоммит и тег.\fR \f(CRws-workstation-verify --strict\fR зелёный, тег
+\f(CRpre-nix\fR. Во время миграции репозиторий не правится параллельно в других
+сессиях.
+.IP "10." 4
+\fBЭталон, recovery, snapshot\(cqы:\fR
+.LP
+.EX
+ws-baseline capture pre-nix
+sudo system-backup-snapshot
+sudo btrfs subvolume snapshot -r / /.snapshots/pre-nix-root
+sudo btrfs subvolume snapshot -r /home /.snapshots/pre-nix-home
+sudo btrfs subvolume get-default /
+.EE
+.IP
+Скрипт хранит два поколения \f(CRrecovery\fR/\f(CRbackup-ro\fR; именованные
+snapshot\(cqы он не трогает. Вывод \f(CRget-default\fR записать в эталон.
+.IP "11." 4
+\fBПроверить recovery на деле.\fR rEFInd → GRUB → «Ubuntu — Backup
+snapshot»: система поднимается, встроенная клавиатура работает,
+\f(CRfindmnt /\fR показывает \f(CR.snapshots/recovery\fR. Затем пункт предыдущего
+ядра T2 (7.2.6-1): грузится (suspend на нём не проверять — там нет
+фикса). Вернуться через rEFInd.
+.LP
+\fBГотово:\fR hold стоит; recovery грузится с ядром T2 и встроенной
+клавиатурой; эталон \f(CRpre-nix\fR снят; \f(CRpre-nix-root\fR, \f(CRpre-nix-home\fR и тег
+\f(CRpre-nix\fR существуют.
+.LP
+\l'2i'
+.SH ФАЗА 0 — @NIX, NIX, СКЕЛЕТ FLAKE, WS, CI
+.IP "1." 3
+\fBЭталон с sudo\fR — до установки Nix, потому что установщик меняет
+\f(CR/etc/bash.bashrc\fR и другие файлы: \f(CRdpkg --verify\fR,
+\f(CRlsinitrd /boot/initrd.img-$(uname -r)\fR → в \f(CRbaseline/pre-nix/\fR.
+.IP "2." 3
+\fBSubvolume \f(CB@nix\fB:\fR
+.LP
+.EX
+sudo mkdir -p /run/btrfs-top
+sudo mount -o subvolid=5 UUID=0cfd2add-849f-47b9-865d-2ac821ca529c /run/btrfs-top
+sudo btrfs subvolume create /run/btrfs-top/@nix
+sudo umount /run/btrfs-top
+sudo mkdir /nix
+.EE
+.IP
+В \f(CR/etc/fstab\fR:
+.LP
+.EX
+UUID=0cfd2add-849f-47b9-865d-2ac821ca529c  /nix  btrfs  subvol=@nix,noatime,compress=zstd:1  0 0
+.EE
+.IP
+\f(CRsudo systemctl daemon-reload && sudo mount /nix && findmnt /nix\fR.
+.IP "3." 3
+\fBУстановить Nix:\fR
+.LP
+.EX
+curl --proto '=https' --tlsv1.2 -L https://nixos.org/nix/install -o /tmp/nix-install
+sh /tmp/nix-install --daemon
+.EE
+.IP
+Затем в \f(CR/etc/nix/nix.conf\fR строка
+\f(CRexperimental-features = nix-command flakes\fR и
+\f(CRsudo systemctl restart nix-daemon\fR.
+.IP "4." 3
+\fBNix в login shell.\fR GNOME-сессия строит окружение через \f(CRfish -l\fR, а
+\f(CR/etc/fish/conf.d\fR пуст. Добавить \f(CRconfig/fish/conf.d/00-nix.fish\fR и
+ссылку на него в \f(CR\(ti/.config/fish/conf.d/\fR, как у остальных файлов:
+.LP
+.EX
+# Nix для login shell. GNOME строит окружение сессии через \(gafish -l\(ga,
+# поэтому файл должен быть быстрым, без сети и безопасным без Nix.
+if test -e /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.fish
+   source /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.fish
+else if test -d /nix/var/nix/profiles/default/bin
+   fish_add_path --global --path $HOME/.nix-profile/bin /nix/var/nix/profiles/default/bin
+end
+.EE
+.IP
+\f(CRuser-bin.fish\fR идёт после и оставляет \f(CR\(ti/.local/bin\fR первым в PATH, как
+сейчас. Переменные окружения задаются только в fish:
+\f(CRhome.sessionVariables\fR до fish не доходят. После перелогина проверить
+\f(CRsystemctl --user show-environment\fR и \f(CRfish -l -c 'command -v nix'\fR.
+.IP "5." 3
+\fBСкелет flake.\fR Inputs: \f(CRnixpkgs\fR (\f(CRnixos-26.05\fR), \f(CRhome-manager\fR
+(\f(CRrelease-26.05\fR, follows nixpkgs). Минимальный home для \f(CRking@mbp16\fR:
+\f(CRtargets.genericLinux.enable = true\fR, \f(CRprograms.home-manager.enable = true\fR.
+.RS
+.IP "\(bu" 3
+Новые файлы — \f(CRgit add\fR до сборки: flake видит только файлы из git.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+В \f(CR.gitignore\fR добавить \f(CRresult\fR и \f(CRresult-*\fR, сборки — с
+\f(CR--no-link\fR: висящая ссылка \f(CRresult\fR — FAIL в verify («broken symlink
+in repo tree»).
+.RE
+.IP
+Первый запуск:
+.LP
+.EX
+nix run home-manager/release-26.05 -- switch --flake \(ti/.local/share/workstation-config#king@mbp16
+.EE
+.IP "6." 3
+\fB\f(CBbin/ws\fB\fR — bash, как остальные \f(CRbin/\fR: \f(CRws switch\fR (home-manager
+switch), \f(CRws diff\fR (сборка и \f(CRnvd diff\fR), \f(CRws baseline\fR (обёртка
+\f(CRws-baseline\fR). \f(CRws\fR запускается от пользователя и сам вызывает sudo там,
+где нужно: \f(CRsudo ws\fR не сработает, secure_path не видит профиль Nix.
+.IP "7." 3
+\fBCI\fR (GitHub Actions): \f(CRnix flake check\fR, сборка всех
+\f(CRhomeConfigurations\fR, \f(CRbash -n\fR/\f(CRfish -n\fR/\f(CRpython3 -m py_compile\fR по
+\f(CRbin/\fR и \f(CRsystem/\fR. С фазы 4 — сборка системных деревьев хостов.
+.IP "8." 3
+\fBverify:\fR раздел Nix — \f(CR/nix\fR смонтирован из \f(CR@nix\fR, nix-daemon
+активен, \f(CR00-nix.fish\fR отслеживается и подключён.
+.LP
+\fBГотово:\fR пустой switch проходит; после перелогина Nix есть в PATH
+GNOME-сессии; \f(CRws baseline diff pre-nix phase-0\fR — только ожидаемое (новые
+файлы Nix, строка fstab); CI зелёный; тег \f(CRnix-phase-0\fR.
+.PP
+\fBОткат:\fR удалить Nix по официальной инструкции для multi-user, убрать
+строку \f(CR@nix\fR из fstab, удалить subvolume. \f(CR00-nix.fish\fR без Nix ничего не
+делает.
+.LP
+\l'2i'
+.SH ФАЗА 1 — ТЕРМИНАЛ И ДОСТАВКА КОМАНД
+.LP
+Home-manager начинает владеть ссылками, которые сейчас созданы вручную или
+разными скриптами. Цели ссылок не меняются: всё указывает в checkout.
+.IP "\(bu" 3
+\fBСсылки\fR (\f(CRmkOutOfStoreSymlink\fR на checkout, по одному файлу, как
+сейчас):
+.RS
+.IP "\(bu" 3
+\f(CR\(ti/.config/fish/config.fish\fR, \f(CRconf.d/*\fR, \f(CRfunctions/*\fR,
+\f(CRcompletions/*\fR. Новое — только \f(CRws-gnome-test.fish\fR: он есть в
+репозитории, но не подключён;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+\f(CR\(ti/.config/ghostty/*.ghostty\fR;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+\f(CR\(ti/.config/{ubuntu-,}xdg-terminals.list\fR и
+\f(CR\(ti/.local/share/applications/ghostty-open-here.desktop\fR
+(\f(CRconfig/xdg-terminals/\fR, захвачены в фазе −1);
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+\f(CR\(ti/.local/bin/\fR: \f(CRdotgit\fR, \f(CRhelpws\fR, \f(CRws\fR, \f(CRws-baseline\fR,
+\f(CRws-doc-build\fR, \f(CRws-gnome\fR, \f(CRws-gnome-apply\fR, \f(CRws-gnome-status\fR,
+\f(CRws-gnome-test\fR, \f(CRws-input-source\fR, \f(CRws-keyboard\fR, \f(CRws-keyboard-apply\fR,
+\f(CRws-keyboard-install-extensions\fR, \f(CRws-keyboard-status\fR,
+\f(CRws-keyboard-system-apply\fR, \f(CRws-nautilus-current\fR, \f(CRws-suspend\fR,
+\f(CRws-tiling-apply\fR, \f(CRws-window\fR, \f(CRws-workstation-verify\fR, \f(CRws-xremap\fR,
+\f(CRwsbox\fR, \f(CRwsflatpak\fR;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+\f(CR\(ti/.local/share/man/man1\fR → \f(CRman/man1\fR checkout\(cqа: начинает работать
+\f(CRman ws-…\fR.
+.RE
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+\fBНе трогаются:\fR \f(CR\(ti/.local/bin/xremap\fR (фаза 3),
+\f(CR\(ti/.config/systemd/user/xremap.service\fR и его wants-ссылка (владелец —
+\f(CRws-keyboard-apply\fR), \f(CR.desktop\fR Claude (владелец — \f(CRwsflatpak\fR),
+расширения GNOME (владелец — \f(CRws-keyboard-install-extensions\fR),
+\f(CRbin/ws-caps-led\fR (вызывается расширением по абсолютному пути, в PATH его
+нет).
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+\fBСовместимость с владельцами.\fR \f(CRws-keyboard-apply\fR проверяет свои ссылки
+через \f(CRreadlink -f\fR и цепочку \f(CR→ /nix/store → checkout\fR принимает; verify
+тоже сравнивает \f(CRreadlink -f\fR. \f(CRwsflatpak\fR ищет репозиторий через
+\f(CRWORKSTATION_CONFIG\fR или свой путь: ссылка ведёт в checkout, путь
+разрешается туда же.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+\fBCLI в \f(CBhome.packages\fB:\fR fzf, zoxide, eza, lowdown, micro, nvd. apt-версии
+остаются до фазы 5, профиль Nix стоит в PATH раньше \f(CR/usr/bin\fR. Перед
+переключением сравнить версии (\f(CRfzf --fish\fR, флаги eza в
+\f(CRconfig/fish/conf.d/eza.fish\fR, вывод \f(CRlowdown -s -t man\fR для
+\f(CRws-doc-build\fR). Если lowdown из Nix даёт другой man, verify покажет WARN
+«generated man page differs»: тогда либо перегенерировать \f(CRman/\fR одним
+коммитом, либо оставить lowdown из apt.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+\fBCompletions CLI из Nix:\fR добавить
+\f(CR\(ti/.nix-profile/share/fish/vendor_completions.d\fR в \f(CRfish_complete_path\fR.
+\f(CRXDG_DATA_DIRS\fR не трогать, иначе в сетке приложений появятся дубли
+\f(CR.desktop\fR.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+\fBУдалить\fR битую \f(CR\(ti/.local/bin/ws-nautilus-go\fR.
+.LP
+Порядок:
+.IP "1." 3
+\f(CRws switch -b hm-bak\fR: существующие ссылки станут \f(CR*.hm-bak\fR,
+переименовываются сами ссылки, а не файлы репозитория.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "2." 3
+Новый терминал, проверки, \f(CRws baseline capture phase-1\fR,
+\f(CRws baseline diff pre-nix phase-1\fR.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "3." 3
+Удалить \f(CR*.hm-bak\fR.
+.LP
+\fBГотово:\fR diff без регрессий (ожидаемо: ссылки через store, версии CLI,
+новые \f(CRws\fR, \f(CRws-baseline\fR, \f(CRws-gnome-test.fish\fR, \f(CRman\fR); prompt, Alt+C,
+zoxide, алиасы eza, заголовки вкладок как раньше; клавиатурная матрица без
+изменений; тег \f(CRnix-phase-1\fR.
+.PP
+\fBОткат:\fR \f(CRhome-manager generations\fR → \f(CRactivate\fR предыдущего поколения;
+ссылки \f(CR*.hm-bak\fR.
+.LP
+\l'2i'
+.SH ФАЗА 2 — ОРКЕСТРАТОР WS APPLY / WS CHECK
+.LP
+Ценность для нескольких машин — один порядок подъёма. Владельцы не
+меняются, \f(CRws\fR только вызывает их по очереди:
+.LP
+.EX
+ws apply    ws-keyboard-install-extensions → ws-tiling-apply →
+            ws-keyboard-apply → ws-gnome apply → wsflatpak apply →
+            wsbox apply
+            (шаги, чей preflight не прошёл, выводятся в конце; на новой
+            машине: ws apply → logout/login → ws apply)
+ws check    ws-workstation-verify, wsflatpak check, wsbox check,
+            ws-gnome check, ws-suspend status; общий итог FAIL/WARN
+.EE
+.IP "\(bu" 3
+\f(CRws apply\fR не выполняет sudo-шагов: системный слой — \f(CRws system apply\fR
+(фаза 4).
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Каждый вызов владельца — как вручную сейчас, с тем же окружением.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+В \f(CRrebuild.md\fR разделы 6.1, 6.3, 6.4 и 10 ссылаются на \f(CRws apply\fR, ручные
+команды остаются как пояснение.
+.LP
+\fBГотово:\fR \f(CRws apply\fR на текущей машине ничего не меняет (\f(CRws baseline diff\fR
+пуст, кроме отметок времени бэкапов \f(CRws-gnome\fR); \f(CRws check\fR зелёный; тег
+\f(CRnix-phase-2\fR.
+.LP
+\l'2i'
+.SH ФАЗА 3 — БИНАРНИК XREMAP
+.IP "\(bu" 3
+\f(CRpkgs/xremap.nix\fR: тот же \f(CRxremap-linux-x86_64-gnome.zip\fR v0.15.13 с
+GitHub, по hash. Бинарник статический, patchelf не нужен.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Критерий подмены: sha256 бинарника из store равен sha256
+\f(CRruntime/xremap/v0.15.13/xremap\fR.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+\f(CR\(ti/.local/bin/xremap\fR → store (home-manager) вместо
+\f(CRruntime/xremap/current/xremap\fR. \f(CRws-xremap\fR находит его через PATH
+unit\(cqа, как сейчас.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Не меняются: \f(CRxremap.yml\fR (включая абсолютный путь к \f(CRws-input-source\fR),
+\f(CRws-xremap\fR (\f(CR--watch=config,device\fR из \f(CRsettings.conf\fR,
+\f(CR--ignore \(dqDynamic Function Row Virtual Input Device\(dq\fR,
+\f(CR--output-device-name workstation-xremap\fR), \f(CRxremap.service\fR,
+расширения \f(CRxremap@k0kubun.com\fR и \f(CRwindow-control@carlo9890.github.io\fR.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Порядок: switch → \f(CRws-keyboard restart\fR → матрица → reboot → матрица →
+suspend → матрица.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+\f(CRruntime/\fR удалить после reboot-проверки. Проверка verify «.gitignore
+covers runtime/probe» остаётся до фазы 5.
+.LP
+\fBГотово:\fR \f(CRws baseline diff\fR — только путь \f(CRxremap\fR; вся ручная матрица,
+включая после suspend; тег \f(CRnix-phase-3\fR.
+.PP
+\fBОткат:\fR предыдущее поколение home-manager; \f(CRruntime/\fR до удаления
+остаётся рядом.
+.LP
+\l'2i'
+.SH ФАЗА 4 — СИСТЕМНЫЙ СЛОЙ
+.LP
+Перед фазой: \f(CRsudo system-backup-snapshot\fR, \f(CRpre-phase4-root\fR и
+\f(CRpre-phase4-nix\fR.
+.SS
+4a. Сборка и \f(CRws system diff|check\fR
+.LP
+Nix собирает дерево файлов хоста из \f(CRsystem/\fR и \f(CRconfig/distrobox/host/\fR,
+байт в байт. Опись (\f(CRhosts/mbp16/system.nix\fR) — все файлы, которыми сейчас
+владеют \f(CRws-keyboard-system-apply\fR, \f(CRws-suspend apply\fR, ручная установка
+\f(CRntsync.conf\fR и захваченные в фазе −1:
+.LP
+.EX
+common           99-workstation-uinput.rules, modules-load.d/ntsync.conf
+boot             /boot/refind_linux.conf, /etc/default/grub,
+                 /usr/local/sbin/system-backup-snapshot, refind.conf (check)
+t2-mbp16         90-touchbar-native.rules, 70-bcm4364-no-d3cold.rules,
+                 30-amdgpu-pm.rules, 99-network-t2-ncm.rules + NM conf,
+                 modprobe tb.conf, touchbar-native.conf, apple-gmux.conf,
+                 modules-load.d/t2.conf, sleep.conf.d/80-deep-only.conf,
+                 80-broadcom-aspm (system-sleep), broadcom-aspm-suspend-guard,
+                 broadcom-aspm-restore.service, ws-touchbar-fn + unit,
+                 get-apple-firmware.service
+.EE
+.PP
+\f(CRrefind_linux.conf\fR и \f(CRGRUB_CMDLINE_LINUX_DEFAULT\fR собираются из
+\f(CRfacts.kernelParams\fR. Сборка должна дать ровно нынешние файлы.
+.PP
+Сначала работают только \f(CRdiff\fR и \f(CRcheck\fR. \fBКритерий 4a — первый
+\f(CBws system diff\fB пуст.\fR Непустой diff означает ошибку описи, а не повод
+что-то менять.
+.PP
+\f(CRws system check\fR проверяет и включённость: \f(CRws-touchbar-fn.service\fR и
+\f(CRget-apple-firmware.service\fR enabled (multi-user.target),
+\f(CRbroadcom-aspm-restore.service\fR static.
+.SS
+4b. \f(CRws system apply\fR — те же действия, что сейчас
+.LP
+\f(CRapply\fR повторяет всё, что делают \f(CRws-keyboard-system-apply\fR и
+\f(CRws-suspend apply\fR, а не только копирует файлы:
+.LP
+.EX
+до копирования   бэкап заменяемых файлов в /var/backups/workstation/<время>/
+копирование      install -D с нынешними режимами (0644 / 0755)
+/etc/default/keyboard
+                 правка, как в ws-keyboard-system-apply: XKBLAYOUT=us,
+                 без grp:/grp_led: (файл принадлежит keyboard-configuration,
+                 целиком не заменяется)
+удаление         известные устаревшие: /etc/tiny-dfr/config.toml (если
+                 tiny-dfr не установлен), 70-workstation-uinput.rules (только
+                 если совпадает со старым содержимым)
+unit'ы           daemon-reload; enable ws-touchbar-fn,
+                 get-apple-firmware; restart ws-touchbar-fn
+udev             control --reload-rules; trigger --subsystem-match=input
+                 --action=change; settle
+initramfs        update-initramfs -u -k $(uname -r) только если изменились
+                 modprobe-файлы (опции hid-appletb-kbd читаются из initramfs)
+grub             update-grub только если изменился /etc/default/grub
+проверка         cmp всех файлов; ws-touchbar-fn active; предупреждения
+                 про Touch Bar config и tiny-dfr, как сейчас
+.EE
+.PP
+ESP не трогает, сам не перезагружает.
+.PP
+Один владелец — в том же коммите:
+.IP "\(bu" 3
+\f(CRws-keyboard-system-apply\fR → обёртка над \f(CRws system apply\fR (имя остаётся:
+на него ссылаются \f(CRrebuild.md\fR и verify);
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+\f(CRws-suspend apply\fR → то же; \f(CRws-suspend status\fR, \f(CRt2bce-build\fR,
+\f(CRt2bce-install\fR, \f(CRt2bce-rollback\fR не меняются;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+verify: проверки «apply installs …» указывают на новое место логики.
+.LP
+Перед первым suspend после любого \f(CRapply\fR:
+.IP "\(bu" 3
+\f(CRsystemd-analyze cat-config systemd/sleep.conf\fR показывает
+\f(CRMemorySleepMode=deep\fR;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+\f(CRsudo lsinitrd | grep -E 't2bce|appletb|modprobe.d'\fR совпадает с эталоном.
+.LP
+\fBГотово:\fR \f(CRws system diff\fR пуст; \f(CRws system apply\fR на текущей машине
+меняет только отметки времени; не меньше 10 чистых циклов suspend; recovery
+обновлён и грузится; тег \f(CRnix-phase-4\fR.
+.PP
+\fBОткат:\fR файлы из \f(CR/var/backups/workstation/\fR; если не грузится — GRUB →
+recovery → \f(CRpre-phase4-root\fR.
+.LP
+\l'2i'
+.SH ФАЗА 5 — ПЕРЕКЛЮЧЕНИЕ И УБОРКА
+.IP "\(bu" 3
+\f(CRbootstrap.sh\fR: apt из общего списка и \f(CRhosts/<name>/apt.txt\fR → \f(CR@nix\fR →
+Nix → первый switch. \f(CRws check apt\fR сравнивает с \f(CRapt-mark showmanual\fR и
+только сообщает о различиях.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Удалить apt-версии fzf, zoxide, eza, micro, lowdown, если в фазах 1–4 не
+понадобились.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+\f(CRws check\fR — основной вход; \f(CRws-workstation-verify\fR остаётся его частью.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Документы: \f(CRrebuild.md\fR — под bootstrap, \f(CRws apply\fR и recovery;
+\f(CRworkstation.md\fR — где что лежит; \f(CRroadmap.md\fR — ссылка на этот план.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+\f(CRstate/\fR остаётся: \f(CRws-keyboard restore\fR читает
+\f(CRstate/keyboard/gsettings-backup.tsv\fR.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Тег \f(CRnix-v1\fR.
+.LP
+\l'2i'
+.SH ФАЗА 6 — ВТОРОЕ ЖЕЛЕЗО
+.IP "\(bu" 3
+Сначала VM (KVM из \f(CRplan-virt\fR): чистая Ubuntu 26.04 на generic-ядре,
+\f(CRboot = \(dqgrub\(dq\fR, \f(CRhardware = \(dqgeneric-pc\(dq\fR, весь путь по \f(CRrebuild.md\fR.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+На generic-ядре есть ограничение AppArmor на user namespaces, в T2-ядре
+его нет. Всё, что зависит от sandbox, проверять там.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Что станет фактами хоста, только когда понадобится другое значение:
+.RS
+.IP "\(bu" 3
+масштаб 1.5 в \f(CR.desktop\fR Claude (\f(CRconfig/flatpak/desktop/\fR) — каталог
+данных хоста для \f(CRwsflatpak\fR;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+абсолютные пути \f(CR/home/king/…\fR в \f(CRxremap.yml\fR и в \f(CRLED_HELPER\fR
+расширения input-source — если имя пользователя другое;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+\f(CRkeyboard.physical = \(dqpc\(dq\fR — своя клавиша для UA вместо Fn+CapsLock;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+verify: проверки T2 и Touch Bar — только для \f(CRhardware = \(dqt2-mbp16\(dq\fR.
+.RE
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Реальная машина: новый \f(CRhosts/<name>/\fR и при необходимости
+hardware-профиль; recovery проверить, как в фазе −1.
+.LP
+\fBГотово:\fR вторая машина поднимается без правок в репозитории, кроме её
+каталога в \f(CRhosts/\fR и явно добавленных фактов.
+.LP
+\l'2i'
+.SH ПОСЛЕ МИГРАЦИИ
+.LP
+Отдельные задачи, каждая — со своим эталоном и критерием «check владельца
+PASS, \f(CRws baseline diff\fR пуст»:
+.IP "\(bu" 3
+GNOME через \f(CRdconf.settings\fR вместо \f(CRws-gnome apply\fR. Учесть: home-manager
+применяет значения при каждом switch, ручные правки будут откатываться.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Flatpak через nix-flatpak или генерацию \f(CRapps.conf\fR. Учесть: \f(CRwsflatpak\fR
+пишет в \f(CRconfig/flatpak/\fR, а его \f(CRcheck\fR требует ссылку \f(CR.desktop\fR на
+репозиторий.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+xremap как \f(CRsystemd.user.services\fR и \f(CRxremap.yml\fR со store-путями.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Расширения с EGO по версии и hash.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Скрипты в store (\f(CRwriteShellApplication\fR) вместо ссылок на checkout.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+\f(CRman/\fR собирать при сборке, а не хранить в git.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Фикс t2bce через DKMS — только если сборка в podman станет неудобной;
+\f(CRbuild-essential\fR на хосте противоречит правилу roadmap про toolchains.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Закрепить образ \f(CRarch\fR по digest (сейчас \f(CRwsbox check\fR сравнивает с
+\f(CRarchlinux:latest\fR).
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Удалить \f(CRstate/\fR после переноса \f(CRgsettings-backup.tsv\fR.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Убрать \f(CRt2bce-build\fR и \f(CRtouchbar-build\fR: сборку t2bce делает
+\f(CRws-suspend\fR в одноразовом контейнере.
+.LP
+\l'2i'
+.SH ОБЩИЕ ПРАВИЛА
+.IP "\(bu" 3
+Перед фазами −1, 0 и 4 — \f(CRsystem-backup-snapshot\fR и именованные snapshot\(cqы
+(\f(CR@\fR и \f(CR@nix\fR); после каждой фазы — \f(CRws baseline capture phase-N\fR и тег
+\f(CRnix-phase-N\fR. Recovery обновлять только из проверенного состояния.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Фазы 3 и 4 — с запасом времени на logout и reboot, не перед важной
+работой.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+\f(CRgit add\fR перед сборкой; сборки с \f(CR--no-link\fR.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+sudo-шаги выполняются в своём терминале.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Во время фазы репозиторий не правится в других сессиях.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+\f(CRnix flake update\fR — раз в месяц отдельным коммитом, после зелёного CI.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Сборка мусора Nix — по таймеру (\f(CRnix.gc\fR в home-manager), поколения
+хранить 30 дней.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Секреты в репозиторий не класть.
+.SH СВЯЗЬ С ROADMAP
+.IP "\(bu" 3
+\f(CRplan-gnome\fR, \f(CRplan-flatpak\fR, \f(CRplan-dev\fR — DONE; миграция их слои только
+доставляет.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+\f(CRplan-t2\fR — после фазы 4.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+\f(CRplan-virt\fR — до фазы 6: нужна VM.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+\f(CRplan-windows\fR — независимо; контейнеры \f(CRwine\fR/\f(CRarch\fR остаются за \f(CRwsbox\fR.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+\f(CRplan-final\fR в основном закрывают фазы −1, 0 и 5.
+.SH ИЗМЕНЕНИЯ ОТНОСИТЕЛЬНО ВЕРСИИ 2
+.IP "\(bu" 3
+Принцип «Nix доставляет, владельцы не меняются»: \f(CRwsflatpak\fR, \f(CRwsbox\fR,
+\f(CRws-gnome\fR, \f(CRws-keyboard*\fR, \f(CRws-suspend\fR и verify остаются; nix-flatpak,
+генерация \f(CRdistrobox.ini\fR, \f(CRdconf.settings\fR, xremap как модуль и DKMS
+перенесены в «После миграции».
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+\f(CRbin/\fR — ссылками на checkout, без \f(CRwriteShellApplication\fR и
+\f(CRpatchShebangs\fR.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+\f(CR/nix\fR — на subvolume \f(CR@nix\fR.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Раздел «Эталон функционала» и \f(CRws-baseline\fR; verify правится в том же
+коммите, что и перенос.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Фаза −1: опись системного слоя обновлена под коммит \f(CR0b50385\fR; добавлены
+\f(CRt2.conf\fR и \f(CRget-apple-firmware.service\fR; закрываются пробелы (биндинги
+Tiling Assistant, \f(CRman\fR, темы helpws, выбор терминала через
+\f(CRxdg-terminal-exec\fR).
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+\f(CRws system apply\fR повторяет все действия нынешних apply-скриптов
+(enable/restart, udev trigger, правка \f(CR/etc/default/keyboard\fR, уборка
+устаревшего), а не только копирует.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+\f(CRwindow-monitor-pro\fR остаётся включённым: он установлен и обязателен по
+verify.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+\f(CR--watch=config,device\fR и \f(CR--ignore\fR Dynamic Function Row в \f(CRws-xremap\fR
+не меняются.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Фазы: убраны «Внешний вид GNOME», «Flatpak и Distrobox» и «Клавиатурный
+слой»; добавлены «Оркестратор» и «Бинарник xremap».
