@@ -433,10 +433,11 @@ sudo apt-mark hold linux-t2
 обновление — это снять hold, собрать модули, вернуть hold.
 \f(CRws-suspend status\fR уже показывает \f(CRheld\fR.
 .IP "2." 4
-\fBfstab.\fR Строку \f(CR/mnt/apple\fR привести к
-\f(CRdefaults,nofail,x-systemd.device-timeout=5s 0 0\fR, проверить
-\f(CRsudo findmnt --verify\fR. Делается до обновления recovery, чтобы
-исправленный fstab попал в snapshot.
+\fBfstab.\fR Строку \f(CR/mnt/apple\fR (APFS macOS) удалить: раздел больше не
+используется. Отмонтировать, удалить строку и комментарий установщика
+перед ней, \f(CRsudo findmnt --verify\fR, пустой каталог \f(CR/mnt/apple\fR удалить.
+Делается до обновления recovery, чтобы исправленный fstab попал в
+snapshot.
 .IP "3." 4
 \fBGRUB: только drop-in\(cqы.\fR Меню уже включено \f(CR99-recovery-menu.cfg\fR.
 .RS
@@ -484,10 +485,10 @@ T2 нет.
 .IP
 Установить: \f(CRsudo install -m0755 … /usr/local/sbin/system-backup-snapshot\fR.
 .IP "5." 4
-\fBRoot и emergency mode.\fR Статус root без sudo не читается:
-\f(CRsudo passwd -S root\fR. Если \f(CRL\fR, emergency mode shell не даст.
-Рекомендация — задать пароль root: диск не зашифрован, физический доступ
-и так равен полному. Последний запасной путь — флешка с T2-ISO.
+\fBRoot и emergency mode.\fR Пароль root не задаётся (решение
+2026-09-26): emergency mode shell не даст. Поэтому recovery не должен
+зависеть от необязательных дисков (шаг 2), а запасной путь, если и он не
+поднимется, — флешка с T2-ISO.
 .IP "6." 4
 \fBЗахватить остальной системный слой\fR — байт в байт, без установки:
 .LP
@@ -531,14 +532,6 @@ Left/Right/Up/Down/f/c/r (tile-*, center, restore), \f(CRe\fR
 \fB\f(CBman ws-*\fB.\fR Сейчас не находится: \f(CR\(ti/.local/share/man/man1\fR пуст.
 Решается в фазе 1 ссылкой на \f(CRman/man1\fR checkout\(cqа; до этого не
 обещать \f(CRman ws-…\fR в документах.
-.if n \
-.sp -1
-.if t \
-.sp -0.25v
-.IP "\(bu" 3
-\fBhelpws.\fR Документы ссылаются на \f(CRhelpws suspend\fR и
-\f(CRhelpws distrobox\fR, таких тем нет. Добавить: \f(CRsuspend\fR →
-\f(CRdocs/suspend.md\fR, \f(CRdistrobox\fR → \f(CRdocs/plans/development.md\fR.
 .if n \
 .sp -1
 .if t \
@@ -1281,7 +1274,7 @@ sudo-шаги выполняются в своём терминале.
 .IP "\(bu" 3
 Фаза −1: опись системного слоя обновлена под коммит \f(CR0b50385\fR; добавлены
 \f(CRt2.conf\fR и \f(CRget-apple-firmware.service\fR; закрываются пробелы (биндинги
-Tiling Assistant, \f(CRman\fR, темы helpws, выбор терминала через
+Tiling Assistant, \f(CRman\fR, выбор терминала через
 \f(CRxdg-terminal-exec\fR).
 .if n \
 .sp -1

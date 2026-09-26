@@ -4,3 +4,4 @@ kernel/**/*.patch -whitespace
 system/boot/refind_linux.conf -whitespace
 system/default/grub.d/99-recovery-menu.cfg -whitespace
 system/usr/local/sbin/system-backup-snapshot -whitespace
+system/esp/refind.conf -whitespace

@@ -68,6 +68,11 @@ ASPM
 \f(CR/boot/refind_linux.conf\fR 2026-09-25. Все три отказа T2 (ниже) случились при
 forced ASPM и Touch Bar в режиме дисплея; без него отказов не было.
 \f(CRws-workstation-verify\fR предупреждает, если параметры вернутся.
+.PP
+Ядрам, которые грузятся через GRUB (recovery, предыдущие ядра), forced ASPM
+добавлял \f(CR/etc/default/grub.d/90-pcie-aspm.cfg\fR; он удалён 2026-09-26.
+Параметры ядра для GRUB теперь в \f(CR/etc/default/grub.d/10-workstation-cmdline.cfg\fR
+(\f(CRsystem/default/grub.d/\fR) и совпадают с \f(CRrefind_linux.conf\fR.
 .SS
 t2bce: отказ stateful suspend
 .LP
@@ -151,9 +156,10 @@ echo Y | sudo tee /sys/module/t2bce_core/parameters/stateful_sleep
 .SS
 Обновление ядра
 .LP
-\f(CRlinux-t2\fR не заморожен. Модули в \f(CRupdates/\fR привязаны к одной версии ядра,
-поэтому новое ядро загрузит штатный \f(CRt2bce\fR. \f(CRws-workstation-verify\fR
-предупредит об этом. Порядок:
+\f(CRlinux-t2\fR заморожен (\f(CRapt-mark hold\fR): модули в \f(CRupdates/\fR привязаны к одной
+версии ядра, и новое ядро без пересборки загрузило бы штатный \f(CRt2bce\fR.
+\f(CRws-suspend status\fR показывает \f(CRheld\fR, \f(CRws-workstation-verify\fR предупреждает,
+если hold снят. Обновление — осознанный шаг:
 .IP "1." 3
 Проверить, вошло ли исправление в upstream (#215, deqrocks/t2bce#9,
 \f(CRlinux-t2-patches\fR). Если да — локальный патч больше не нужен.
@@ -169,13 +175,19 @@ echo Y | sudo tee /sys/module/t2bce_core/parameters/stateful_sleep
 .if t \
 .sp -0.25v
 .IP "3." 3
-Собрать и поставить:
+Снять hold, обновить ядро, собрать и поставить модули, вернуть hold:
 .LP
 .EX
+sudo apt-mark unhold linux-t2
+sudo apt install linux-t2
 ws-suspend t2bce-build NEW_KERNEL
 ws-suspend t2bce-install NEW_KERNEL
+sudo apt-mark hold linux-t2
 .EE
 .LP
+\f(CRapt autoremove\fR после обновления не запускать: предыдущее ядро остаётся
+пунктом GRUB для recovery.
+.PP
 Если патч не накладывается на новую версию \f(CRt2bce\fR, его нужно перенести
 вручную. Предыдущее ядро с исправленными модулями остаётся в rEFInd.
 .SS

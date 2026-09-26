@@ -73,6 +73,11 @@ Hook лежит в `/usr/lib/systemd/system-sleep/`, потому что systemd
 forced ASPM и Touch Bar в режиме дисплея; без него отказов не было.
 `ws-workstation-verify` предупреждает, если параметры вернутся.
 
+Ядрам, которые грузятся через GRUB (recovery, предыдущие ядра), forced ASPM
+добавлял `/etc/default/grub.d/90-pcie-aspm.cfg`; он удалён 2026-09-26.
+Параметры ядра для GRUB теперь в `/etc/default/grub.d/10-workstation-cmdline.cfg`
+(`system/default/grub.d/`) и совпадают с `refind_linux.conf`.
+
 ## t2bce: отказ stateful suspend
 
 Иногда bridgeOS отвечает на запрос сохранения состояния отказом:
@@ -140,20 +145,27 @@ echo Y | sudo tee /sys/module/t2bce_core/parameters/stateful_sleep
 
 ## Обновление ядра
 
-`linux-t2` не заморожен. Модули в `updates/` привязаны к одной версии ядра,
-поэтому новое ядро загрузит штатный `t2bce`. `ws-workstation-verify`
-предупредит об этом. Порядок:
+`linux-t2` заморожен (`apt-mark hold`): модули в `updates/` привязаны к одной
+версии ядра, и новое ядро без пересборки загрузило бы штатный `t2bce`.
+`ws-suspend status` показывает `held`, `ws-workstation-verify` предупреждает,
+если hold снят. Обновление — осознанный шаг:
 
 1. Проверить, вошло ли исправление в upstream (#215, deqrocks/t2bce#9,
    `linux-t2-patches`). Если да — локальный патч больше не нужен.
 2. Если нет — найти коммит `linux-t2-patches`, из которого собрано новое
    ядро, и добавить строку в `kernel/t2bce/sources.conf`.
-3. Собрать и поставить:
+3. Снять hold, обновить ядро, собрать и поставить модули, вернуть hold:
 
 ```console
+sudo apt-mark unhold linux-t2
+sudo apt install linux-t2
 ws-suspend t2bce-build NEW_KERNEL
 ws-suspend t2bce-install NEW_KERNEL
+sudo apt-mark hold linux-t2
 ```
+
+`apt autoremove` после обновления не запускать: предыдущее ядро остаётся
+пунктом GRUB для recovery.
 
 Если патч не накладывается на новую версию `t2bce`, его нужно перенести
 вручную. Предыдущее ядро с исправленными модулями остаётся в rEFInd.

@@ -1,0 +1,290 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Functional baseline of the workstation: what every layer owner reports and
+# what is actually installed. Used as the regression gate of the Nix migration
+# (docs/plans/nix-migration.md, "Эталон функционала").
+
+repo="${WORKSTATION_CONFIG:-$HOME/.local/share/workstation-config}"
+root="${XDG_STATE_HOME:-$HOME/.local/state}/workstation/baseline"
+
+usage() {
+    cat <<'USAGE'
+Usage:
+  ws-baseline capture NAME [--no-boxes] [--with-sudo]
+  ws-baseline diff A B
+  ws-baseline list
+
+capture   snapshot of owner checks, GNOME, Flatpak, Distrobox, user links,
+          system files and tools into ~/.local/state/workstation/baseline/NAME
+          --no-boxes    skip `wsbox check` (it starts the containers)
+          --with-sudo   also dpkg --verify, the initramfs listing and the rEFInd
+                        ESP refind.conf checksum (asks sudo)
+diff      compare two baselines; owner checks are compared as sets of
+          PASS/WARN/FAIL lines, everything else line by line
+USAGE
+}
+
+die() {
+    echo "ws-baseline: $*" >&2
+    exit 1
+}
+
+have() { command -v "$1" >/dev/null 2>&1; }
+
+# Runtime copies of system/ and other system files the workstation owns.
+system_files=(
+    /etc/udev/rules.d/30-amdgpu-pm.rules
+    /etc/udev/rules.d/70-bcm4364-no-d3cold.rules
+    /etc/udev/rules.d/90-touchbar-native.rules
+    /etc/udev/rules.d/99-network-t2-ncm.rules
+    /etc/udev/rules.d/99-workstation-uinput.rules
+    /etc/NetworkManager/conf.d/99-network-t2-ncm.conf
+    /etc/modprobe.d/apple-gmux.conf
+    /etc/modprobe.d/tb.conf
+    /etc/modprobe.d/touchbar-native.conf
+    /etc/modules-load.d/ntsync.conf
+    /etc/modules-load.d/t2.conf
+    /etc/systemd/sleep.conf.d/80-deep-only.conf
+    /etc/systemd/system/broadcom-aspm-restore.service
+    /etc/systemd/system/get-apple-firmware.service
+    /etc/systemd/system/ws-touchbar-fn.service
+    /usr/lib/systemd/system-sleep/80-broadcom-aspm
+    /usr/local/libexec/ws-touchbar-fn
+    /usr/local/sbin/broadcom-aspm-suspend-guard
+    /usr/local/sbin/system-backup-snapshot
+    /boot/refind_linux.conf
+    /etc/default/grub
+    /etc/default/keyboard
+    /etc/fstab
+)
+
+# path -> resolved target and content hash, for every entry under the given
+# locations (symlinks are listed with their final target).
+list_entries() {
+    local base path target sum
+    for base in "$@"; do
+        [[ -e "$base" || -L "$base" ]] || { printf '%s\tMISSING\n' "$base"; continue; }
+        while IFS= read -r -d '' path; do
+            target="$(readlink -f -- "$path" 2>/dev/null || echo '?')"
+            if [[ -f "$target" ]]; then
+                sum="$(sha256sum -- "$target" | cut -c1-16)"
+            elif [[ -L "$path" ]]; then
+                sum="BROKEN"
+            else
+                continue
+            fi
+            printf '%s\t%s\t%s\n' "$path" "$target" "$sum"
+        done < <(find "$base" \( -type f -o -type l \) -print0 2>/dev/null | sort -z)
+    done
+}
+
+run_to() {
+    local out="$1"
+    shift
+    { "$@" 2>&1 || echo "[exit $?]"; } > "$out"
+}
+
+cmd_capture() {
+    local name="" boxes=true with_sudo=false dir app
+    while (($#)); do
+        case "$1" in
+            --no-boxes) boxes=false ;;
+            --with-sudo) with_sudo=true ;;
+            -*) die "unknown option: $1" ;;
+            *) [[ -z "$name" ]] || die "only one NAME"; name="$1" ;;
+        esac
+        shift
+    done
+    [[ -n "$name" && "$name" != */* ]] || die "capture needs a NAME"
+
+    dir="$root/$name"
+    [[ ! -e "$dir" ]] || die "baseline exists: $dir"
+    mkdir -p "$dir"/{checks,gnome,flatpak/overrides,distrobox,user,system}
+
+    {
+        echo "name: $name"
+        echo "date: $(date --iso-8601=seconds)"
+        echo "host: $(hostname)"
+        echo "kernel: $(uname -r)"
+        echo "repo: $(git -C "$repo" rev-parse HEAD 2>/dev/null || echo '?')"
+        echo "repo-dirty: $(git -C "$repo" status --porcelain 2>/dev/null | wc -l)"
+    } > "$dir/meta.txt"
+
+    echo "== owner checks"
+    run_to "$dir/checks/ws-workstation-verify.txt" "$repo/bin/ws-workstation-verify" --strict
+    run_to "$dir/checks/wsflatpak-check.txt" "$repo/bin/wsflatpak" check
+    run_to "$dir/checks/ws-gnome-check.txt" "$repo/bin/ws-gnome" check
+    run_to "$dir/checks/ws-gnome-test.txt" "$repo/bin/ws-gnome" test
+    run_to "$dir/checks/ws-suspend-status.txt" "$repo/bin/ws-suspend" status
+    run_to "$dir/checks/ws-keyboard-status.txt" "$repo/bin/ws-keyboard-status"
+    run_to "$dir/checks/ws-input-source-status.txt" "$repo/bin/ws-input-source" status
+    if [[ "$boxes" == true ]]; then
+        run_to "$dir/checks/wsbox-check.txt" "$repo/bin/wsbox" check
+    fi
+
+    echo "== GNOME"
+    run_to "$dir/gnome/dconf.ini" dconf dump /
+    run_to "$dir/gnome/extensions-enabled.txt" gnome-extensions list --enabled
+
+    echo "== Flatpak"
+    run_to "$dir/flatpak/apps.txt" flatpak list --user --app --columns=application,origin,branch
+    run_to "$dir/flatpak/remotes.txt" flatpak remotes --user --columns=name,url
+    run_to "$dir/flatpak/system-remotes.txt" flatpak remotes --system --columns=name
+    while IFS= read -r app; do
+        [[ -n "$app" ]] || continue
+        run_to "$dir/flatpak/overrides/$app.txt" flatpak override --user --show "$app"
+    done < <(flatpak list --user --app --columns=application 2>/dev/null)
+    run_to "$dir/flatpak/override-global.txt" flatpak override --user --show
+    list_entries "$HOME/.local/share/applications" > "$dir/flatpak/applications.txt"
+
+    echo "== Distrobox"
+    run_to "$dir/distrobox/podman.txt" podman ps -a --format '{{.Names}} {{.ID}} {{.ImageName}} {{.Labels.manager}}'
+    ls -1 "$HOME/.local/share/distrobox-homes" > "$dir/distrobox/homes.txt" 2>&1 || true
+
+    echo "== user layer"
+    list_entries \
+        "$HOME/.local/bin" \
+        "$HOME/.config/fish" \
+        "$HOME/.config/ghostty" \
+        "$HOME/.config/systemd/user" \
+        "$HOME/.config/xdg-terminals.list" \
+        "$HOME/.config/ubuntu-xdg-terminals.list" \
+        "$HOME/.local/share/gnome-shell/extensions" \
+        "$HOME/.local/share/man" \
+        | grep -v '/fish_variables	' > "$dir/user/entries.txt" || true
+    run_to "$dir/user/units-enabled.txt" systemctl --user list-unit-files --state=enabled --no-legend
+    run_to "$dir/user/units-active.txt" systemctl --user list-units --state=active --no-legend --plain
+    systemctl --user show-environment 2>/dev/null \
+        | grep -vE '^(INVOCATION_ID|MANAGERPID|SSH_AUTH_SOCK|GNOME_KEYRING_CONTROL|SYSTEMD_EXEC_PID|WAYLAND_DISPLAY|DISPLAY|XAUTHORITY)=' \
+        > "$dir/user/environment.txt" || true
+
+    echo "== system"
+    local f
+    for f in "${system_files[@]}"; do
+        if [[ -r "$f" ]]; then
+            printf '%s\t%s\n' "$f" "$(sha256sum -- "$f" | cut -c1-16)"
+        elif [[ -e "$f" ]]; then
+            printf '%s\tUNREADABLE\n' "$f"
+        else
+            printf '%s\tMISSING\n' "$f"
+        fi
+    done > "$dir/system/files.txt"
+    ls -1 /etc/default/grub.d/ > "$dir/system/grub.d.txt" 2>&1 || true
+    run_to "$dir/system/units-enabled.txt" systemctl list-unit-files --state=enabled --no-legend
+    tr ' ' '\n' < /proc/cmdline | grep -v '^initrd=' > "$dir/system/cmdline.txt"
+    cat /sys/power/mem_sleep > "$dir/system/mem_sleep.txt"
+    lsmod | awk 'NR > 1 && $1 ~ /^(t2bce|appletb|hid_appletb|ntsync|apple_gmux|brcmfmac|apfs)/ { print $1 }' \
+        | sort > "$dir/system/modules.txt"
+    {
+        cat /sys/module/t2bce_core/version 2>/dev/null || echo "t2bce_core: not loaded"
+        apt-mark showhold 2>/dev/null
+    } > "$dir/system/t2bce.txt"
+    findmnt -rno TARGET,SOURCE,FSTYPE,OPTIONS / /home /nix /.snapshots 2>/dev/null \
+        > "$dir/system/mounts.txt" || true
+
+    echo "== tools"
+    local tool
+    for tool in xremap fzf zoxide eza lowdown micro fish ghostty nix home-manager; do
+        if have "$tool"; then
+            printf '%s\t%s\t%s\n' "$tool" "$(readlink -f "$(command -v "$tool")")" \
+                "$("$tool" --version 2>/dev/null | head -n1 || echo '?')"
+        else
+            printf '%s\tMISSING\n' "$tool"
+        fi
+    done > "$dir/tools.txt"
+
+    if [[ "$with_sudo" == true ]]; then
+        echo "== sudo"
+        sudo dpkg --verify > "$dir/system/dpkg-verify.txt" 2>&1 || true
+        sudo lsinitrd "/boot/initrd.img-$(uname -r)" 2>/dev/null \
+            | awk '{ print $NF }' | grep -E 't2bce|appletb|modprobe\.d|modules-load' \
+            | sort > "$dir/system/initrd.txt" || true
+        # rEFInd ESP (not mounted in normal operation): read-only checksum.
+        sudo sh -c '
+            esp="$(mktemp -d)"
+            mount -o ro /dev/disk/by-partuuid/b3575417-21a5-43db-9c6e-dc2dd5510c76 "$esp" \
+                && { sha256sum "$esp/EFI/BOOT/refind.conf" | sed "s|$esp|ESP|"; umount "$esp"; }
+            rmdir "$esp"
+        ' > "$dir/system/refind-esp.txt" 2>&1 || true
+    fi
+
+    echo
+    echo "Captured: $dir"
+}
+
+# Owner checks: keep only PASS/WARN/FAIL lines, normalized and sorted, so the
+# comparison is about which checks pass, not about ordering or timings.
+# Status reports without such lines (ws-suspend status, ws-keyboard-status)
+# are compared as whole text.
+normalize_check() {
+    if grep -qE '^[[:space:]]*(PASS|WARN|FAIL)[[:space:]]' "$1" 2>/dev/null; then
+        grep -E '^[[:space:]]*(PASS|WARN|FAIL)[[:space:]]' "$1" \
+            | sed -E 's/^[[:space:]]+//; s/[[:space:]]+/ /g' \
+            | sort -u
+    else
+        cat "$1"
+    fi
+}
+
+cmd_diff() {
+    local a="$root/${1:-}" b="$root/${2:-}" rel changed=0 tmp
+    [[ -n "${1:-}" && -n "${2:-}" ]] || die "diff needs A and B"
+    [[ -d "$a" ]] || die "no baseline: $a"
+    [[ -d "$b" ]] || die "no baseline: $b"
+    tmp="$(mktemp -d)"
+    trap 'rm -rf "$tmp"' RETURN
+
+    while IFS= read -r rel; do
+        if [[ ! -e "$a/$rel" ]]; then
+            echo "=== only in ${2}: $rel"
+            changed=1
+            continue
+        fi
+        if [[ ! -e "$b/$rel" ]]; then
+            echo "=== only in ${1}: $rel"
+            changed=1
+            continue
+        fi
+        case "$rel" in
+            meta.txt) continue ;;
+            checks/*)
+                normalize_check "$a/$rel" > "$tmp/a"
+                normalize_check "$b/$rel" > "$tmp/b"
+                ;;
+            *)
+                cp "$a/$rel" "$tmp/a"
+                cp "$b/$rel" "$tmp/b"
+                ;;
+        esac
+        if ! cmp -s "$tmp/a" "$tmp/b"; then
+            echo "=== $rel"
+            diff -U0 --label "$1" --label "$2" "$tmp/a" "$tmp/b" | grep -v '^@@' || true
+            changed=1
+        fi
+    done < <( { (cd "$a" && find . -type f -printf '%P\n'); (cd "$b" && find . -type f -printf '%P\n'); } | sort -u)
+
+    if ((changed)); then
+        echo
+        echo "Differences found. Each one must be an expected change of the phase."
+        return 1
+    fi
+    echo "No differences."
+}
+
+cmd_list() {
+    [[ -d "$root" ]] || return 0
+    local d
+    for d in "$root"/*/; do
+        [[ -d "$d" ]] || continue
+        printf '%-20s %s\n' "$(basename "$d")" "$(sed -n 's/^date: //p' "$d/meta.txt" 2>/dev/null)"
+    done
+}
+
+case "${1:-}" in
+    capture) shift; cmd_capture "$@" ;;
+    diff) shift; cmd_diff "$@" ;;
+    list) cmd_list ;;
+    -h|--help|help|"") usage ;;
+    *) usage >&2; exit 64 ;;
+esac

@@ -123,18 +123,40 @@ with open(path, "w", encoding="utf-8") as f:
 PY
 
 #
-# Determine newest kernel inside snapshot
+# Choose the recovery kernel inside the snapshot:
+#
+#   1. the running kernel (it is the one verified on this machine, and the
+#      patched t2bce modules exist only for it);
+#   2. otherwise the newest T2 kernel (the internal keyboard and trackpad
+#      need t2bce);
+#   3. otherwise the newest kernel.
+#
+# Plain `sort -V` would pick a newer generic HWE kernel over the T2 one.
 #
 
-KERNEL="$(
+snapshot_kernels()
+{
     find "$SNAPDIR/recovery.new/boot" \
         -maxdepth 1 \
         -type f \
         -name 'vmlinuz-*' \
         -printf '%f\n' \
-    | sort -V \
-    | tail -n1
-)"
+    | sort -V
+}
+
+KERNEL=""
+
+if [[ -f "$SNAPDIR/recovery.new/boot/vmlinuz-$(uname -r)" ]]; then
+    KERNEL="vmlinuz-$(uname -r)"
+fi
+
+if [[ -z "$KERNEL" ]]; then
+    KERNEL="$(snapshot_kernels | grep -- '-t2-' | tail -n1 || true)"
+fi
+
+if [[ -z "$KERNEL" ]]; then
+    KERNEL="$(snapshot_kernels | tail -n1)"
+fi
 
 if [[ -z "$KERNEL" ]]; then
     echo "ERROR: no kernel found in recovery snapshot."
@@ -238,14 +260,15 @@ mv \
     "$BOOT_RECOVERY"
 
 #
-# Copy current cmdline but remove root-specific arguments.
+# Copy current cmdline but remove root-specific arguments and the initrd=
+# argument that rEFInd adds (GRUB loads the initrd with its own command).
 #
 
 EXTRA_ARGS=()
 
 for arg in $(cat /proc/cmdline); do
     case "$arg" in
-        BOOT_IMAGE=*|root=*|rootflags=*|ro|rw)
+        BOOT_IMAGE=*|root=*|rootflags=*|ro|rw|initrd=*)
             ;;
         *)
             EXTRA_ARGS+=("$arg")

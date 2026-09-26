@@ -581,6 +581,9 @@ tracked "docs/plans/gnome.md" "GNOME implementation plan"
 
 # Suspend / T2 power layer helper.
 check_runtime_helper ws-suspend
+
+# Functional baseline / regression gate of the Nix migration.
+check_runtime_helper ws-baseline
 for path in system/usr/local/sbin/broadcom-aspm-suspend-guard system/usr/lib/systemd/system-sleep/80-broadcom-aspm; do
     [[ -e "$repo/$path" ]] && check_exec_tracked "$path"
 done
@@ -1384,6 +1387,12 @@ t2bce_param="$(cat /sys/module/t2bce_core/parameters/stateful_sleep 2>/dev/null 
     && pass "t2bce stateful sleep enabled" \
     || fail "t2bce_core.stateful_sleep=$t2bce_param (forced no-state test mode left on)"
 
+if apt-mark showhold 2>/dev/null | grep -qx 'linux-t2'; then
+    pass "linux-t2 held (patched t2bce modules exist only for $(uname -r))"
+else
+    warn "linux-t2 is not held: a kernel update would boot the in-tree t2bce (docs/suspend.md)"
+fi
+
 if awk -v k="$(uname -r)" '$1 == k { found = 1 } END { exit !found }' "$repo/kernel/t2bce/sources.conf" 2>/dev/null; then
     pass "kernel/t2bce/sources.conf pins sources for $(uname -r)"
 else
@@ -1396,6 +1405,8 @@ fi
 
 section "14.2 Captured T2 / boot / recovery system files"
 
+refind_partuuid=b3575417-21a5-43db-9c6e-dc2dd5510c76
+
 # Captured byte-for-byte before the Nix migration (docs/plans/nix-migration.md,
 # phase -1). They are not installed by any apply script yet; verify only
 # checks that the running system still matches the repository.
@@ -1407,6 +1418,7 @@ for pair in \
     "system/modules-load.d/t2.conf:/etc/modules-load.d/t2.conf" \
     "system/systemd/system/get-apple-firmware.service:/etc/systemd/system/get-apple-firmware.service" \
     "system/boot/refind_linux.conf:/boot/refind_linux.conf" \
+    "system/default/grub.d/10-workstation-cmdline.cfg:/etc/default/grub.d/10-workstation-cmdline.cfg" \
     "system/default/grub.d/99-recovery-menu.cfg:/etc/default/grub.d/99-recovery-menu.cfg" \
     "system/usr/local/sbin/system-backup-snapshot:/usr/local/sbin/system-backup-snapshot"
 do
@@ -1420,10 +1432,43 @@ systemctl is-enabled --quiet get-apple-firmware.service 2>/dev/null \
     && pass "get-apple-firmware.service enabled" \
     || fail "get-apple-firmware.service not enabled"
 
+# /etc/default/grub belongs to the grub package (ucf); workstation settings
+# live only in grub.d drop-ins.
+compare_file /usr/share/grub/default/grub /etc/default/grub \
+    "/etc/default/grub is the package template"
+
+refind_args="$(sed -nE 's/^"Ubuntu" "(.*)"$/\1/p' "$repo/system/boot/refind_linux.conf" \
+    | tr ' ' '\n' | grep -vE '^(root|rootflags)=|^(rw|ro)$' | xargs)"
+grub_args="$(sed -nE 's/^GRUB_CMDLINE_LINUX_DEFAULT="(.*)"$/\1/p' \
+    "$repo/system/default/grub.d/10-workstation-cmdline.cfg")"
+[[ -n "$refind_args" && "$refind_args" == "$grub_args" ]] \
+    && pass "GRUB and rEFInd kernel parameters match: $grub_args" \
+    || fail "GRUB ($grub_args) and rEFInd ($refind_args) kernel parameters differ"
+
+# Recovery must not stop in emergency mode when a non-system disk is absent.
+non_system_mounts="$(awk '$0 !~ /^[[:space:]]*#/ && NF >= 4 && $2 ~ /^\/mnt\// && $4 !~ /(^|,)nofail(,|$)/ { print $2 }' /etc/fstab 2>/dev/null)"
+if [[ -z "$non_system_mounts" ]]; then
+    pass "fstab: /mnt/* mounts are nofail"
+else
+    warn "fstab: /mnt/* without nofail ($(echo $non_system_mounts)); boot/recovery would stop in emergency mode without it"
+fi
+
 if [[ -e /etc/default/grub.d/90-pcie-aspm.cfg ]]; then
     warn "/etc/default/grub.d/90-pcie-aspm.cfg forces ASPM on GRUB/recovery kernels (docs/suspend.md)"
 else
     pass "no forced ASPM in GRUB drop-ins"
+fi
+
+# rEFInd lives on its own ESP (nvme0n1p3), which is not mounted in normal
+# operation; compare only when it is. ws-baseline capture --with-sudo mounts
+# it read-only and records the checksum.
+tracked system/esp/refind.conf system/esp/refind.conf
+refind_esp="$(findmnt -rno TARGET "/dev/disk/by-partuuid/$refind_partuuid" 2>/dev/null | head -n1)"
+if [[ -n "$refind_esp" ]]; then
+    compare_file "$repo/system/esp/refind.conf" "$refind_esp/EFI/BOOT/refind.conf" \
+        "runtime rEFInd refind.conf matches repo"
+else
+    info "rEFInd ESP not mounted; refind.conf compared by ws-baseline capture --with-sudo"
 fi
 
 section "14.3 Default terminal (xdg-terminal-exec)"

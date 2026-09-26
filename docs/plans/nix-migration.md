@@ -368,10 +368,11 @@ bin/, config/, system/, kernel/, gnome/, docs/, man/, state/   — как сей
    обновление — это снять hold, собрать модули, вернуть hold.
    `ws-suspend status` уже показывает `held`.
 
-2. **fstab.** Строку `/mnt/apple` привести к
-   `defaults,nofail,x-systemd.device-timeout=5s 0 0`, проверить
-   `sudo findmnt --verify`. Делается до обновления recovery, чтобы
-   исправленный fstab попал в snapshot.
+2. **fstab.** Строку `/mnt/apple` (APFS macOS) удалить: раздел больше не
+   используется. Отмонтировать, удалить строку и комментарий установщика
+   перед ней, `sudo findmnt --verify`, пустой каталог `/mnt/apple` удалить.
+   Делается до обновления recovery, чтобы исправленный fstab попал в
+   snapshot.
 
 3. **GRUB: только drop-in'ы.** Меню уже включено `99-recovery-menu.cfg`.
    - удалить `/etc/default/grub.d/90-pcie-aspm.cfg`: forced ASPM не
@@ -398,10 +399,10 @@ bin/, config/, system/, kernel/, gnome/, docs/, man/, state/   — как сей
 
    Установить: `sudo install -m0755 … /usr/local/sbin/system-backup-snapshot`.
 
-5. **Root и emergency mode.** Статус root без sudo не читается:
-   `sudo passwd -S root`. Если `L`, emergency mode shell не даст.
-   Рекомендация — задать пароль root: диск не зашифрован, физический доступ
-   и так равен полному. Последний запасной путь — флешка с T2-ISO.
+5. **Root и emergency mode.** Пароль root не задаётся (решение
+   2026-09-26): emergency mode shell не даст. Поэтому recovery не должен
+   зависеть от необязательных дисков (шаг 2), а запасной путь, если и он не
+   поднимется, — флешка с T2-ISO.
 
 6. **Захватить остальной системный слой** — байт в байт, без установки:
 
@@ -438,9 +439,6 @@ bin/, config/, system/, kernel/, gnome/, docs/, man/, state/   — как сей
    - **`man ws-*`.** Сейчас не находится: `~/.local/share/man/man1` пуст.
      Решается в фазе 1 ссылкой на `man/man1` checkout'а; до этого не
      обещать `man ws-…` в документах.
-   - **helpws.** Документы ссылаются на `helpws suspend` и
-     `helpws distrobox`, таких тем нет. Добавить: `suspend` →
-     `docs/suspend.md`, `distrobox` → `docs/plans/development.md`.
    - **Терминал по умолчанию.** GNOME на Ubuntu открывает терминал через
      `xdg-terminal-exec` («Открыть в терминале» в Nautilus, `.desktop` с
      `Terminal=true`). Выбор Ghostty задают три файла вне репозитория:
@@ -892,7 +890,7 @@ PASS, `ws baseline diff` пуст»:
   коммите, что и перенос.
 - Фаза −1: опись системного слоя обновлена под коммит `0b50385`; добавлены
   `t2.conf` и `get-apple-firmware.service`; закрываются пробелы (биндинги
-  Tiling Assistant, `man`, темы helpws, выбор терминала через
+  Tiling Assistant, `man`, выбор терминала через
   `xdg-terminal-exec`).
 - `ws system apply` повторяет все действия нынешних apply-скриптов
   (enable/restart, udev trigger, правка `/etc/default/keyboard`, уборка

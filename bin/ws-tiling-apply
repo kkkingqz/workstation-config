@@ -5,14 +5,21 @@ import subprocess
 
 SCHEMA = "org.gnome.shell.extensions.tiling-assistant"
 
+# Private chords emitted by xremap (config/keyboard/xremap.yml). They are
+# appended to the Tiling Assistant defaults, never replace them.
+#   <Shift><Control><Alt><Super>...  Fn+Ctrl+arrows, Fn+Ctrl+F/C/R, Fn+Option+E/T
+#   <Control><Alt><Super>F13..F19    earlier private chords; nothing emits them
+#                                    now, kept so existing setups do not change
 BINDINGS = {
-    "tile-left-half": "<Control><Alt><Super>F13",
-    "tile-right-half": "<Control><Alt><Super>F14",
-    "tile-top-half": "<Control><Alt><Super>F15",
-    "tile-bottom-half": "<Control><Alt><Super>F16",
-    "tile-maximize": "<Control><Alt><Super>F17",
-    "center-window": "<Control><Alt><Super>F18",
-    "restore-window": "<Control><Alt><Super>F19",
+    "tile-left-half": ["<Shift><Control><Alt><Super>Left", "<Control><Alt><Super>F13"],
+    "tile-right-half": ["<Shift><Control><Alt><Super>Right", "<Control><Alt><Super>F14"],
+    "tile-top-half": ["<Shift><Control><Alt><Super>Up", "<Control><Alt><Super>F15"],
+    "tile-bottom-half": ["<Shift><Control><Alt><Super>Down", "<Control><Alt><Super>F16"],
+    "tile-maximize": ["<Shift><Control><Alt><Super>f", "<Control><Alt><Super>F17"],
+    "center-window": ["<Shift><Control><Alt><Super>c", "<Control><Alt><Super>F18"],
+    "restore-window": ["<Shift><Control><Alt><Super>r", "<Control><Alt><Super>F19"],
+    "tile-edit-mode": ["<Shift><Control><Alt><Super>e"],
+    "toggle-always-on-top": ["<Shift><Control><Alt><Super>t"],
 }
 
 
@@ -41,17 +48,16 @@ def main():
             + ", ".join(missing)
         )
 
-    for key, private_binding in BINDINGS.items():
+    for key, private_bindings in BINDINGS.items():
         raw = run("gsettings", "get", SCHEMA, key)
         current = parse_array(raw)
+        wanted = current + [b for b in private_bindings if b not in current]
 
-        if private_binding not in current:
-            current.append(private_binding)
-
-        subprocess.run(
-            ["gsettings", "set", SCHEMA, key, repr(current)],
-            check=True,
-        )
+        if wanted != current:
+            subprocess.run(
+                ["gsettings", "set", SCHEMA, key, repr(wanted)],
+                check=True,
+            )
 
     print("Tiling Assistant private bindings:")
     for key in BINDINGS:
