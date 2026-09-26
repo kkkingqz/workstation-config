@@ -1,0 +1,237 @@
+.\" -*- mode: troff; coding: utf-8 -*-
+.TH "ws-suspend" "1" "2026-09-26" "Workstation" "User Commands"
+.SH UBUNTU T2 SUSPEND — CURRENT BASELINE
+.SS
+Текущее состояние
+.LP
+.EX
+MacBookPro16,1
+T2 kernel 7.2.7-1-t2-resolute
+sleep        deep / S3 only
+cmdline      intel_iommu=on iommu=pt pm_async=off   (без pcie_aspm=force)
+t2bce        0.07-nostatefix1 (локальная сборка, updates/t2bce)
+Touch Bar    родной режим (см. helpws touchbar)
+.EE
+.LP
+Слой состоит из трёх частей:
+.LP
+.EX
+deep-only sleep        systemd никогда не откатывается на s2idle
+Broadcom Wi-Fi guards  ASPM off на время сна, без D3cold
+t2bce fix              no-state fallback не роняет ядро
+.EE
+.PP
+Всё управляется командой \f(CRws-suspend\fR:
+.LP
+.EX
+ws-suspend status
+ws-suspend apply
+ws-suspend t2bce-build [KERNEL]
+ws-suspend t2bce-install [KERNEL]
+ws-suspend t2bce-rollback [KERNEL]
+.EE
+.SS
+Deep-only sleep
+.LP
+.EX
+/etc/systemd/sleep.conf.d/80-deep-only.conf
+  SuspendState=mem
+  MemorySleepMode=deep
+.EE
+.LP
+По умолчанию systemd после неудачного S3 пробует \f(CRfreeze\fR (s2idle). На T2
+s2idle виснет. 2026-09-25 12:00 так и было: brcmfmac не ушёл в D3, S3
+прервался, systemd сразу перешёл в s2idle, система зависла. С этим файлом
+неудачный suspend просто возвращает в рабочую сессию.
+.SS
+Broadcom BCM4364
+.LP
+.EX
+/usr/lib/systemd/system-sleep/80-broadcom-aspm       hook systemd-sleep
+/usr/local/sbin/broadcom-aspm-suspend-guard          disable / restore
+/etc/systemd/system/broadcom-aspm-restore.service    restore после resume
+/etc/udev/rules.d/70-bcm4364-no-d3cold.rules         d3cold_allowed=0
+.EE
+.LP
+Перед сном guard сохраняет ASPM-биты Wi-Fi (\f(CR05:00.0\fR) и root port
+(\f(CR00:1c.0\fR) и выключает ASPM; после resume \f(CRbroadcom-aspm-restore.service\fR
+ждёт стабильный \f(CRbrcmfmac\fR и возвращает L1. Цель — избежать
+\f(CRbrcmf_pcie_pm_enter_D3: Timeout on response for entering D3 substate\fR.
+После установки guard таймаутов D3 не было.
+.PP
+Hook лежит в \f(CR/usr/lib/systemd/system-sleep/\fR, потому что systemd-sleep
+читает hooks оттуда.
+.SS
+ASPM
+.LP
+\f(CRpcie_aspm=force pcie_aspm.policy=powersave\fR убраны из
+\f(CR/boot/refind_linux.conf\fR 2026-09-25. Все три отказа T2 (ниже) случились при
+forced ASPM и Touch Bar в режиме дисплея; без него отказов не было.
+\f(CRws-workstation-verify\fR предупреждает, если параметры вернутся.
+.SS
+t2bce: отказ stateful suspend
+.LP
+Иногда bridgeOS отвечает на запрос сохранения состояния отказом:
+.LP
+.EX
+t2bce_core: remote rejected stateful suspend payload
+.EE
+.PP
+Штатный \f(CRt2bce\fR 0.07 после этого уходит в no-state fallback: удаляет VHCI,
+пока очереди событий и mailbox уже на паузе, поэтому команды разборки не
+получают ответа (\f(CRPossible desync\fR, \f(CRcommand queue timeout\fR,
+\f(CRSQ/CQ unregister failed\fR). После resume \f(CRCQ registration failed\fR, и IRQ-поток
+\f(CRbce_dma\fR падает с NULL dereference в \f(CRt2bce_dma_reserve_submission\fR.
+Система намертво зависает. Так закончились все три отказа
+(2026-09-22 19:25, 09-23 17:31, 09-24 14:11).
+.PP
+Upstream:
+.LP
+.EX
+t2linux/T2-Debian-and-Ubuntu-Kernel#215   отчёт (автор t2bce: fallback будет удалён)
+deqrocks/t2bce#9                          черновик исправления fallback
+.EE
+.SS
+Локальный патч
+.LP
+.EX
+kernel/t2bce/nostate-fix.patch   патч к drivers/staging/t2bce из linux-t2-patches 1001
+kernel/t2bce/sources.conf        версия ядра -> коммит linux-t2-patches
+.EE
+.LP
+Патч:
+.IP "1." 3
+переносит оставшуюся часть deqrocks/t2bce#9: транспорт и очереди событий
+VHCI открываются на время no-state teardown, ошибки прерывают suspend;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "2." 3
+добавляет проверку NULL в \f(CRt2bce_core_reserve_submission()\fR;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "3." 3
+делает \f(CRt2bce_core.stateful_sleep\fR параметром модуля (по умолчанию \f(CRY\fR),
+чтобы no-state путь можно было проверить по команде;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "4." 3
+помечает версии \f(CR0.07-nostatefix1\fR / \f(CR0.02-nostatefix1\fR.
+.LP
+Пересобираются все пять модулей \f(CRt2bce_*\fR, чтобы совпадали версии символов.
+Сборка идёт в одноразовом контейнере podman (\f(CRubuntu:26.04\fR) с заголовками
+\f(CR/usr/src/linux-headers-KERNEL\fR; результат — \f(CR\(ti/.cache/ws-suspend/t2bce/KERNEL/\fR.
+Модули ставятся в \f(CR/lib/modules/KERNEL/updates/t2bce\fR: depmod ищет в
+\f(CRupdates\fR раньше, чем в \f(CRkernel\fR. Пакеты ядра не меняются.
+.SS
+Проверка no-state пути
+.LP
+Сохранить работу, затем:
+.LP
+.EX
+echo N | sudo tee /sys/module/t2bce_core/parameters/stateful_sleep
+systemctl suspend
+.EE
+.PP
+После выхода из сна клавиатура, трекпад и Touch Bar появляются через пару
+секунд. В \f(CRjournalctl -b -k\fR должны быть \f(CRno_state_fallback=1\fR и
+\f(CRpath=no-state\fR и не должно быть \f(CRdesync\fR, \f(CRqueue timeout\fR, \f(CRBUG\fR/\f(CROops\fR.
+Затем обязательно вернуть:
+.LP
+.EX
+echo Y | sudo tee /sys/module/t2bce_core/parameters/stateful_sleep
+.EE
+.PP
+Проверено 2026-09-25: no-state цикл прошёл чисто.
+.SS
+Обновление ядра
+.LP
+\f(CRlinux-t2\fR не заморожен. Модули в \f(CRupdates/\fR привязаны к одной версии ядра,
+поэтому новое ядро загрузит штатный \f(CRt2bce\fR. \f(CRws-workstation-verify\fR
+предупредит об этом. Порядок:
+.IP "1." 3
+Проверить, вошло ли исправление в upstream (#215, deqrocks/t2bce#9,
+\f(CRlinux-t2-patches\fR). Если да — локальный патч больше не нужен.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "2." 3
+Если нет — найти коммит \f(CRlinux-t2-patches\fR, из которого собрано новое
+ядро, и добавить строку в \f(CRkernel/t2bce/sources.conf\fR.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "3." 3
+Собрать и поставить:
+.LP
+.EX
+ws-suspend t2bce-build NEW_KERNEL
+ws-suspend t2bce-install NEW_KERNEL
+.EE
+.LP
+Если патч не накладывается на новую версию \f(CRt2bce\fR, его нужно перенести
+вручную. Предыдущее ядро с исправленными модулями остаётся в rEFInd.
+.SS
+Откат
+.LP
+.EX
+ws-suspend t2bce-rollback
+sudo reboot
+.EE
+.SS
+Проверка
+.LP
+.EX
+ws-suspend status
+ws-workstation-verify --strict
+.EE
+.LP
+Ожидается:
+.LP
+.EX
+mem_sleep                 s2idle [deep]
+cmdline                   без pcie_aspm
+t2bce_core                0.07-nostatefix1, stateful_sleep=Y
+runtime files             OK
+.EE
+.SS
+Подтверждённый baseline
+.LP
+2026-09-25/26:
+.LP
+.EX
+stateful S3 cycle                          OK
+forced no-state cycle                      OK
+Touch Bar native mode S3 cycles            OK
+модули из репозитория == установленные      srcversion совпадает
+.EE
+.SS
+Source of truth
+.LP
+.EX
+bin/ws-suspend
+kernel/t2bce/nostate-fix.patch
+kernel/t2bce/sources.conf
+system/sleep.conf.d/80-deep-only.conf
+system/udev/70-bcm4364-no-d3cold.rules
+system/usr/local/sbin/broadcom-aspm-suspend-guard
+system/usr/lib/systemd/system-sleep/80-broadcom-aspm
+system/systemd/system/broadcom-aspm-restore.service
+.EE
+.SS
+Не использовать
+.LP
+.EX
+выгрузку t2bce/apple-bce перед сном (t2linux wiki: never unload t2bce)
+T2Linux-Suspend-Fix / t2-suspend.service / t2-resume.service
+s2idle
+pcie_aspm=force, pcie_ports=compat, i915.enable_guc=3
+Touch Bar display mode (appletbdrm, tiny-dfr) вместе с suspend
+.EE

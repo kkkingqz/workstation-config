@@ -1,0 +1,2 @@
+# Patch files keep blank diff context lines (a single space) verbatim.
+kernel/**/*.patch -whitespace

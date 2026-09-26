@@ -1,0 +1,6 @@
+[Unit]
+Description=Restore Broadcom PCIe ASPM after resume
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/broadcom-aspm-suspend-guard restore

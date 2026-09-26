@@ -1,0 +1,13 @@
+#!/bin/sh
+
+case "$1/$2" in
+    pre/suspend|pre/hibernate|pre/hybrid-sleep|pre/suspend-then-hibernate)
+        /usr/local/sbin/broadcom-aspm-suspend-guard disable
+        ;;
+
+    post/suspend|post/hibernate|post/hybrid-sleep|post/suspend-then-hibernate)
+        systemctl --no-block start broadcom-aspm-restore.service
+        ;;
+esac
+
+exit 0

@@ -1,0 +1,4 @@
+# MacBookPro16,1 BCM4364:
+# Prevent PCI D3cold because the device can become inaccessible on resume.
+# Match Broadcom BCM4364 + Apple subsystem only.
+ACTION=="add", SUBSYSTEM=="pci", ATTR{vendor}=="0x14e4", ATTR{device}=="0x4464", ATTR{subsystem_vendor}=="0x106b", ATTR{subsystem_device}=="0x07bf", ATTR{d3cold_allowed}="0"

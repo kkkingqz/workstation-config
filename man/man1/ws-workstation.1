@@ -43,7 +43,7 @@
 .if t \
 .sp -0.25v
 .IP "\(bu" 3
-T2 kernel: \f(CR7.2.6-1-t2-resolute\fR
+T2 kernel: \f(CR7.2.7-1-t2-resolute\fR (+ локально исправленный \f(CRt2bce\fR, см. \f(CRhelpws suspend\fR)
 .if n \
 .sp -1
 .if t \
@@ -423,13 +423,23 @@ Runtime power-off AMD dGPU в текущей конфигурации не ис�
 deep / S3
 .EE
 .PP
-Suspend/resume протестирован и работает.
-.PP
-ASPM:
+Слой сна:
 .LP
 .EX
-pcie_aspm=force
-pcie_aspm.policy=powersave
+80-deep-only.conf          только S3, без отката на s2idle
+Broadcom ASPM guard        ASPM Wi-Fi off на время сна, без D3cold
+t2bce 0.07-nostatefix1     отказ T2 от stateful suspend не роняет ядро
+Touch Bar родной режим     без appletbdrm / tiny-dfr
+.EE
+.PP
+ASPM принудительно \fBне\fR включается (\f(CRpcie_aspm=force\fR убран 2026-09-25):
+все отказы T2 от stateful suspend случились с ним.
+.PP
+Управление и подробности:
+.LP
+.EX
+ws-suspend status
+helpws suspend
 .EE
 .PP
 Дополнительный агрессивный power tuning сейчас не используется.
@@ -1017,7 +1027,7 @@ Touch Bar работает в родном режиме: \f(CRhid-appletb-kbd\fR
 .EX
 Ubuntu 26.04.1 LTS
 └── GNOME 50 / Wayland
-    ├── T2 kernel 7.2.6-1-t2-resolute
+    ├── T2 kernel 7.2.7-1-t2-resolute + patched t2bce
     ├── Intel primary + AMD offload
     ├── Wi-Fi / Bluetooth
     ├── PipeWire audio

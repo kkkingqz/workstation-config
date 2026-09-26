@@ -15,6 +15,7 @@ case "$topic" in
     keyboard|keys) open_md "$repo/docs/keyboard.md" ;;
     workstation|system|baseline) open_md "$repo/docs/workstation.md" ;;
     touchbar|touch-bar) open_md "$repo/docs/touchbar.md" ;;
+    suspend|sleep|power) open_md "$repo/docs/suspend.md" ;;
     gnome|desktop) open_md "$repo/docs/gnome.md" ;;
     rebuild|reinstall|install) open_md "$repo/docs/rebuild.md" ;;
     roadmap|plans) open_md "$repo/docs/roadmap.md" ;;
@@ -43,6 +44,7 @@ Core:
   keyboard         macOS-style keyboard layer
   workstation      Current workstation baseline
   touchbar         Touch Bar implementation notes
+  suspend          Suspend / T2 power layer
   gnome            GNOME desktop status / baseline work
   rebuild          Reinstall to current baseline
   roadmap          Remaining workstation roadmap

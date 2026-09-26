@@ -21,7 +21,7 @@ volume: User Commands
 - **Wayland**
 - **GDM3**
 - **rEFInd** как основное boot menu
-- T2 kernel: `7.2.6-1-t2-resolute`
+- T2 kernel: `7.2.7-1-t2-resolute` (+ локально исправленный `t2bce`, см. `helpws suspend`)
 - Generic Ubuntu kernel оставлен как fallback
 - Secure Boot отключён для T2 Linux
 
@@ -321,13 +321,23 @@ Runtime power-off AMD dGPU в текущей конфигурации не ис�
 deep / S3
 ```
 
-Suspend/resume протестирован и работает.
-
-ASPM:
+Слой сна:
 
 ```text
-pcie_aspm=force
-pcie_aspm.policy=powersave
+80-deep-only.conf          только S3, без отката на s2idle
+Broadcom ASPM guard        ASPM Wi-Fi off на время сна, без D3cold
+t2bce 0.07-nostatefix1     отказ T2 от stateful suspend не роняет ядро
+Touch Bar родной режим     без appletbdrm / tiny-dfr
+```
+
+ASPM принудительно **не** включается (`pcie_aspm=force` убран 2026-09-25):
+все отказы T2 от stateful suspend случились с ним.
+
+Управление и подробности:
+
+```console
+ws-suspend status
+helpws suspend
 ```
 
 Дополнительный агрессивный power tuning сейчас не используется.
@@ -783,7 +793,7 @@ Touch Bar работает в родном режиме: `hid-appletb-kbd` + `ws
 ```text
 Ubuntu 26.04.1 LTS
 └── GNOME 50 / Wayland
-    ├── T2 kernel 7.2.6-1-t2-resolute
+    ├── T2 kernel 7.2.7-1-t2-resolute + patched t2bce
     ├── Intel primary + AMD offload
     ├── Wi-Fi / Bluetooth
     ├── PipeWire audio

@@ -192,9 +192,10 @@ boot inventory.
 intel_iommu=on
 iommu=pt
 pm_async=off
-pcie_aspm=force
-pcie_aspm.policy=powersave
 .EE
+.PP
+\f(CRpcie_aspm=force\fR и \f(CRpcie_aspm.policy=powersave\fR \fBне\fR добавлять: с ними
+T2 отказывала в stateful suspend (\f(CRhelpws suspend\fR).
 .PP
 Не добавлять параметры, которых нет в зафиксированном рабочем \f(CR/proc/cmdline\fR.
 .PP
@@ -538,10 +539,24 @@ installed packages.
 deep / S3
 .EE
 .PP
+Восстановить suspend layer из repository:
+.LP
+.EX
+ws-suspend apply
+ws-suspend t2bce-build
+ws-suspend t2bce-install
+sudo reboot
+.EE
+.PP
+\f(CRt2bce-build\fR требует \f(CRpodman\fR и \f(CRlinux-headers\fR текущего ядра. Если для
+установленного ядра нет строки в \f(CRkernel/t2bce/sources.conf\fR, сначала
+проверить upstream (\f(CRhelpws suspend\fR, раздел «Обновление ядра»).
+.PP
 Проверить:
 .LP
 .EX
 cat /sys/power/mem_sleep
+ws-suspend status
 .EE
 .PP
 Затем ручной тест:

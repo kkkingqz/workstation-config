@@ -1,0 +1,200 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Suspend / T2 power layer: deep-only sleep, Broadcom Wi-Fi guards and the
+# patched t2bce modules (no-state fallback fix). See docs/suspend.md.
+
+repo="${WORKSTATION_CONFIG:-$HOME/.local/share/workstation-config}"
+cache="${XDG_CACHE_HOME:-$HOME/.cache}/ws-suspend"
+
+# repo source : runtime destination : mode
+files=(
+    "system/sleep.conf.d/80-deep-only.conf:/etc/systemd/sleep.conf.d/80-deep-only.conf:0644"
+    "system/udev/70-bcm4364-no-d3cold.rules:/etc/udev/rules.d/70-bcm4364-no-d3cold.rules:0644"
+    "system/usr/local/sbin/broadcom-aspm-suspend-guard:/usr/local/sbin/broadcom-aspm-suspend-guard:0755"
+    "system/usr/lib/systemd/system-sleep/80-broadcom-aspm:/usr/lib/systemd/system-sleep/80-broadcom-aspm:0755"
+    "system/systemd/system/broadcom-aspm-restore.service:/etc/systemd/system/broadcom-aspm-restore.service:0644"
+)
+
+t2bce_modules=(t2bce_dma t2bce_core t2bce_vhci t2bce_audio t2bce_ave)
+t2bce_patch="$repo/kernel/t2bce/nostate-fix.patch"
+t2bce_sources="$repo/kernel/t2bce/sources.conf"
+build_image="docker.io/library/ubuntu:26.04"
+
+die() {
+    echo "ws-suspend: $*" >&2
+    exit 1
+}
+
+usage() {
+    cat <<'USAGE'
+Usage: ws-suspend <command> [KERNEL]
+
+  status                 show sleep mode, t2bce state and runtime drift (read-only)
+  apply                  install the suspend-layer system files (sudo)
+  t2bce-build [KERNEL]   build patched t2bce modules into ~/.cache/ws-suspend
+  t2bce-install [KERNEL] install built modules into /lib/modules/KERNEL/updates/t2bce (sudo)
+  t2bce-rollback [KERNEL] remove them; the in-tree modules take over (sudo)
+
+KERNEL defaults to the running kernel (uname -r).
+USAGE
+}
+
+t2bce_commit() {
+    local kver="$1"
+    awk -v k="$kver" '$1 == k { print $2 }' "$t2bce_sources"
+}
+
+cmd_status() {
+    local kver pair src dst mode ver param
+    kver="$(uname -r)"
+
+    echo "== Sleep =="
+    printf 'mem_sleep:   %s\n' "$(cat /sys/power/mem_sleep)"
+    printf 'cmdline:     %s\n' "$(grep -o 'pcie_aspm[^ ]*\|pm_async=[^ ]*' /proc/cmdline | tr '\n' ' ')"
+
+    echo
+    echo "== t2bce ($kver) =="
+    ver="$(cat /sys/module/t2bce_core/version 2>/dev/null || echo '-')"
+    param="$(cat /sys/module/t2bce_core/parameters/stateful_sleep 2>/dev/null || echo '-')"
+    printf 'loaded:          %s (stateful_sleep=%s)\n' "$ver" "$param"
+    printf 'resolves to:     %s\n' "$(modinfo -k "$kver" -F filename t2bce_core 2>/dev/null || echo '-')"
+    printf 'pinned source:   %s\n' "$(t2bce_commit "$kver" || true)"
+    if apt-mark showhold 2>/dev/null | grep -qx 'linux-t2'; then
+        echo "linux-t2:        held"
+    else
+        echo "linux-t2:        not held (a new kernel boots the in-tree t2bce until rebuilt)"
+    fi
+
+    echo
+    echo "== Runtime files =="
+    for pair in "${files[@]}"; do
+        IFS=: read -r src dst mode <<<"$pair"
+        if cmp -s "$repo/$src" "$dst"; then
+            printf 'OK      %s\n' "$dst"
+        elif [[ -e "$dst" ]]; then
+            printf 'DIFFERS %s\n' "$dst"
+        else
+            printf 'MISSING %s\n' "$dst"
+        fi
+    done
+}
+
+cmd_apply() {
+    local pair src dst mode
+    command -v sudo >/dev/null 2>&1 || die "sudo not found"
+
+    for pair in "${files[@]}"; do
+        IFS=: read -r src dst mode <<<"$pair"
+        [[ -r "$repo/$src" ]] || die "missing: $repo/$src"
+        sudo install -Dm"$mode" "$repo/$src" "$dst"
+        echo "installed: $dst"
+    done
+
+    sudo systemctl daemon-reload
+    sudo udevadm control --reload-rules
+
+    for pair in "${files[@]}"; do
+        IFS=: read -r src dst mode <<<"$pair"
+        cmp -s "$repo/$src" "$dst" || die "runtime differs from repo: $dst"
+    done
+
+    echo
+    echo "Suspend layer applied. The d3cold rule takes effect on the next boot."
+}
+
+cmd_t2bce_build() {
+    local kver="$1" commit headers work src out m
+    commit="$(t2bce_commit "$kver")"
+    [[ -n "$commit" ]] || die "no pinned linux-t2-patches commit for $kver in kernel/t2bce/sources.conf"
+    headers="/usr/src/linux-headers-$kver"
+    [[ -d "$headers" ]] || die "kernel headers missing: $headers"
+    command -v podman >/dev/null 2>&1 || die "podman not found"
+    command -v git >/dev/null 2>&1 || die "git not found"
+
+    work="$cache/t2bce/$kver"
+    src="$work/src"
+    out="$work/modules"
+    rm -rf -- "$work"
+    mkdir -p "$src" "$out"
+
+    echo "== Sources: linux-t2-patches $commit =="
+    curl -fsSL -o "$work/1001.patch" \
+        "https://raw.githubusercontent.com/t2linux/linux-t2-patches/$commit/1001-Add-t2bce-driver-stack.patch"
+    git -C "$src" init -q
+    git -C "$src" apply "$work/1001.patch"
+    git -C "$src" apply "$t2bce_patch"
+
+    echo
+    echo "== Build ($build_image, $headers) =="
+    podman run --rm \
+        -v /usr/src:/usr/src:ro \
+        -v "$src:/src:Z" \
+        "$build_image" \
+        bash -euc "
+            apt-get update -qq
+            apt-get install -y -qq --no-install-recommends gcc make libc6-dev libelf-dev >/dev/null
+            make -C '$headers' M=/src/drivers/staging/t2bce \
+                CONFIG_T2BCE_DMA=m CONFIG_T2BCE_CORE=m CONFIG_T2BCE_VHCI=m \
+                CONFIG_T2BCE_AUDIO=m CONFIG_T2BCE_AVE=m modules
+        "
+
+    for m in "${t2bce_modules[@]}"; do
+        cp -- "$src/drivers/staging/t2bce/$m/$m.ko" "$out/"
+    done
+
+    echo
+    for m in "${t2bce_modules[@]}"; do
+        printf '%-12s %-20s %s\n' "$m" "$(modinfo -F version "$out/$m.ko")" "$(modinfo -F vermagic "$out/$m.ko" | awk '{print $1}')"
+    done
+    echo
+    echo "Built into $out. Install with: ws-suspend t2bce-install $kver"
+}
+
+cmd_t2bce_install() {
+    local kver="$1" out dest m vm
+    out="$cache/t2bce/$kver/modules"
+    dest="/lib/modules/$kver/updates/t2bce"
+    [[ -d "/lib/modules/$kver" ]] || die "kernel $kver is not installed"
+    for m in "${t2bce_modules[@]}"; do
+        [[ -r "$out/$m.ko" ]] || die "missing $out/$m.ko; run: ws-suspend t2bce-build $kver"
+        vm="$(modinfo -F vermagic "$out/$m.ko" | awk '{print $1}')"
+        [[ "$vm" == "$kver" ]] || die "vermagic mismatch in $m.ko: $vm"
+    done
+
+    sudo install -d -m0755 "$dest"
+    for m in "${t2bce_modules[@]}"; do
+        sudo install -m0644 "$out/$m.ko" "$dest/$m.ko"
+    done
+    sudo depmod -a "$kver"
+    for m in "${t2bce_modules[@]}"; do
+        printf '%-12s %s\n' "$m" "$(modinfo -k "$kver" -F filename "$m")"
+    done
+    sudo update-initramfs -u -k "$kver"
+    echo
+    echo "Installed. Reboot into $kver to load the patched modules."
+}
+
+cmd_t2bce_rollback() {
+    local kver="$1"
+    sudo rm -rf -- "/lib/modules/$kver/updates/t2bce"
+    sudo rmdir --ignore-fail-on-non-empty "/lib/modules/$kver/updates" 2>/dev/null || true
+    sudo depmod -a "$kver"
+    printf 't2bce_core   %s\n' "$(modinfo -k "$kver" -F filename t2bce_core)"
+    sudo update-initramfs -u -k "$kver"
+    echo
+    echo "Rolled back to the in-tree t2bce for $kver. Reboot to apply."
+}
+
+cmd="${1:-status}"
+kver="${2:-$(uname -r)}"
+
+case "$cmd" in
+    status) cmd_status ;;
+    apply) cmd_apply ;;
+    t2bce-build) cmd_t2bce_build "$kver" ;;
+    t2bce-install) cmd_t2bce_install "$kver" ;;
+    t2bce-rollback) cmd_t2bce_rollback "$kver" ;;
+    -h|--help|help) usage ;;
+    *) usage >&2; exit 64 ;;
+esac

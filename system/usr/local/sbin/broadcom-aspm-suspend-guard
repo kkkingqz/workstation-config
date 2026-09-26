@@ -1,0 +1,110 @@
+#!/usr/bin/env bash
+set -u
+
+ACTION="${1:-}"
+STATE_FILE=/run/broadcom-aspm-suspend.state
+TAG=broadcom-aspm-suspend
+
+# Order matters:
+# disable: endpoint -> root port
+# restore: root port -> endpoint
+ENDPOINT=0000:05:00.0
+ROOTPORT=0000:00:1c.0
+
+log() {
+    logger -t "$TAG" "$*"
+}
+
+read_bits() {
+    local dev="$1"
+    local ctl
+    ctl="$(setpci -s "$dev" CAP_EXP+10.w 2>/dev/null)" || return 1
+    printf '%d\n' $(( 16#$ctl & 3 ))
+}
+
+write_bits() {
+    local dev="$1"
+    local bits="$2"
+
+    setpci -s "$dev" CAP_EXP+10.w="$(printf '%x' "$bits")":0003
+}
+
+case "$ACTION" in
+disable)
+    rm -f "$STATE_FILE"
+
+    ep_bits="$(read_bits "$ENDPOINT")" || exit 1
+    rp_bits="$(read_bits "$ROOTPORT")" || exit 1
+
+    printf '%s %s\n' "$ENDPOINT" "$ep_bits" >> "$STATE_FILE"
+    printf '%s %s\n' "$ROOTPORT" "$rp_bits" >> "$STATE_FILE"
+
+    log "saved ASPM: endpoint=$ep_bits rootport=$rp_bits"
+
+    # Endpoint first, then upstream root port.
+    write_bits "$ENDPOINT" 0 || exit 1
+    write_bits "$ROOTPORT" 0 || exit 1
+
+    ep_verify="$(read_bits "$ENDPOINT")"
+    rp_verify="$(read_bits "$ROOTPORT")"
+
+    log "disabled ASPM: endpoint=$ep_verify rootport=$rp_verify"
+
+    if [[ "$ep_verify" != 0 || "$rp_verify" != 0 ]]; then
+        log "ERROR: ASPM disable verification failed"
+        exit 1
+    fi
+    ;;
+
+restore)
+    [[ -r "$STATE_FILE" ]] || {
+        log "no saved ASPM state; nothing to restore"
+        exit 0
+    }
+
+    ep_bits="$(awk -v d="$ENDPOINT" '$1 == d {print $2}' "$STATE_FILE")"
+    rp_bits="$(awk -v d="$ROOTPORT" '$1 == d {print $2}' "$STATE_FILE")"
+
+    # Wait for PCI endpoint and brcmfmac to be stable.
+    stable=0
+
+    for ((i=1; i<=300; i++)); do
+        if [[ -e "/sys/bus/pci/devices/$ENDPOINT" ]] &&
+           setpci -s "$ENDPOINT" CAP_EXP+10.w >/dev/null 2>&1 &&
+           [[ -L "/sys/bus/pci/devices/$ENDPOINT/driver" ]] &&
+           [[ "$(basename "$(readlink -f "/sys/bus/pci/devices/$ENDPOINT/driver")")" == brcmfmac ]]; then
+
+            ((stable+=1))
+
+            if (( stable >= 5 )); then
+                break
+            fi
+        else
+            stable=0
+        fi
+
+        sleep 0.1
+    done
+
+    if (( stable < 5 )); then
+        log "ERROR: Broadcom endpoint/driver did not stabilize"
+        exit 1
+    fi
+
+    # Restore upstream side first.
+    write_bits "$ROOTPORT" "$rp_bits" || exit 1
+    write_bits "$ENDPOINT" "$ep_bits" || exit 1
+
+    rp_verify="$(read_bits "$ROOTPORT")"
+    ep_verify="$(read_bits "$ENDPOINT")"
+
+    log "restored ASPM: endpoint=$ep_verify rootport=$rp_verify"
+
+    rm -f "$STATE_FILE"
+    ;;
+
+*)
+    echo "usage: $0 {disable|restore}" >&2
+    exit 2
+    ;;
+esac

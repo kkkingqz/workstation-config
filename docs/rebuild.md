@@ -142,9 +142,10 @@ rEFInd остаётся основным boot menu.
 intel_iommu=on
 iommu=pt
 pm_async=off
-pcie_aspm=force
-pcie_aspm.policy=powersave
 ```
+
+`pcie_aspm=force` и `pcie_aspm.policy=powersave` **не** добавлять: с ними
+T2 отказывала в stateful suspend (`helpws suspend`).
 
 Не добавлять параметры, которых нет в зафиксированном рабочем `/proc/cmdline`.
 
@@ -485,10 +486,24 @@ Machine-state archive содержит:
 deep / S3
 ```
 
+Восстановить suspend layer из repository:
+
+```console
+ws-suspend apply
+ws-suspend t2bce-build
+ws-suspend t2bce-install
+sudo reboot
+```
+
+`t2bce-build` требует `podman` и `linux-headers` текущего ядра. Если для
+установленного ядра нет строки в `kernel/t2bce/sources.conf`, сначала
+проверить upstream (`helpws suspend`, раздел «Обновление ядра»).
+
 Проверить:
 
 ```bash
 cat /sys/power/mem_sleep
+ws-suspend status
 ```
 
 Затем ручной тест:

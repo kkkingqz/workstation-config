@@ -19,7 +19,7 @@ volume: User Commands
 - Wi-Fi, Bluetooth, T2 audio, microphone, camera;
 - Intel UHD 630 как primary GPU + AMD dGPU offload;
 - рабочий `deep/S3` suspend/resume;
-- ASPM `force` + `powersave`;
+- suspend layer: deep-only, Broadcom guard, patched `t2bce` (`helpws suspend`); ASPM не форсируется;
 - Touch Bar в родном режиме (`hid-appletb-kbd` + `ws-touchbar-fn`):
   - F1…F12 по умолчанию;
   - media/brightness при удержании Fn;

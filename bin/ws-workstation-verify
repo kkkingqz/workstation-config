@@ -550,6 +550,14 @@ for path in \
     system/modprobe/touchbar-native.conf \
     system/usr/local/libexec/ws-touchbar-fn \
     system/systemd/system/ws-touchbar-fn.service \
+    system/sleep.conf.d/80-deep-only.conf \
+    system/udev/70-bcm4364-no-d3cold.rules \
+    system/usr/local/sbin/broadcom-aspm-suspend-guard \
+    system/usr/lib/systemd/system-sleep/80-broadcom-aspm \
+    system/systemd/system/broadcom-aspm-restore.service \
+    kernel/t2bce/nostate-fix.patch \
+    kernel/t2bce/sources.conf \
+    docs/suspend.md \
     gnome/extensions/workstation-smart-popup@local/metadata.json \
     gnome/extensions/workstation-smart-popup@local/extension.js \
     gnome/extensions/workstation-dock-spring@local/metadata.json \
@@ -570,6 +578,12 @@ done
 
 tracked "config/fish/completions/ws-gnome.fish" "GNOME Fish completion"
 tracked "docs/plans/gnome.md" "GNOME implementation plan"
+
+# Suspend / T2 power layer helper.
+check_runtime_helper ws-suspend
+for path in system/usr/local/sbin/broadcom-aspm-suspend-guard system/usr/lib/systemd/system-sleep/80-broadcom-aspm; do
+    [[ -e "$repo/$path" ]] && check_exec_tracked "$path"
+done
 
 section "5. Apply reproducibility"
 
@@ -1334,6 +1348,50 @@ if [[ -e /etc/udev/rules.d/70-workstation-uinput.rules ]]; then
     warn "obsolete runtime /etc/udev/rules.d/70-workstation-uinput.rules still exists"
 else
     pass "obsolete runtime 70-workstation-uinput.rules absent"
+fi
+
+section "14.1 Suspend / T2 power"
+
+grep -Fq '[deep]' /sys/power/mem_sleep 2>/dev/null \
+    && pass "mem_sleep default is deep (S3)" \
+    || fail "mem_sleep default is not deep: $(cat /sys/power/mem_sleep 2>/dev/null)"
+
+if grep -Eq '(^| )pcie_aspm(=|\.policy=)' /proc/cmdline; then
+    warn "kernel cmdline forces ASPM ($(grep -Eo 'pcie_aspm[^ ]*' /proc/cmdline | tr '\n' ' ')); all T2 stateful-suspend rejections happened with it"
+else
+    pass "kernel cmdline does not force ASPM"
+fi
+
+for pair in \
+    "system/sleep.conf.d/80-deep-only.conf:/etc/systemd/sleep.conf.d/80-deep-only.conf" \
+    "system/udev/70-bcm4364-no-d3cold.rules:/etc/udev/rules.d/70-bcm4364-no-d3cold.rules" \
+    "system/usr/local/sbin/broadcom-aspm-suspend-guard:/usr/local/sbin/broadcom-aspm-suspend-guard" \
+    "system/usr/lib/systemd/system-sleep/80-broadcom-aspm:/usr/lib/systemd/system-sleep/80-broadcom-aspm" \
+    "system/systemd/system/broadcom-aspm-restore.service:/etc/systemd/system/broadcom-aspm-restore.service"
+do
+    compare_file "$repo/${pair%%:*}" "${pair#*:}" "runtime ${pair#*:} matches repo"
+done
+
+t2bce_ver="$(cat /sys/module/t2bce_core/version 2>/dev/null || true)"
+if [[ "$t2bce_ver" == *nostatefix* ]]; then
+    pass "patched t2bce loaded: t2bce_core $t2bce_ver"
+else
+    warn "t2bce_core '${t2bce_ver:-not loaded}' is not the patched build; run ws-suspend t2bce-build && ws-suspend t2bce-install (docs/suspend.md)"
+fi
+
+t2bce_param="$(cat /sys/module/t2bce_core/parameters/stateful_sleep 2>/dev/null || true)"
+[[ -z "$t2bce_param" || "$t2bce_param" == "Y" ]] \
+    && pass "t2bce stateful sleep enabled" \
+    || fail "t2bce_core.stateful_sleep=$t2bce_param (forced no-state test mode left on)"
+
+if awk -v k="$(uname -r)" '$1 == k { found = 1 } END { exit !found }' "$repo/kernel/t2bce/sources.conf" 2>/dev/null; then
+    pass "kernel/t2bce/sources.conf pins sources for $(uname -r)"
+else
+    warn "kernel/t2bce/sources.conf has no entry for $(uname -r)"
+fi
+
+if [[ -e /etc/systemd/system/tiny-dfr-sleep.service ]]; then
+    warn "obsolete /etc/systemd/system/tiny-dfr-sleep.service still exists"
 fi
 
 section "15. Extension schema source / generated files"
