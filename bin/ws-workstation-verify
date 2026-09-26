@@ -601,6 +601,10 @@ contains_literal "$apply" 'ws-tiling-apply' "apply reapplies Tiling Assistant pr
 [[ -x "$repo/bin/ws-keyboard-system-apply" ]] \
     && pass "system-level keyboard/uinput/Touch Bar apply helper is executable" \
     || fail "bin/ws-keyboard-system-apply missing/not executable"
+contains_literal "$repo/bin/ws-keyboard-system-apply" '"$repo/bin/ws" system apply' \
+    "ws-keyboard-system-apply delegates to ws system apply (one owner of system files)"
+contains_literal "$repo/bin/ws-suspend" '"$repo/bin/ws" system apply' \
+    "ws-suspend apply delegates to ws system apply (one owner of system files)"
 [[ -e "$repo/system/usr/local/libexec/ws-touchbar-fn" ]] && check_exec_tracked "system/usr/local/libexec/ws-touchbar-fn"
 
 

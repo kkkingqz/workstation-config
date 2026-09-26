@@ -35,6 +35,10 @@ ws-suspend t2bce-install [KERNEL]
 ws-suspend t2bce-rollback [KERNEL]
 ```
 
+`ws-suspend apply` — обёртка над `ws system apply`: ставит все системные
+файлы хоста из `modules/system` (Nix), а не только слой suspend; проверка
+без изменений — `ws system diff`.
+
 ## Deep-only sleep
 
 ```text

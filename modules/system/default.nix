@@ -5,7 +5,8 @@
 #
 #   $out/files/<absolute path>   files for /
 #   $out/esp/<path>              files on the rEFInd ESP (compared only)
-#   $out/manifest                file MODE PATH | esp PARTUUID PATH | unit STATE NAME
+#   $out/manifest                file MODE PATH | esp PARTUUID PATH |
+#                                unit STATE NAME | restart - NAME
 { lib, runCommand, writeText, facts }:
 let
   repo = ../..;
@@ -40,4 +41,7 @@ runCommand "system-${facts.hardware}" { } ''
   ${lib.concatStrings (lib.mapAttrsToList (name: state: ''
     printf 'unit\t%s\t%s\n' ${state} ${name} >> $out/manifest
   '') units)}
+  ${lib.concatMapStrings (name: ''
+    printf 'restart\t-\t%s\n' ${name} >> $out/manifest
+  '') (collect "restart")}
 ''

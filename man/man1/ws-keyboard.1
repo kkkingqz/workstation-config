@@ -624,6 +624,11 @@ modprobe options, \f(CRws-touchbar-fn.service\fR) применяется отд�
 ws-keyboard-system-apply
 .EE
 .PP
+Это обёртка над \f(CRws system apply\fR: ставит все системные файлы хоста из
+\f(CRmodules/system\fR (Nix), только отличающиеся, с бэкапом в
+\f(CR/var/backups/workstation/system-<время>/\fR; проверка без изменений —
+\f(CRws system diff\fR.
+.PP
 \f(CRws-keyboard-apply\fR выполняет runtime preflight до изменения GNOME shortcuts.
 Если xremap, \f(CR/dev/uinput\fR, GNOME xremap bridge или обязательные extensions не
 готовы, GNOME bindings не должны оставаться частично применёнными.

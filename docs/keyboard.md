@@ -608,6 +608,11 @@ modprobe options, `ws-touchbar-fn.service`) применяется отдель�
 ws-keyboard-system-apply
 ```
 
+Это обёртка над `ws system apply`: ставит все системные файлы хоста из
+`modules/system` (Nix), только отличающиеся, с бэкапом в
+`/var/backups/workstation/system-<время>/`; проверка без изменений —
+`ws system diff`.
+
 `ws-keyboard-apply` выполняет runtime preflight до изменения GNOME shortcuts.
 Если xremap, `/dev/uinput`, GNOME xremap bridge или обязательные extensions не
 готовы, GNOME bindings не должны оставаться частично применёнными.

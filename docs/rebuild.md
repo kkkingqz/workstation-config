@@ -444,6 +444,12 @@ GDM/login layout = US only
 
 При изменении modprobe-файлов он сам пересобирает initramfs.
 
+Это обёртка над `ws system apply` (нужен Nix, раздел 6.0): он ставит все
+системные файлы из `modules/system` — и suspend layer из раздела 8, и T2
+base из разделов 4–5, — только отличающиеся, с бэкапом в
+`/var/backups/workstation/system-<время>/`. Без изменений:
+`ws system diff`.
+
 Затем установить наши GNOME extensions:
 
 ```console

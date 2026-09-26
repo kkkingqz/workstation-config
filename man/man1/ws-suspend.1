@@ -30,6 +30,10 @@ ws-suspend t2bce-build [KERNEL]
 ws-suspend t2bce-install [KERNEL]
 ws-suspend t2bce-rollback [KERNEL]
 .EE
+.PP
+\f(CRws-suspend apply\fR — обёртка над \f(CRws system apply\fR: ставит все системные
+файлы хоста из \f(CRmodules/system\fR (Nix), а не только слой suspend; проверка
+без изменений — \f(CRws system diff\fR.
 .SS
 Deep-only sleep
 .LP

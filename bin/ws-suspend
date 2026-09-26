@@ -7,6 +7,7 @@ set -euo pipefail
 repo="${WORKSTATION_CONFIG:-$HOME/.local/share/workstation-config}"
 cache="${XDG_CACHE_HOME:-$HOME/.cache}/ws-suspend"
 
+# Suspend-layer files compared by status (installed by ws system apply):
 # repo source : runtime destination : mode
 files=(
     "system/sleep.conf.d/80-deep-only.conf:/etc/systemd/sleep.conf.d/80-deep-only.conf:0644"
@@ -31,7 +32,7 @@ usage() {
 Usage: ws-suspend <command> [KERNEL]
 
   status                 show sleep mode, t2bce state and runtime drift (read-only)
-  apply                  install the suspend-layer system files (sudo)
+  apply                  install the system files: ws system apply (sudo)
   t2bce-build [KERNEL]   build patched t2bce modules into ~/.cache/ws-suspend
   t2bce-install [KERNEL] install built modules into /lib/modules/KERNEL/updates/t2bce (sudo)
   t2bce-rollback [KERNEL] remove them; the in-tree modules take over (sudo)
@@ -80,27 +81,10 @@ cmd_status() {
     done
 }
 
+# Since phase 4 of docs/plans/nix-migration.md one owner installs all system
+# files, including the suspend layer: `ws system apply` (modules/system).
 cmd_apply() {
-    local pair src dst mode
-    command -v sudo >/dev/null 2>&1 || die "sudo not found"
-
-    for pair in "${files[@]}"; do
-        IFS=: read -r src dst mode <<<"$pair"
-        [[ -r "$repo/$src" ]] || die "missing: $repo/$src"
-        sudo install -Dm"$mode" "$repo/$src" "$dst"
-        echo "installed: $dst"
-    done
-
-    sudo systemctl daemon-reload
-    sudo udevadm control --reload-rules
-
-    for pair in "${files[@]}"; do
-        IFS=: read -r src dst mode <<<"$pair"
-        cmp -s "$repo/$src" "$dst" || die "runtime differs from repo: $dst"
-    done
-
-    echo
-    echo "Suspend layer applied. The d3cold rule takes effect on the next boot."
+    exec "$repo/bin/ws" system apply
 }
 
 cmd_t2bce_build() {

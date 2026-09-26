@@ -483,6 +483,12 @@ GDM/login layout = US only
 .PP
 При изменении modprobe-файлов он сам пересобирает initramfs.
 .PP
+Это обёртка над \f(CRws system apply\fR (нужен Nix, раздел 6.0): он ставит все
+системные файлы из \f(CRmodules/system\fR — и suspend layer из раздела 8, и T2
+base из разделов 4–5, — только отличающиеся, с бэкапом в
+\f(CR/var/backups/workstation/system-<время>/\fR. Без изменений:
+\f(CRws system diff\fR.
+.PP
 Затем установить наши GNOME extensions:
 .LP
 .EX

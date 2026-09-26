@@ -31,4 +31,7 @@
     "get-apple-firmware.service" = "enabled";
     "broadcom-aspm-restore.service" = "static";
   };
+
+  # Restarted by every `ws system apply`, as ws-keyboard-system-apply did.
+  restart = [ "ws-touchbar-fn.service" ];
 }

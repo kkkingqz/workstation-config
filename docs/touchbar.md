@@ -34,7 +34,7 @@ Touch Bar закреплён в USB configuration 1. Режим дисплея (
 /etc/systemd/system/ws-touchbar-fn.service   system service для bridge
 ```
 
-Все файлы лежат в `system/` repository и ставятся `ws-keyboard-system-apply`.
+Все файлы лежат в `system/` repository и ставятся `ws-keyboard-system-apply` (обёртка над `ws system apply`).
 
 ## hid-appletb-kbd
 

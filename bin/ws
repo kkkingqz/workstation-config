@@ -14,7 +14,7 @@ Usage:
   ws diff
   ws apply [STEP...]
   ws check [-v]
-  ws system diff|check
+  ws system diff|check|apply
   ws baseline capture|diff|list ...
   ws host
 
@@ -32,12 +32,18 @@ apply     run the layer owners in order, as by hand (no sudo steps):
           logout/login) is reported at the end; on a new machine:
           ws apply, log out and in, ws apply
 check     run the owners' checks (ws-workstation-verify, wsflatpak check,
-          wsbox check, ws-gnome check, ws-suspend status) and summarize;
+          wsbox check, ws-gnome check, ws-suspend status, ws system check)
+          and summarize;
           shows WARN/FAIL lines only, -v shows the full output
 system    build the host system file tree (modules/system) and compare it
           with the live system, read-only: diff shows file differences,
           check also unit states and prints OK/DIFFERS/MISSING per entry;
-          files on the rEFInd ESP are compared only when it is mounted
+          files on the rEFInd ESP are compared only when it is mounted;
+          apply (sudo) backs up and installs the files that differ, edits
+          /etc/default/keyboard (GDM: EN only), removes known obsolete files,
+          enables and restarts units, reloads udev, rebuilds the initramfs
+          if modprobe.d changed and runs update-grub if grub.d changed;
+          it does not touch the ESP and does not reboot
 baseline  functional baseline, see ws-baseline --help
 host      print the flake host name used for this machine
 USAGE
@@ -198,7 +204,8 @@ cmd_system() {
 
     case "$mode" in
         diff|check) ;;
-        *) die "usage: ws system diff|check" ;;
+        apply) shift; cmd_system_apply "$@"; return ;;
+        *) die "usage: ws system diff|check|apply" ;;
     esac
     tree="$(system_tree)"
 
@@ -239,6 +246,238 @@ cmd_system() {
         echo "no differences ($files files)"
     fi
     ((problems == 0))
+}
+
+# GDM/login keyboard: /etc/default/keyboard belongs to keyboard-configuration
+# and is edited, not replaced: XKBLAYOUT=us, no variant, no grp:/grp_led:
+# options (layouts are switched by the workstation input-source extension).
+# Prints the edited file.
+keyboard_default() {
+    python3 - "$1" <<'PY'
+from pathlib import Path
+import re
+import sys
+
+text = Path(sys.argv[1]).read_text()
+
+def get_value(name, default=""):
+    m = re.search(
+        rf'(?m)^\s*{re.escape(name)}\s*=\s*(?:"([^"]*)"|\'([^\']*)\'|([^\n#]*))',
+        text,
+    )
+    if not m:
+        return default
+    return next((g.strip() for g in m.groups() if g is not None), default)
+
+def set_value(name, value):
+    global text
+    line = f'{name}="{value}"'
+    pat = rf'(?m)^\s*{re.escape(name)}\s*=.*$'
+    if re.search(pat, text):
+        text = re.sub(pat, line, text, count=1)
+    else:
+        if text and not text.endswith("\n"):
+            text += "\n"
+        text += line + "\n"
+
+model = get_value("XKBMODEL", "pc105") or "pc105"
+kept = [
+    o for o in (x.strip() for x in get_value("XKBOPTIONS", "").split(","))
+    if o and not o.startswith(("grp:", "grp_led:"))
+]
+
+set_value("XKBMODEL", model)
+set_value("XKBLAYOUT", "us")
+set_value("XKBVARIANT", "")
+set_value("XKBOPTIONS", ",".join(kept))
+sys.stdout.write(text)
+PY
+}
+
+# Obsolete files of earlier baselines: path, the only content line that
+# allows removal (empty: remove whenever the condition in apply holds).
+obsolete_uinput=/etc/udev/rules.d/70-workstation-uinput.rules
+obsolete_uinput_line='KERNEL=="uinput", TAG+="uaccess", OPTIONS+="static_node=uinput"'
+obsolete_tiny_cfg=/etc/tiny-dfr/config.toml
+
+tiny_dfr_installed() {
+    dpkg-query -W -f='${Status}' tiny-dfr 2>/dev/null | grep -q 'install ok installed'
+}
+
+# One owner of the system files (phase 4 of docs/plans/nix-migration.md):
+# what ws-keyboard-system-apply and ws-suspend apply did, for the whole tree.
+# Only files that differ are backed up and replaced; the ESP is not touched,
+# nothing reboots.
+cmd_system_apply() {
+    local tree kind a b backup tmp unit changed=0 modprobe=false grub=false
+    local refind=false d3cold=false touchbar=false saved=false dev cfg out rc=0
+    local -a restart=()
+
+    command -v sudo >/dev/null 2>&1 || die "sudo not found"
+    command -v python3 >/dev/null 2>&1 || die "python3 not found"
+    tree="$(system_tree)"
+    backup="/var/backups/workstation/system-$(date +%Y%m%d-%H%M%S)"
+
+    # Back up a live file under $backup before it is replaced or removed.
+    save() {
+        [[ -e "$1" ]] || return 0
+        sudo install -d -m0700 "$backup" "$backup$(dirname "$1")"
+        sudo cp -a -- "$1" "$backup$1"
+        saved=true
+    }
+
+    sudo -v
+    echo "== Files ($tree)"
+    while IFS=$'\t' read -r kind a b; do
+        case "$kind" in
+            file)
+                case "$b" in
+                    /etc/udev/rules.d/90-touchbar-native.rules) touchbar=true ;;
+                esac
+                if [[ -e "$b" ]] && cmp -s "$tree/files$b" "$b" \
+                    && [[ "$(stat -c '%a %U:%G' "$b")" == "${a#0} root:root" ]]; then
+                    continue
+                fi
+                save "$b"
+                sudo install -D -m"$a" -o root -g root "$tree/files$b" "$b"
+                echo "installed: $b"
+                changed=$((changed + 1))
+                case "$b" in
+                    /etc/modprobe.d/*) modprobe=true ;;
+                    /etc/default/grub.d/*) grub=true ;;
+                    /boot/refind_linux.conf) refind=true ;;
+                    */70-bcm4364-no-d3cold.rules) d3cold=true ;;
+                esac
+                ;;
+            restart) restart+=("$b") ;;
+        esac
+    done < "$tree/manifest"
+
+    echo
+    echo "== GDM/login keyboard"
+    tmp="$(mktemp)"
+    trap 'rm -f "$tmp"' RETURN
+    keyboard_default /etc/default/keyboard > "$tmp"
+    if cmp -s "$tmp" /etc/default/keyboard; then
+        echo "unchanged: /etc/default/keyboard"
+    else
+        save /etc/default/keyboard
+        sudo install -m0644 -o root -g root "$tmp" /etc/default/keyboard
+        echo "edited: /etc/default/keyboard"
+        changed=$((changed + 1))
+    fi
+
+    echo
+    echo "== Obsolete files"
+    if [[ -f "$obsolete_uinput" ]]; then
+        if grep -Fxq "$obsolete_uinput_line" "$obsolete_uinput"; then
+            save "$obsolete_uinput"
+            sudo rm -f -- "$obsolete_uinput"
+            echo "removed: $obsolete_uinput"
+        else
+            echo "WARN    $obsolete_uinput does not match the known old rule; left untouched"
+        fi
+    fi
+    if [[ -f "$obsolete_tiny_cfg" ]] && ! tiny_dfr_installed; then
+        save "$obsolete_tiny_cfg"
+        sudo rm -f -- "$obsolete_tiny_cfg"
+        sudo rmdir --ignore-fail-on-non-empty "$(dirname "$obsolete_tiny_cfg")"
+        echo "removed: $obsolete_tiny_cfg"
+    fi
+
+    echo
+    echo "== Units"
+    sudo systemctl daemon-reload
+    while IFS=$'\t' read -r kind a b; do
+        [[ "$kind" == unit && "$a" == enabled ]] || continue
+        sudo systemctl enable --quiet "$b"
+        echo "enabled: $b"
+    done < "$tree/manifest"
+    for unit in "${restart[@]}"; do
+        sudo systemctl restart "$unit"
+        echo "restarted: $unit"
+    done
+
+    echo
+    echo "== udev"
+    sudo udevadm control --reload-rules
+    sudo udevadm trigger --subsystem-match=input --action=change || true
+    sudo udevadm settle || true
+
+    # hid-appletb-kbd options are read from the initramfs at boot.
+    if [[ "$modprobe" == true ]]; then
+        echo
+        echo "== initramfs (modprobe.d changed)"
+        sudo update-initramfs -u -k "$(uname -r)"
+        sudo lsinitrd 2>/dev/null | grep -E 't2bce|appletb|modprobe.d' || true
+    fi
+    if [[ "$grub" == true ]]; then
+        echo
+        echo "== GRUB (grub.d changed)"
+        sudo update-grub
+    fi
+
+    echo
+    echo "== Check"
+    [[ "$saved" == true ]] && echo "backup: $backup"
+    out="$(cmd_system check)" || rc=1
+    grep -vE '^OK ' <<<"$out" || true
+    for unit in "${restart[@]}"; do
+        if systemctl is-active --quiet "$unit"; then
+            echo "OK      $unit active"
+        else
+            echo "FAIL    $unit not active"
+            rc=1
+        fi
+    done
+    python3 - /etc/default/keyboard <<'PY' || rc=1
+from pathlib import Path
+import re
+import sys
+
+text = Path(sys.argv[1]).read_text()
+
+def value(name):
+    m = re.search(
+        rf'(?m)^\s*{re.escape(name)}\s*=\s*(?:"([^"]*)"|\'([^\']*)\'|([^\n#]*))',
+        text,
+    )
+    if not m:
+        return None
+    return next((g.strip() for g in m.groups() if g is not None), "")
+
+options = value("XKBOPTIONS") or ""
+if (value("XKBLAYOUT") == "us" and value("XKBVARIANT") in ("", None)
+        and not any(x.startswith(("grp:", "grp_led:")) for x in options.split(","))):
+    print("OK      GDM/login keyboard: EN only")
+else:
+    print("FAIL    GDM/login keyboard is not EN only")
+    sys.exit(1)
+PY
+    printf 'MemorySleepMode: %s\n' \
+        "$(systemd-analyze cat-config systemd/sleep.conf 2>/dev/null \
+            | sed -n 's/^MemorySleepMode=//p' | tail -n1)"
+
+    if [[ "$touchbar" == true ]]; then
+        if tiny_dfr_installed; then
+            echo "WARN    tiny-dfr is installed; it switches the Touch Bar to display mode (docs/touchbar.md)"
+        fi
+        for dev in /sys/bus/usb/devices/*; do
+            [[ "$(cat "$dev/idVendor" 2>/dev/null):$(cat "$dev/idProduct" 2>/dev/null)" == "05ac:8302" ]] || continue
+            cfg="$(cat "$dev/bConfigurationValue" 2>/dev/null || true)"
+            if [[ "$cfg" == 1 ]]; then
+                echo "OK      Touch Bar: USB configuration 1 (native)"
+            else
+                echo "WARN    Touch Bar is in USB configuration '${cfg:-0}'; reboot to apply the udev rule"
+            fi
+        done
+    fi
+
+    echo
+    echo "$changed file(s) changed."
+    [[ "$refind" == true ]] && echo "refind_linux.conf changed: the kernel command line applies on the next boot."
+    [[ "$d3cold" == true ]] && echo "The d3cold rule takes effect on the next boot."
+    return "$rc"
 }
 
 # Owner checks: name, command. Problem lines are WARN/FAIL (verify, wsflatpak,
