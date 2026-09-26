@@ -1,0 +1,19 @@
+[Unit]
+Description=Restore MacBook Touch Bar Fn switching and autodim behind xremap
+After=systemd-udevd.service
+ConditionPathExists=/sys/module/hid_appletb_kbd
+
+[Service]
+Type=simple
+ExecStart=/usr/local/libexec/ws-touchbar-fn
+# Hand autodim back to hid-appletb-kbd if the bridge died while owning it.
+ExecStopPost=/usr/local/libexec/ws-touchbar-fn --hand-back
+Restart=always
+RestartSec=1
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=yes
+ProtectSystem=full
+
+[Install]
+WantedBy=multi-user.target

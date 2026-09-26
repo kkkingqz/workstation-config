@@ -1,0 +1,5 @@
+# MacBookPro16,1: keep the Touch Bar (05ac:8302) in USB configuration 1.
+# Configuration 1 is the native keyboard mode (T2 renders the keys, driven by hid-appletb-kbd).
+# Configuration 2 is the host display mode (appletbdrm) used by tiny-dfr; on this machine every
+# failed or hung S3 cycle happened in that mode. See docs/touchbar.md in workstation-config.
+ACTION=="add", SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ATTR{idVendor}=="05ac", ATTR{idProduct}=="8302", ATTR{bConfigurationValue}!="1", ATTR{bConfigurationValue}="0", ATTR{bConfigurationValue}="1"

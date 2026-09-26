@@ -1,6 +1,6 @@
 title: ws-gnome
 section: 1
-date: 2026-09-23
+date: 2026-09-25
 source: Workstation
 volume: User Commands
 
@@ -279,8 +279,8 @@ ws-gnome test
 ws-gnome-test
 ```
 
-Автоматическая часть read-only и не проверяет Touch Bar/tiny-dfr, Flatpak,
-Distrobox или Wine.
+Автоматическая часть read-only и не проверяет Touch Bar, Flatpak, Distrobox
+или Wine.
 
 После неё helper печатает ручной checklist для тех GUI interactions, которые
 нельзя достоверно проверить без действий пользователя.

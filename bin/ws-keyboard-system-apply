@@ -6,8 +6,21 @@ udev_src="$repo/system/udev/99-workstation-uinput.rules"
 udev_dst="/etc/udev/rules.d/99-workstation-uinput.rules"
 old_udev="/etc/udev/rules.d/70-workstation-uinput.rules"
 keyboard="/etc/default/keyboard"
-tiny_src="$repo/config/tiny-dfr/config.toml"
-tiny_dst="/etc/tiny-dfr/config.toml"
+
+# Touch Bar native mode: USB configuration 1, keys rendered by the T2 (hid-appletb-kbd),
+# no appletbdrm; ws-touchbar-fn mirrors Fn from the xremap device into hid-appletb-kbd mode.
+tb_rule_src="$repo/system/udev/90-touchbar-native.rules"
+tb_rule_dst="/etc/udev/rules.d/90-touchbar-native.rules"
+tb_conf_src="$repo/system/modprobe/tb.conf"
+tb_conf_dst="/etc/modprobe.d/tb.conf"
+tb_blacklist_src="$repo/system/modprobe/touchbar-native.conf"
+tb_blacklist_dst="/etc/modprobe.d/touchbar-native.conf"
+fn_helper_src="$repo/system/usr/local/libexec/ws-touchbar-fn"
+fn_helper_dst="/usr/local/libexec/ws-touchbar-fn"
+fn_unit_src="$repo/system/systemd/system/ws-touchbar-fn.service"
+fn_unit_dst="/etc/systemd/system/ws-touchbar-fn.service"
+# Installed by the previous tiny-dfr baseline of this script.
+old_tiny_cfg="/etc/tiny-dfr/config.toml"
 
 die() {
     echo "ws-keyboard-system-apply: $*" >&2
@@ -19,6 +32,13 @@ command -v python3 >/dev/null 2>&1 || die "python3 not found"
 
 [[ -r "$udev_src" ]] || die "missing: $udev_src"
 [[ -r "$keyboard" ]] || die "missing: $keyboard"
+for f in "$tb_rule_src" "$tb_conf_src" "$tb_blacklist_src" "$fn_helper_src" "$fn_unit_src"; do
+    [[ -r "$f" ]] || die "missing: $f"
+done
+
+tiny_dfr_installed() {
+    dpkg-query -W -f='${Status}' tiny-dfr 2>/dev/null | grep -q 'install ok installed'
+}
 
 echo "== uinput rule =="
 sudo install -Dm0644 "$udev_src" "$udev_dst"
@@ -89,17 +109,35 @@ PY
 sudo install -m0644 "$tmp" "$keyboard"
 
 echo
-echo "== tiny-dfr config =="
-if [[ -r "$tiny_src" ]]; then
-    sudo install -Dm0644 "$tiny_src" "$tiny_dst"
-    if systemctl list-unit-files tiny-dfr.service >/dev/null 2>&1; then
-        sudo systemctl restart tiny-dfr.service
-        echo "tiny-dfr.service restarted"
-    else
-        echo "WARNING: tiny-dfr.service not installed" >&2
-    fi
-else
-    echo "WARNING: $tiny_src missing; tiny-dfr config not installed" >&2
+echo "== Touch Bar native mode =="
+if tiny_dfr_installed; then
+    echo "WARNING: tiny-dfr is installed; it switches the Touch Bar to display mode (see docs/touchbar.md)" >&2
+fi
+
+# hid-appletb-kbd options are read from the initramfs at boot.
+modprobe_changed=false
+cmp -s "$tb_conf_src" "$tb_conf_dst" || modprobe_changed=true
+cmp -s "$tb_blacklist_src" "$tb_blacklist_dst" || modprobe_changed=true
+
+sudo install -Dm0644 "$tb_rule_src" "$tb_rule_dst"
+sudo install -Dm0644 "$tb_conf_src" "$tb_conf_dst"
+sudo install -Dm0644 "$tb_blacklist_src" "$tb_blacklist_dst"
+sudo install -Dm0755 "$fn_helper_src" "$fn_helper_dst"
+sudo install -Dm0644 "$fn_unit_src" "$fn_unit_dst"
+sudo systemctl daemon-reload
+sudo systemctl enable ws-touchbar-fn.service
+sudo systemctl restart ws-touchbar-fn.service
+echo "ws-touchbar-fn.service restarted"
+
+if [[ -f "$old_tiny_cfg" ]] && ! tiny_dfr_installed; then
+    sudo rm -f "$old_tiny_cfg"
+    sudo rmdir --ignore-fail-on-non-empty "$(dirname "$old_tiny_cfg")"
+    echo "removed obsolete: $old_tiny_cfg"
+fi
+
+if [[ "$modprobe_changed" == true ]]; then
+    echo "modprobe config changed; rebuilding initramfs for $(uname -r)"
+    sudo update-initramfs -u -k "$(uname -r)"
 fi
 
 echo
@@ -137,9 +175,22 @@ assert not any(x.startswith(("grp:", "grp_led:")) for x in options.split(","))
 print("GDM/login keyboard: EN only")
 PY
 
-if [[ -r "$tiny_src" && -r "$tiny_dst" ]]; then
-    cmp -s "$tiny_src" "$tiny_dst" || die "runtime tiny-dfr config differs from repo"
-fi
+cmp -s "$tb_rule_src" "$tb_rule_dst" || die "runtime Touch Bar udev rule differs from repo"
+cmp -s "$tb_conf_src" "$tb_conf_dst" || die "runtime tb.conf differs from repo"
+cmp -s "$tb_blacklist_src" "$tb_blacklist_dst" || die "runtime appletbdrm blacklist differs from repo"
+cmp -s "$fn_helper_src" "$fn_helper_dst" || die "runtime ws-touchbar-fn differs from repo"
+cmp -s "$fn_unit_src" "$fn_unit_dst" || die "runtime ws-touchbar-fn.service differs from repo"
+systemctl is-active --quiet ws-touchbar-fn.service || die "ws-touchbar-fn.service is not active"
+
+for dev in /sys/bus/usb/devices/*; do
+    [[ "$(cat "$dev/idVendor" 2>/dev/null):$(cat "$dev/idProduct" 2>/dev/null)" == "05ac:8302" ]] || continue
+    cfg="$(cat "$dev/bConfigurationValue" 2>/dev/null || true)"
+    if [[ "$cfg" == "1" ]]; then
+        echo "Touch Bar: USB configuration 1 (native)"
+    else
+        echo "WARNING: Touch Bar is in USB configuration '${cfg:-0}'; reboot to apply $tb_rule_dst" >&2
+    fi
+done
 
 echo
-echo "System keyboard/uinput/tiny-dfr baseline applied."
+echo "System keyboard/uinput/Touch Bar baseline applied."

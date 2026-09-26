@@ -1,5 +1,5 @@
 .\" -*- mode: troff; coding: utf-8 -*-
-.TH "ws-touchbar" "1" "2026-09-23" "Workstation" "User Commands"
+.TH "ws-touchbar" "1" "2026-09-26" "Workstation" "User Commands"
 .SH UBUNTU T2 TOUCH BAR — CURRENT BASELINE
 .SS
 Текущее состояние
@@ -10,48 +10,53 @@
 MacBookPro16,1
 Ubuntu 26.04.1 LTS
 GNOME 50 / Wayland
-T2 kernel 7.2.6-1-t2-resolute
+T2 kernel 7.2.7-1-t2-resolute
 .EE
 .PP
-Текущий Touch Bar renderer — \fBtiny-dfr\fR.
+Текущий режим Touch Bar — \fBродной\fR: кнопки рисует сама T2, host только
+переключает режим через \f(CRhid-appletb-kbd\fR.
 .PP
-Это является рабочим baseline. Старые варианты через чистый
-\f(CRhid_appletb_kbd\fR firmware layer, \f(CRreact-drm\fR, \f(CRmac-touchbar-plus\fR и
-\f(CRws-touchbar-fn.service\fR больше не являются текущей архитектурой.
+Touch Bar закреплён в USB configuration 1. Режим дисплея (configuration 2,
+\f(CRappletbdrm\fR, \f(CRtiny-dfr\fR) не используется: на этой машине с ним связаны все
+сбои suspend (см. «Почему не tiny-dfr»).
 .SS
-Runtime
-.LP
-Package:
+Компоненты
 .LP
 .EX
-tiny-dfr
+/etc/modprobe.d/tb.conf                      параметры hid-appletb-kbd
+/etc/modprobe.d/touchbar-native.conf         blacklist appletbdrm
+/etc/udev/rules.d/90-touchbar-native.rules   USB configuration 1
+/usr/local/libexec/ws-touchbar-fn            Fn и autodim bridge за xremap
+/etc/systemd/system/ws-touchbar-fn.service   system service для bridge
 .EE
-.PP
-На проверенном состоянии:
+.LP
+Все файлы лежат в \f(CRsystem/\fR repository и ставятся \f(CRws-keyboard-system-apply\fR.
+.SS
+hid-appletb-kbd
 .LP
 .EX
-tiny-dfr 0.3.7-4-resolute
+options hid_appletb_kbd mode=1 fntoggle=1 autodim=1 dim_timeout=30 idle_timeout=15 double_press_switch_time=300
 .EE
-.PP
-Service:
+.IP "\(bu" 3
+\f(CRmode=1\fR — F1..F12 по умолчанию;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+\f(CRfntoggle=1\fR — Fn переключает F-keys и media;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+\f(CRautodim=1\fR, \f(CRdim_timeout=30\fR, \f(CRidle_timeout=15\fR — затемнение и выключение
+Touch Bar при бездействии. Пока работает \f(CRws-touchbar-fn\fR, расписание ведёт
+он (см. «Автозатемнение»).
 .LP
-.EX
-systemctl status tiny-dfr.service
-.EE
-.PP
-Source config:
-.LP
-.EX
-\(ti/.local/share/workstation-config/config/tiny-dfr/config.toml
-.EE
-.PP
-Runtime config:
-.LP
-.EX
-/etc/tiny-dfr/config.toml
-.EE
-.PP
-Эти файлы должны совпадать.
+Модуль грузится из initramfs, поэтому после изменения \f(CRtb.conf\fR нужен
+\f(CRupdate-initramfs\fR. \f(CRws-keyboard-system-apply\fR делает это сам, если
+modprobe-файлы изменились.
 .SS
 Layer behavior
 .LP
@@ -60,19 +65,12 @@ normal       F1..F12
 hold Fn      media / brightness
 release Fn   F1..F12
 .EE
-.LP
-Ключевые параметры:
-.LP
-.EX
-MediaLayerDefault = false
-DoublePressSwitchLayers = 0
-.EE
-.PP
-\f(CRDoublePressSwitchLayers = 0\fR означает, что double-Fn не фиксирует media layer.
 .SS
 Связь с xremap
 .LP
-Встроенная Apple/T2 keyboard выдаёт \f(CRKEY_FN\fR.
+Встроенная Apple/T2 keyboard выдаёт \f(CRKEY_FN\fR. xremap забирает события
+встроенной клавиатуры, поэтому штатное переключение по Fn в \f(CRhid-appletb-kbd\fR
+за ним не срабатывает.
 .PP
 xremap использует Fn как собственный mode для macOS-style tiling, но событие
 Fn не поглощается:
@@ -81,39 +79,133 @@ Fn не поглощается:
 skip_key_event: false
 .EE
 .PP
-xremap создаёт virtual device:
+Поэтому \f(CRKEY_FN\fR появляется на virtual device \f(CRworkstation-xremap\fR. Его слушает
+\f(CRws-touchbar-fn.service\fR:
 .LP
 .EX
-workstation-xremap
+Fn press     hid-appletb-kbd mode 1 -> 2   (media / brightness)
+Fn release   mode 2 -> 1                   (F1..F12)
 .EE
 .PP
-tiny-dfr видит Fn через seat/libinput и переключает свой слой.
-.PP
-Чтобы исключить loop, xremap игнорирует:
+Одно Fn событие используется одновременно:
 .LP
 .EX
-Dynamic Function Row Virtual Input Device
+xremap           -> внутренний apple_fn mode
+ws-touchbar-fn   -> временный media/brightness mode Touch Bar
 .EE
 .PP
-Таким образом одно Fn событие одновременно используется:
-.LP
-.EX
-xremap     -> внутренний apple_fn mode
-tiny-dfr   -> временный media/brightness layer
-.EE
+Если \f(CRhid-appletb-kbd\fR не привязан (Touch Bar в режиме дисплея или
+переподключается после сна), мост молча ждёт. В journal попадают только
+подключение к xremap и смена узла \f(CRmode\fR; отдельные нажатия Fn не пишутся.
 .SS
-Старый bridge удалён
+Автозатемнение
 .LP
-Больше не используются:
-.LP
-.EX
-ws-touchbar-fn
-ws-touchbar-fn.service
-/usr/local/libexec/ws-touchbar-fn
-.EE
+Драйвер продлевает подсветку только по касаниям Touch Bar и событиям
+встроенных клавиатуры и трекпада. Клавиатуру забирает xremap, поэтому набор
+текста до драйвера не доходит, и полоса гасла посреди набора.
 .PP
-Этот bridge раньше вручную переключал \f(CRhid_appletb_kbd\fR mode при Fn. В
-текущей схеме он не нужен.
+Пока в драйвере \f(CRautodim=Y\fR, мост переключает его в \f(CRN\fR и ведёт то же
+расписание сам: через \f(CRdim_timeout\fR секунд тишины полоса тускнеет, ещё через
+\f(CRidle_timeout\fR гаснет. Активностью считается ввод с \f(CRworkstation-xremap\fR,
+встроенных клавиатуры и трекпада и клавиш Touch Bar. Закрытая крышка гасит
+полосу. Если в \f(CRtb.conf\fR задан \f(CRautodim=0\fR, мост подсветку не трогает.
+.PP
+При остановке мост возвращает драйверу \f(CRautodim=Y\fR и включает полосу. После
+падения то же делает \f(CRExecStopPost\fR (\f(CRws-touchbar-fn --hand-back\fR) по файлу
+\f(CR/run/ws-touchbar-fn.autodim\fR.
+.PP
+xremap игнорирует \f(CRDynamic Function Row Virtual Input Device\fR. В родном режиме
+такого устройства нет; исключение оставлено как защита от петли на случай
+возврата \f(CRtiny-dfr\fR.
+.SS
+Почему не tiny-dfr
+.LP
+С 2026-09-22 по 2026-09-25 Touch Bar работал в режиме дисплея: сначала через
+\f(CRtiny-dfr\fR, затем, после удаления \f(CRtiny-dfr\fR, его подхватывал GNOME/Mutter как
+второй монитор. Сводка по всем S3-циклам на kernel 7.2.x
+(\f(CR/var/log/syslog\fR, \f(CR/var/log/kern.log\fR):
+.TS
+tab(|) expand allbox;
+lb lb lb lb
+l l l l.
+T{
+Touch Bar
+T}|T{
+pcie_aspm
+T}|T{
+S3 циклов
+T}|T{
+сбои
+T}
+T{
+родной (configuration 1)
+T}|T{
+force
+T}|T{
+16
+T}|T{
+0
+T}
+T{
+родной
+T}|T{
+default
+T}|T{
+4
+T}|T{
+0
+T}
+T{
+дисплей, работает tiny-dfr
+T}|T{
+force
+T}|T{
+3
+T}|T{
+2 отказа T2
+T}
+T{
+дисплей, рисует Mutter
+T}|T{
+force
+T}|T{
+7
+T}|T{
+1 отказ T2
+T}
+T{
+дисплей, никто не рисует
+T}|T{
+force
+T}|T{
+6
+T}|T{
+1 зависание без логов
+T}
+T{
+дисплей, Mutter или никто
+T}|T{
+default
+T}|T{
+13
+T}|T{
+1 зависание без логов
+T}
+.TE
+.PP
+Зависание 2026-09-25 12:00 (brcmfmac не ушёл в D3, systemd откатился на s2idle)
+в таблицу не включено: к Touch Bar оно не относится.
+.PP
+Отказ T2 — это \f(CRt2bce_core: remote rejected stateful suspend payload\fR; за ним
+драйвер уходил в no-state fallback и падал с NULL dereference в
+\f(CRt2bce_dma_reserve_submission\fR (upstream:
+t2linux/T2-Debian-and-Ubuntu-Kernel#215). Оба зависания без логов случились,
+когда \f(CRtiny-dfr\fR останавливали прямо перед сном.
+.PP
+Кроме того, без udev-правила \f(CRtiny-dfr\fR (\f(CR99-touchbar-seat.rules\fR) GNOME
+использует \f(CRappletbdrm\fR как обычный KMS output. При resume Touch Bar
+переподключается, и так однажды получился чёрный экран с
+\f(CRdrmModeAtomicCommit: Invalid argument\fR.
 .SS
 Безопасность runtime PM
 .LP
@@ -127,7 +219,7 @@ ws-touchbar-fn.service
 .EX
 powertop --auto-tune
 агрессивный USB runtime PM для Touch Bar
-одновременный запуск нескольких Touch Bar renderer
+Touch Bar display mode (appletbdrm) вместе с suspend
 .EE
 .SS
 Старые эксперименты
@@ -137,66 +229,86 @@ powertop --auto-tune
 .EX
 react-drm
 mac-touchbar-plus
-firmware-only hid_appletb_kbd mode
-custom ws-touchbar-fn bridge
+tiny-dfr (2026-09-22 .. 2026-09-25)
+tiny-dfr-sleep.service (остановка tiny-dfr на время сна)
 .EE
 .PP
 \f(CRreact-drm\fR удавалось запустить с DRM renderer 2008x60, но draggable UI
-(sliders/progress) был недостаточно надёжен.
+(sliders/progress) был недостаточно надёжен. \f(CRtiny-dfr\fR работал, но в режиме
+дисплея suspend был ненадёжен (см. выше).
 .PP
 Эти сведения остаются полезной историей, но \fBне описывают current baseline\fR.
+.SS
+Возврат к tiny-dfr
+.LP
+Не рекомендуется, пока сбои suspend в режиме дисплея не исправлены upstream.
+Если всё же нужно:
+.LP
+.EX
+sudo systemctl disable --now ws-touchbar-fn.service
+sudo rm /etc/udev/rules.d/90-touchbar-native.rules /etc/modprobe.d/touchbar-native.conf
+sudo update-initramfs -u
+sudo apt install tiny-dfr
+sudo reboot
+.EE
 .SS
 Проверка
 .LP
 .EX
-systemctl is-active tiny-dfr.service
-dpkg-query -W -f='${Version}\en' tiny-dfr
-
-grep -E '\(ha(MediaLayerDefault|DoublePressSwitchLayers)' \e
-  /etc/tiny-dfr/config.toml
-
-cmp \e
-  \(ti/.local/share/workstation-config/config/tiny-dfr/config.toml \e
-  /etc/tiny-dfr/config.toml
+cat /sys/bus/usb/devices/7-6/bConfigurationValue
+lsmod | grep appletbdrm
+cat /sys/bus/hid/drivers/hid-appletb-kbd/*/mode
+cat /sys/module/hid_appletb_kbd/parameters/autodim
+systemctl is-active ws-touchbar-fn.service
+journalctl -b -u ws-touchbar-fn.service
 .EE
 .LP
+\f(CR7-6\fR — порт Touch Bar на T2 VHCI этой машины.
+.PP
+Ожидается:
+.LP
+.EX
+bConfigurationValue          1
+appletbdrm                   не загружен
+hid-appletb-kbd mode         1
+autodim                      N (затемнением управляет мост)
+ws-touchbar-fn.service       active
+journal                      listening on /dev/input/eventN (workstation-xremap)
+.EE
+.PP
 Дополнительно:
 .LP
 .EX
 ws-workstation-verify --strict
 .EE
-.PP
-Ожидается:
-.LP
-.EX
-tiny-dfr.service active
-tiny-dfr package installed
-MediaLayerDefault = false
-DoublePressSwitchLayers = 0
-runtime config matches repository source
-workstation-xremap virtual input device present
-.EE
 .SS
 Source of truth
 .LP
 .EX
-config/tiny-dfr/config.toml
+system/modprobe/tb.conf
+system/modprobe/touchbar-native.conf
+system/udev/90-touchbar-native.rules
+system/usr/local/libexec/ws-touchbar-fn
+system/systemd/system/ws-touchbar-fn.service
+bin/ws-keyboard-system-apply
 bin/ws-xremap
 config/keyboard/xremap.yml
 .EE
 .LP
-tiny-dfr package владеет system service и своим DRM/uinput setup.
-.PP
 Generated/system runtime state не коммитится в workstation-config.
 .SS
 Подтверждённый baseline
 .LP
+2026-09-25:
+.LP
 .EX
-F1..F12 default              OK
-hold Fn -> media/brightness  OK
-release Fn -> F1..F12        OK
-xremap Apple Fn mode          OK
-tiny-dfr service              OK
-runtime config == repo        OK
-old ws-touchbar-fn absent     OK
+Touch Bar USB configuration 1          OK
+appletbdrm не загружен                 OK
+F1..F12 default                        OK
+hold Fn -> media/brightness            OK
+release Fn -> F1..F12                  OK
+xremap Apple Fn mode                   OK
+ws-touchbar-fn service                 OK
+tiny-dfr отсутствует                   OK
+S3 в родном режиме                     20 циклов, 0 сбоев
 .EE

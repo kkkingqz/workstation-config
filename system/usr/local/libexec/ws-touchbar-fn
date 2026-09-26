@@ -1,0 +1,559 @@
+#!/usr/bin/env python3
+
+import ctypes
+import errno
+import fcntl
+import glob
+import os
+import selectors
+import signal
+import sys
+import time
+
+EV_KEY = 1
+EV_SW = 5
+KEY_FN = 464
+SW_LID = 0
+
+# hid-appletb-kbd is bound only while the Touch Bar is in its native USB
+# configuration. In display mode (appletbdrm) and while the device re-enumerates
+# the node is absent; the bridge then stands by without logging every Fn press.
+TOUCHBAR_GLOB = "/sys/bus/hid/drivers/hid-appletb-kbd/*/mode"
+VANISHED = (errno.ENOENT, errno.ENODEV)
+
+# Autodim. hid-appletb-kbd keeps the strip lit while it sees Touch Bar touches or
+# events of the internal keyboard and trackpad. xremap grabs the keyboard, so
+# typing never reaches the driver and the strip goes dark mid-sentence. While the
+# driver's autodim is enabled, the bridge switches it off and runs the same
+# schedule itself (dim after dim_timeout, off after idle_timeout more), counting
+# every input it reads: the xremap device, the internal keyboard and trackpad,
+# and the Touch Bar keys. A closed lid turns the strip off.
+PARAMS = "/sys/module/hid_appletb_kbd/parameters"
+BACKLIGHT = "/sys/class/backlight/appletb_backlight/brightness"
+# Present while the bridge owns dimming, so ExecStopPost can hand autodim back
+# to the driver even if the bridge dies.
+AUTODIM_STATE = "/run/ws-touchbar-fn.autodim"
+FULL, DIM, OFF = 2, 1, 0
+TOUCHBAR_KEYS = "Apple Inc. Touch Bar Display"
+RESCAN_SECONDS = 2.0
+
+# Linux _IOC helpers for EVIOCGSW(len).
+_IOC_NRBITS = 8
+_IOC_TYPEBITS = 8
+_IOC_SIZEBITS = 14
+_IOC_DIRBITS = 2
+
+_IOC_NRSHIFT = 0
+_IOC_TYPESHIFT = _IOC_NRSHIFT + _IOC_NRBITS
+_IOC_SIZESHIFT = _IOC_TYPESHIFT + _IOC_TYPEBITS
+_IOC_DIRSHIFT = _IOC_SIZESHIFT + _IOC_SIZEBITS
+
+_IOC_READ = 2
+
+
+def _ioc(direction, typ, nr, size):
+    return (
+        (direction << _IOC_DIRSHIFT)
+        | (typ << _IOC_TYPESHIFT)
+        | (nr << _IOC_NRSHIFT)
+        | (size << _IOC_SIZESHIFT)
+    )
+
+
+def eviocgsw(length):
+    return _ioc(_IOC_READ, ord("E"), 0x1B, length)
+
+
+class InputEvent(ctypes.Structure):
+    _fields_ = [
+        ("tv_sec", ctypes.c_long),
+        ("tv_usec", ctypes.c_long),
+        ("type", ctypes.c_ushort),
+        ("code", ctypes.c_ushort),
+        ("value", ctypes.c_int),
+    ]
+
+
+EVENT_SIZE = ctypes.sizeof(InputEvent)
+
+# (mode node, mode to restore) while Fn is held.
+saved_mode = None
+mode_path = None
+# The node (or None) last reported in the journal; "" means nothing yet.
+announced_path = ""
+last_wait_log = 0.0
+
+
+def log(message):
+    print(f"ws-touchbar-fn: {message}", flush=True)
+
+
+def input_nodes():
+    """(event node, device name) pairs, read from sysfs without opening devices."""
+    nodes = []
+
+    for entry in sorted(glob.glob("/sys/class/input/event*")):
+        try:
+            with open(os.path.join(entry, "device/name"), encoding="utf-8", errors="replace") as handle:
+                name = handle.read().strip()
+        except OSError:
+            continue
+
+        nodes.append((os.path.join("/dev/input", os.path.basename(entry)), name))
+
+    return nodes
+
+
+def input_role(name):
+    """What the bridge reads from an input device, or None to ignore it."""
+    folded = name.casefold()
+
+    if "xremap" in folded:
+        return "xremap"
+
+    if name == "Lid Switch":
+        return "lid"
+
+    # The same devices hid-appletb-kbd itself watches for activity.
+    if "internal keyboard" in folded or name == TOUCHBAR_KEYS:
+        return "activity"
+
+    return None
+
+
+def lid_closed(fd):
+    bits = bytearray(8)
+    fcntl.ioctl(fd, eviocgsw(len(bits)), bits, True)
+    return bool(bits[SW_LID // 8] & (1 << (SW_LID % 8)))
+
+
+def find_mode_path():
+    paths = sorted(glob.glob(TOUCHBAR_GLOB))
+
+    for path in paths:
+        if os.path.isfile(path):
+            return path
+
+    return None
+
+
+def current_mode_path():
+    """Return the mode node, or None while hid-appletb-kbd is not bound."""
+    global mode_path, announced_path
+
+    if mode_path and os.path.exists(mode_path):
+        return mode_path
+
+    mode_path = find_mode_path()
+
+    # Only changes reach the journal, never single Fn presses.
+    if mode_path != announced_path:
+        announced_path = mode_path
+        if mode_path:
+            log(f"using Touch Bar mode node {mode_path}")
+        else:
+            log("hid-appletb-kbd is not bound (Touch Bar display mode or re-enumeration); idle")
+
+    return mode_path
+
+
+def read_mode(path):
+    with open(path, "r", encoding="ascii") as handle:
+        return int(handle.read().strip())
+
+
+def write_mode(path, value):
+    with open(path, "w", encoding="ascii") as handle:
+        handle.write(f"{value}\n")
+
+
+def restore_mode():
+    global saved_mode
+
+    if saved_mode is None:
+        return
+
+    path, old = saved_mode
+    saved_mode = None
+
+    try:
+        write_mode(path, old)
+    except OSError as exc:
+        # The node left with the native configuration; hid-appletb-kbd starts
+        # in its default mode the next time it binds.
+        if exc.errno not in VANISHED:
+            log(f"failed to restore Touch Bar mode {old}: {exc}")
+
+
+def fn_press():
+    global saved_mode
+
+    if saved_mode is not None:
+        return
+
+    path = current_mode_path()
+
+    if path is None:
+        return
+
+    current = read_mode(path)
+
+    if current == 1:
+        target = 2
+    elif current == 2:
+        target = 1
+    else:
+        # esc (0) and off (3) are left alone.
+        return
+
+    write_mode(path, target)
+    saved_mode = (path, current)
+
+
+def fn_release():
+    restore_mode()
+
+
+def handle_fn(value):
+    try:
+        if value == 1:
+            fn_press()
+        elif value == 0:
+            fn_release()
+        # value == 2 is autorepeat and is intentionally ignored.
+    except OSError as exc:
+        # The node can vanish between lookup and access.
+        if exc.errno not in VANISHED:
+            log(f"KEY_FN handling failed: {exc}")
+    except Exception as exc:
+        log(f"KEY_FN handling failed: {exc}")
+
+
+def read_param(name):
+    with open(os.path.join(PARAMS, name), "r", encoding="ascii") as handle:
+        return handle.read().strip()
+
+
+def write_param(name, value):
+    with open(os.path.join(PARAMS, name), "w", encoding="ascii") as handle:
+        handle.write(f"{value}\n")
+
+
+class Dimmer:
+    """hid-appletb-kbd's dim schedule, fed by every input the bridge reads."""
+
+    def __init__(self):
+        self.owned = False
+        self.native = False
+        self.lid_closed = False
+        self.level = None
+        self.last_activity = time.monotonic()
+        self.dim_after = 30
+        self.off_after = 15
+
+    def take_over(self):
+        try:
+            enabled = read_param("autodim") == "Y"
+        except OSError:
+            return
+
+        if not enabled:
+            log("hid-appletb-kbd autodim is off; leaving the Touch Bar backlight alone")
+            return
+
+        try:
+            # The state file goes first, so a crash in between still hands back.
+            with open(AUTODIM_STATE, "w", encoding="ascii") as handle:
+                handle.write("Y\n")
+            write_param("autodim", "N")
+        except OSError as exc:
+            log(f"autodim: cannot take dimming over from hid-appletb-kbd: {exc}")
+            try:
+                hand_back_after_exit()
+            except OSError:
+                pass
+            return
+
+        self.owned = True
+        log("autodim: typing through xremap now keeps the Touch Bar lit")
+
+    def hand_back(self):
+        if not self.owned:
+            return
+
+        self.owned = False
+
+        try:
+            write_param("autodim", "Y")
+            os.unlink(AUTODIM_STATE)
+        except OSError as exc:
+            log(f"autodim: failed to hand dimming back to hid-appletb-kbd: {exc}")
+
+        # The driver re-arms its timer on its next activity; leave the strip lit.
+        if self.native and not self.lid_closed:
+            self.set_level(FULL)
+
+    def managing(self):
+        return self.owned and self.native
+
+    def update_native(self, native):
+        if native == self.native:
+            return
+
+        self.native = native
+
+        if not native:
+            # appletbdrm and its owner control the backlight now.
+            self.level = None
+            return
+
+        try:
+            self.dim_after = max(1, int(read_param("dim_timeout")))
+            self.off_after = max(1, int(read_param("idle_timeout")))
+        except (OSError, ValueError):
+            pass
+
+        # Binding hid-appletb-kbd lights the strip, but the bridge may also
+        # (re)start while the driver had already dimmed or switched it off.
+        # Continue from the level the backlight shows now.
+        try:
+            with open(BACKLIGHT, "r", encoding="ascii") as handle:
+                self.level = int(handle.read().strip())
+        except (OSError, ValueError):
+            self.level = FULL
+
+        self.last_activity = time.monotonic()
+
+        if self.level == DIM:
+            self.last_activity -= self.dim_after
+
+        if self.managing() and self.lid_closed:
+            self.set_level(OFF)
+
+    def activity(self):
+        self.last_activity = time.monotonic()
+
+        if self.managing() and not self.lid_closed and self.level != FULL:
+            self.set_level(FULL)
+
+    def set_lid(self, closed):
+        if closed == self.lid_closed:
+            return
+
+        self.lid_closed = closed
+
+        if not closed:
+            self.activity()
+        elif self.managing():
+            self.set_level(OFF)
+
+    def deadline(self):
+        if not self.managing() or self.lid_closed:
+            return None
+
+        if self.level == FULL:
+            return self.last_activity + self.dim_after
+
+        if self.level == DIM:
+            return self.last_activity + self.dim_after + self.off_after
+
+        return None
+
+    def tick(self):
+        deadline = self.deadline()
+
+        if deadline is not None and time.monotonic() >= deadline:
+            self.set_level(DIM if self.level == FULL else OFF)
+
+    def set_level(self, level):
+        # Leaving native mode hands the backlight to touchbard; re-check first.
+        if not (mode_path and os.path.exists(mode_path)):
+            self.update_native(False)
+            return
+
+        try:
+            with open(BACKLIGHT, "w", encoding="ascii") as handle:
+                handle.write(f"{level}\n")
+        except OSError as exc:
+            if exc.errno not in VANISHED:
+                log(f"autodim: cannot set the Touch Bar backlight: {exc}")
+            return
+
+        self.level = level
+
+
+class Inputs:
+    """The event nodes the bridge reads, rescanned as devices come and go."""
+
+    def __init__(self, dimmer):
+        self.dimmer = dimmer
+        self.selector = selectors.DefaultSelector()
+        self.devices = {}
+
+    def sync(self):
+        wanted = {}
+
+        for path, name in input_nodes():
+            role = input_role(name)
+
+            if role:
+                wanted[path] = (role, name)
+
+        for path in list(self.devices):
+            if wanted.get(path) != self.devices[path][1:]:
+                self.close(path)
+
+        for path, (role, name) in wanted.items():
+            if path in self.devices:
+                continue
+
+            try:
+                fd = os.open(path, os.O_RDONLY | os.O_NONBLOCK | os.O_CLOEXEC)
+            except OSError:
+                continue
+
+            self.selector.register(fd, selectors.EVENT_READ, path)
+            self.devices[path] = (fd, role, name)
+
+            if role == "xremap":
+                log(f"listening on {path} ({name})")
+            elif role == "lid":
+                try:
+                    self.dimmer.set_lid(lid_closed(fd))
+                except OSError:
+                    pass
+
+    def has(self, role):
+        return any(device[1] == role for device in self.devices.values())
+
+    def close(self, path):
+        fd, role, _name = self.devices.pop(path)
+        self.selector.unregister(fd)
+        os.close(fd)
+
+        if role == "xremap":
+            # A held Fn is never released on a device that went away.
+            restore_mode()
+
+    def close_all(self):
+        for path in list(self.devices):
+            self.close(path)
+
+    def handle(self, path):
+        if path not in self.devices:
+            return
+
+        fd, role, _name = self.devices[path]
+
+        try:
+            data = os.read(fd, EVENT_SIZE * 64)
+        except BlockingIOError:
+            return
+        except OSError as exc:
+            # ENODEV once the device is gone; the next rescan opens replacements.
+            if exc.errno not in VANISHED:
+                log(f"input device error on {path}: {exc}")
+            self.close(path)
+            return
+
+        if not data:
+            self.close(path)
+            return
+
+        if role == "activity":
+            # Only the fact that something happened matters here.
+            self.dimmer.activity()
+            return
+
+        usable = len(data) - (len(data) % EVENT_SIZE)
+        events = [
+            InputEvent.from_buffer_copy(data[offset : offset + EVENT_SIZE])
+            for offset in range(0, usable, EVENT_SIZE)
+        ]
+
+        if role == "lid":
+            for event in events:
+                if event.type == EV_SW and event.code == SW_LID:
+                    self.dimmer.set_lid(event.value != 0)
+            return
+
+        self.dimmer.activity()
+
+        for event in events:
+            if event.type == EV_KEY and event.code == KEY_FN:
+                handle_fn(event.value)
+
+
+def hand_back_after_exit():
+    """Return autodim to hid-appletb-kbd if a bridge left the state file behind.
+
+    Runs as the unit's ExecStopPost, which also covers a crashed bridge. The
+    driver believes the strip is lit, so make that true while it is bound."""
+    try:
+        with open(AUTODIM_STATE, "r", encoding="ascii") as handle:
+            value = handle.read().strip() or "Y"
+    except FileNotFoundError:
+        return
+
+    write_param("autodim", value)
+    os.unlink(AUTODIM_STATE)
+
+    if find_mode_path():
+        with open(BACKLIGHT, "w", encoding="ascii") as handle:
+            handle.write(f"{FULL}\n")
+
+
+def stop_handler(_signum, _frame):
+    raise SystemExit(0)
+
+
+def main():
+    global last_wait_log
+
+    if sys.argv[1:] == ["--hand-back"]:
+        hand_back_after_exit()
+        return
+
+    signal.signal(signal.SIGTERM, stop_handler)
+    signal.signal(signal.SIGINT, stop_handler)
+
+    log("started")
+
+    dimmer = Dimmer()
+    inputs = Inputs(dimmer)
+    next_scan = 0.0
+
+    try:
+        dimmer.take_over()
+
+        while True:
+            now = time.monotonic()
+
+            if now >= next_scan:
+                inputs.sync()
+                dimmer.update_native(current_mode_path() is not None)
+
+                if not inputs.has("xremap") and now - last_wait_log >= 10:
+                    log("waiting for an xremap virtual input device")
+                    last_wait_log = now
+
+                next_scan = now + RESCAN_SECONDS
+
+            wake = next_scan
+            deadline = dimmer.deadline()
+
+            if deadline is not None:
+                wake = min(wake, deadline)
+
+            for key, _mask in inputs.selector.select(max(0.0, wake - time.monotonic())):
+                inputs.handle(key.data)
+
+            dimmer.tick()
+    finally:
+        inputs.close_all()
+        restore_mode()
+        dimmer.hand_back()
+
+
+if __name__ == "__main__":
+    main()

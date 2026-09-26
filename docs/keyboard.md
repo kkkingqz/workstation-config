@@ -1,6 +1,6 @@
 title: ws-keyboard
 section: 1
-date: 2026-09-23
+date: 2026-09-25
 source: Workstation
 volume: User Commands
 
@@ -65,8 +65,9 @@ xremap запускается как systemd user service и создаёт virt
 workstation-xremap
 ```
 
-`Dynamic Function Row Virtual Input Device` исключён из xremap, чтобы не
-создавать цикл между xremap и Touch Bar.
+`Dynamic Function Row Virtual Input Device` исключён из xremap как защита от
+петли между xremap и Touch Bar daemon. В текущем родном режиме Touch Bar такого
+устройства нет.
 
 ## Основные системные shortcuts
 
@@ -464,23 +465,9 @@ Extension использует Tiling Assistant как backend:
 
 ## Touch Bar / Fn
 
-Текущий Touch Bar renderer:
-
-```text
-tiny-dfr
-```
-
-Source config:
-
-```text
-config/tiny-dfr/config.toml
-```
-
-Runtime config:
-
-```text
-/etc/tiny-dfr/config.toml
-```
+Touch Bar работает в родном режиме: кнопки рисует T2, режимом управляет
+`hid-appletb-kbd` (`/etc/modprobe.d/tb.conf`, `mode=1`). Touch Bar закреплён в
+USB configuration 1, `appletbdrm` и `tiny-dfr` не используются.
 
 Поведение:
 
@@ -490,18 +477,22 @@ hold Fn      media / brightness
 release Fn   F1..F12
 ```
 
-`DoublePressSwitchLayers = 0`, поэтому double-Fn не фиксирует другой layer.
-
-Старый `ws-touchbar-fn.service` удалён.
-
-xremap для Apple Fn использует:
+xremap забирает события встроенной клавиатуры, поэтому штатное переключение
+по Fn в `hid-appletb-kbd` за ним не срабатывает. xremap для Apple Fn использует:
 
 ```text
 skip_key_event: false
 ```
 
-поэтому KEY_FN остаётся видимым tiny-dfr через virtual keyboard
-`workstation-xremap`.
+поэтому KEY_FN остаётся на virtual keyboard `workstation-xremap`. Его слушает
+`ws-touchbar-fn.service`: пока Fn зажата, `hid-appletb-kbd` переключается в
+mode 2 (media/brightness), при отпускании возвращается mode 1.
+
+Подробности и причины отказа от `tiny-dfr`:
+
+```console
+helpws touchbar
+```
 
 ## Source of truth
 
@@ -527,7 +518,11 @@ bin/ws-workstation-verify
 systemd/user/xremap.service
 system/udev/99-workstation-uinput.rules
 
-config/tiny-dfr/config.toml
+system/udev/90-touchbar-native.rules
+system/modprobe/tb.conf
+system/modprobe/touchbar-native.conf
+system/usr/local/libexec/ws-touchbar-fn
+system/systemd/system/ws-touchbar-fn.service
 
 gnome/extensions/workstation-smart-popup@local/
   extension.js
@@ -593,8 +588,9 @@ Extension sources устанавливаются через:
 ws-keyboard-install-extensions
 ```
 
-System-level baseline (udev, GDM EN, tiny-dfr runtime config) применяется
-отдельно, потому что требует `sudo`:
+System-level baseline (uinput udev, GDM EN, Touch Bar native mode: udev rule,
+modprobe options, `ws-touchbar-fn.service`) применяется отдельно, потому что
+требует `sudo`:
 
 ```console
 ws-keyboard-system-apply
@@ -612,8 +608,8 @@ ws-keyboard restore
 
 восстанавливает исходный snapshot GNOME shortcuts и останавливает xremap.
 
-Он не удаляет Tiling Assistant, Window Control, tiny-dfr или локальные GNOME
-extensions. Их lifecycle управляется отдельно.
+Он не удаляет Tiling Assistant, Window Control, `ws-touchbar-fn` или локальные
+GNOME extensions. Их lifecycle управляется отдельно.
 
 ## Проверка
 
@@ -639,7 +635,7 @@ gnome-extensions info window-control@carlo9890.github.io
 gnome-extensions info workstation-smart-popup@local
 gnome-extensions info workstation-input-source@local
 
-systemctl status tiny-dfr.service
+systemctl status ws-touchbar-fn.service
 ```
 
 ## Подтверждённый baseline
@@ -661,6 +657,6 @@ EN / RU / UA                          OK
 CapsLock logic + LED                  OK
 GDM/login EN                          OK
 GNOME unlock-dialog EN                OK
-tiny-dfr F1/Fn media                  OK
+Touch Bar F1/Fn media (native)        OK
 xremap service / uinput               OK
 ```

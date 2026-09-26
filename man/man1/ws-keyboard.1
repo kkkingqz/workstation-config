@@ -1,5 +1,5 @@
 .\" -*- mode: troff; coding: utf-8 -*-
-.TH "ws-keyboard" "1" "2026-09-23" "Workstation" "User Commands"
+.TH "ws-keyboard" "1" "2026-09-25" "Workstation" "User Commands"
 .SH KEYBOARD — FINAL macOS-STYLE PROFILE ON GNOME
 .SS
 Назначение
@@ -61,8 +61,9 @@ xremap запускается как systemd user service и создаёт virt
 workstation-xremap
 .EE
 .PP
-\f(CRDynamic Function Row Virtual Input Device\fR исключён из xremap, чтобы не
-создавать цикл между xremap и Touch Bar.
+\f(CRDynamic Function Row Virtual Input Device\fR исключён из xremap как защита от
+петли между xremap и Touch Bar daemon. В текущем родном режиме Touch Bar такого
+устройства нет.
 .SS
 Основные системные shortcuts
 .LP
@@ -480,23 +481,9 @@ Extension использует Tiling Assistant как backend:
 .SS
 Touch Bar / Fn
 .LP
-Текущий Touch Bar renderer:
-.LP
-.EX
-tiny-dfr
-.EE
-.PP
-Source config:
-.LP
-.EX
-config/tiny-dfr/config.toml
-.EE
-.PP
-Runtime config:
-.LP
-.EX
-/etc/tiny-dfr/config.toml
-.EE
+Touch Bar работает в родном режиме: кнопки рисует T2, режимом управляет
+\f(CRhid-appletb-kbd\fR (\f(CR/etc/modprobe.d/tb.conf\fR, \f(CRmode=1\fR). Touch Bar закреплён в
+USB configuration 1, \f(CRappletbdrm\fR и \f(CRtiny-dfr\fR не используются.
 .PP
 Поведение:
 .LP
@@ -506,18 +493,22 @@ hold Fn      media / brightness
 release Fn   F1..F12
 .EE
 .PP
-\f(CRDoublePressSwitchLayers = 0\fR, поэтому double-Fn не фиксирует другой layer.
-.PP
-Старый \f(CRws-touchbar-fn.service\fR удалён.
-.PP
-xremap для Apple Fn использует:
+xremap забирает события встроенной клавиатуры, поэтому штатное переключение
+по Fn в \f(CRhid-appletb-kbd\fR за ним не срабатывает. xremap для Apple Fn использует:
 .LP
 .EX
 skip_key_event: false
 .EE
 .PP
-поэтому KEY_FN остаётся видимым tiny-dfr через virtual keyboard
-\f(CRworkstation-xremap\fR.
+поэтому KEY_FN остаётся на virtual keyboard \f(CRworkstation-xremap\fR. Его слушает
+\f(CRws-touchbar-fn.service\fR: пока Fn зажата, \f(CRhid-appletb-kbd\fR переключается в
+mode 2 (media/brightness), при отпускании возвращается mode 1.
+.PP
+Подробности и причины отказа от \f(CRtiny-dfr\fR:
+.LP
+.EX
+helpws touchbar
+.EE
 .SS
 Source of truth
 .LP
@@ -543,7 +534,11 @@ bin/ws-workstation-verify
 systemd/user/xremap.service
 system/udev/99-workstation-uinput.rules
 
-config/tiny-dfr/config.toml
+system/udev/90-touchbar-native.rules
+system/modprobe/tb.conf
+system/modprobe/touchbar-native.conf
+system/usr/local/libexec/ws-touchbar-fn
+system/systemd/system/ws-touchbar-fn.service
 
 gnome/extensions/workstation-smart-popup@local/
   extension.js
@@ -609,8 +604,9 @@ Extension sources устанавливаются через:
 ws-keyboard-install-extensions
 .EE
 .PP
-System-level baseline (udev, GDM EN, tiny-dfr runtime config) применяется
-отдельно, потому что требует \f(CRsudo\fR:
+System-level baseline (uinput udev, GDM EN, Touch Bar native mode: udev rule,
+modprobe options, \f(CRws-touchbar-fn.service\fR) применяется отдельно, потому что
+требует \f(CRsudo\fR:
 .LP
 .EX
 ws-keyboard-system-apply
@@ -628,8 +624,8 @@ ws-keyboard restore
 .LP
 восстанавливает исходный snapshot GNOME shortcuts и останавливает xremap.
 .PP
-Он не удаляет Tiling Assistant, Window Control, tiny-dfr или локальные GNOME
-extensions. Их lifecycle управляется отдельно.
+Он не удаляет Tiling Assistant, Window Control, \f(CRws-touchbar-fn\fR или локальные
+GNOME extensions. Их lifecycle управляется отдельно.
 .SS
 Проверка
 .LP
@@ -655,7 +651,7 @@ gnome-extensions info window-control@carlo9890.github.io
 gnome-extensions info workstation-smart-popup@local
 gnome-extensions info workstation-input-source@local
 
-systemctl status tiny-dfr.service
+systemctl status ws-touchbar-fn.service
 .EE
 .SS
 Подтверждённый baseline
@@ -677,6 +673,6 @@ EN / RU / UA                          OK
 CapsLock logic + LED                  OK
 GDM/login EN                          OK
 GNOME unlock-dialog EN                OK
-tiny-dfr F1/Fn media                  OK
+Touch Bar F1/Fn media (native)        OK
 xremap service / uinput               OK
 .EE

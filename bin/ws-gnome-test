@@ -17,7 +17,7 @@ Options:
 Read-only final smoke-test for the host GNOME layer.
 
 Explicitly OUT OF SCOPE:
-  - tiny-dfr / Touch Bar
+  - Touch Bar
   - Flatpak application integration
   - Distrobox application integration
   - Wine
@@ -81,7 +81,7 @@ service_active() {
 echo "GNOME host smoke-test"
 echo "Time: $(date --iso-8601=seconds 2>/dev/null || date)"
 echo "Mode: READ-ONLY"
-echo "Scope: GNOME host layer only; tiny-dfr/Flatpak/Distrobox/Wine excluded"
+echo "Scope: GNOME host layer only; Touch Bar/Flatpak/Distrobox/Wine excluded"
 
 section "1. Session / compositor"
 
