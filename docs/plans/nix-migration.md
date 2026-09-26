@@ -788,14 +788,16 @@ WARN/FAIL/DRIFT/DIFFERS/MISSING и итог `FAIL=… WARN=…`. На текущ
 **Откат:** предыдущее поколение home-manager; `runtime/` до удаления
 остаётся рядом.
 
-**Ход (2026-09-26):** `pkgs/xremap.nix` (fetchurl zip по SRI-hash, unzip,
+**Итог (2026-09-26):** `pkgs/xremap.nix` (fetchurl zip по SRI-hash, unzip,
 без patchelf/strip) → sha256 бинарника из store `3da5ec8a…227e` равен
 `runtime/xremap/v0.15.13/xremap`; `modules/home/xremap.nix` — ссылка
 `~/.local/bin/xremap` на store. switch и `ws-keyboard restart`: сервис
 активен, аргументы и выбор устройств прежние. verify проверяет, что
 бинарник из Nix и его sha256. `ws baseline diff phase-2 phase-3` — только
-путь `xremap` (хэш прежний). Осталось: ручная матрица → reboot → матрица →
-suspend → матрица, затем удалить `runtime/` и поставить тег.
+путь `xremap` (хэш прежний). Матрица, reboot и два suspend пройдены,
+сервис после resume работает без перезапуска. `runtime/` перенесён в
+`~/.local/state/workstation/runtime-before-nix-phase-3` (не в repo),
+verify: FAIL 0, WARN 0. Тег `nix-phase-3`.
 
 ---
 
