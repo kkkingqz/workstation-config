@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=Ghostty (Open Here)
+Comment=Open Ghostty in selected directory
+Exec=/usr/bin/ghostty --gtk-single-instance=false
+TryExec=/usr/bin/ghostty
+Type=Application
+Terminal=false
+Categories=System;TerminalEmulator;
+X-TerminalArgExec=-e
+X-TerminalArgDir=--working-directory=

@@ -1394,6 +1394,55 @@ if [[ -e /etc/systemd/system/tiny-dfr-sleep.service ]]; then
     warn "obsolete /etc/systemd/system/tiny-dfr-sleep.service still exists"
 fi
 
+section "14.2 Captured T2 / boot / recovery system files"
+
+# Captured byte-for-byte before the Nix migration (docs/plans/nix-migration.md,
+# phase -1). They are not installed by any apply script yet; verify only
+# checks that the running system still matches the repository.
+for pair in \
+    "system/udev/30-amdgpu-pm.rules:/etc/udev/rules.d/30-amdgpu-pm.rules" \
+    "system/udev/99-network-t2-ncm.rules:/etc/udev/rules.d/99-network-t2-ncm.rules" \
+    "system/NetworkManager/conf.d/99-network-t2-ncm.conf:/etc/NetworkManager/conf.d/99-network-t2-ncm.conf" \
+    "system/modprobe/apple-gmux.conf:/etc/modprobe.d/apple-gmux.conf" \
+    "system/modules-load.d/t2.conf:/etc/modules-load.d/t2.conf" \
+    "system/systemd/system/get-apple-firmware.service:/etc/systemd/system/get-apple-firmware.service" \
+    "system/boot/refind_linux.conf:/boot/refind_linux.conf" \
+    "system/default/grub.d/99-recovery-menu.cfg:/etc/default/grub.d/99-recovery-menu.cfg" \
+    "system/usr/local/sbin/system-backup-snapshot:/usr/local/sbin/system-backup-snapshot"
+do
+    tracked "${pair%%:*}" "${pair%%:*}"
+    compare_file "$repo/${pair%%:*}" "${pair#*:}" "runtime ${pair#*:} matches repo"
+done
+[[ -e "$repo/system/usr/local/sbin/system-backup-snapshot" ]] \
+    && check_exec_tracked "system/usr/local/sbin/system-backup-snapshot"
+
+systemctl is-enabled --quiet get-apple-firmware.service 2>/dev/null \
+    && pass "get-apple-firmware.service enabled" \
+    || fail "get-apple-firmware.service not enabled"
+
+if [[ -e /etc/default/grub.d/90-pcie-aspm.cfg ]]; then
+    warn "/etc/default/grub.d/90-pcie-aspm.cfg forces ASPM on GRUB/recovery kernels (docs/suspend.md)"
+else
+    pass "no forced ASPM in GRUB drop-ins"
+fi
+
+section "14.3 Default terminal (xdg-terminal-exec)"
+
+for name in xdg-terminals.list ubuntu-xdg-terminals.list; do
+    tracked "config/xdg-terminals/$name" "config/xdg-terminals/$name"
+    check_symlink_target "$HOME/.config/$name" "$repo/config/xdg-terminals/$name" \
+        "~/.config/$name points into repo"
+    if grep -Fxq 'ghostty-open-here.desktop' "$HOME/.config/$name" 2>/dev/null; then
+        pass "$name selects ghostty-open-here.desktop"
+    else
+        fail "$name does not select ghostty-open-here.desktop"
+    fi
+done
+tracked "config/xdg-terminals/ghostty-open-here.desktop" "config/xdg-terminals/ghostty-open-here.desktop"
+check_symlink_target "$HOME/.local/share/applications/ghostty-open-here.desktop" \
+    "$repo/config/xdg-terminals/ghostty-open-here.desktop" \
+    "ghostty-open-here.desktop points into repo"
+
 section "15. Extension schema source / generated files"
 
 for uuid in workstation-smart-popup@local workstation-input-source@local; do

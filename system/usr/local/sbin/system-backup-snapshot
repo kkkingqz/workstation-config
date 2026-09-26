@@ -1,0 +1,315 @@
+#!/usr/bin/env bash
+
+set -Eeuo pipefail
+
+if [[ $EUID -ne 0 ]]; then
+    echo "Run as root:"
+    echo "  sudo system-backup-snapshot"
+    exit 1
+fi
+
+SNAPDIR="/.snapshots"
+GRUB_SCRIPT="/etc/grub.d/41_backup_snapshot"
+BOOT_RECOVERY="/boot/recovery"
+
+ROOT_SOURCE="$(findmnt -no SOURCE /)"
+ROOT_DEV="$(printf '%s\n' "$ROOT_SOURCE" | sed 's/\[.*$//')"
+ROOT_UUID="$(blkid -s UUID -o value "$ROOT_DEV")"
+
+if [[ -z "$ROOT_DEV" || -z "$ROOT_UUID" ]]; then
+    echo "ERROR: Cannot determine root Btrfs device/UUID."
+    exit 1
+fi
+
+if [[ "$(findmnt -no FSTYPE /)" != "btrfs" ]]; then
+    echo "ERROR: / is not Btrfs."
+    exit 1
+fi
+
+if ! mountpoint -q "$SNAPDIR"; then
+    echo "ERROR: $SNAPDIR is not mounted."
+    exit 1
+fi
+
+if [[ "$(findmnt -no FSTYPE "$SNAPDIR")" != "btrfs" ]]; then
+    echo "ERROR: $SNAPDIR is not Btrfs."
+    exit 1
+fi
+
+echo "Root device : $ROOT_DEV"
+echo "Root UUID   : $ROOT_UUID"
+echo "Snapshots   : $SNAPDIR"
+echo
+
+delete_subvolume()
+{
+    local path="$1"
+
+    if btrfs subvolume show "$path" >/dev/null 2>&1; then
+        btrfs property set -ts "$path" ro false >/dev/null 2>&1 || true
+        btrfs subvolume delete "$path"
+    fi
+}
+
+#
+# Remove stale *.new from interrupted previous run
+#
+
+delete_subvolume "$SNAPDIR/recovery.new"
+delete_subvolume "$SNAPDIR/backup-ro.new"
+
+rm -rf /boot/recovery.new
+
+echo "Creating read-only master snapshot..."
+
+btrfs subvolume snapshot -r \
+    / \
+    "$SNAPDIR/backup-ro.new"
+
+echo "Creating writable recovery snapshot..."
+
+btrfs subvolume snapshot \
+    "$SNAPDIR/backup-ro.new" \
+    "$SNAPDIR/recovery.new"
+
+#
+# recovery must mount itself as /
+#
+
+FSTAB="$SNAPDIR/recovery.new/etc/fstab"
+
+if [[ ! -f "$FSTAB" ]]; then
+    echo "ERROR: snapshot has no /etc/fstab"
+    exit 1
+fi
+
+python3 - "$FSTAB" <<'PY'
+import sys
+
+path = sys.argv[1]
+
+with open(path, "r", encoding="utf-8") as f:
+    lines = f.readlines()
+
+out = []
+
+for line in lines:
+    stripped = line.strip()
+
+    if not stripped or stripped.startswith("#"):
+        out.append(line)
+        continue
+
+    fields = line.split()
+
+    if len(fields) >= 4 and fields[1] == "/" and fields[2] == "btrfs":
+        opts = fields[3].split(",")
+
+        opts = [
+            o for o in opts
+            if not o.startswith("subvol=")
+            and not o.startswith("subvolid=")
+        ]
+
+        opts.append("subvol=.snapshots/recovery")
+        fields[3] = ",".join(opts)
+
+        line = "\t".join(fields) + "\n"
+
+    out.append(line)
+
+with open(path, "w", encoding="utf-8") as f:
+    f.writelines(out)
+PY
+
+#
+# Determine newest kernel inside snapshot
+#
+
+KERNEL="$(
+    find "$SNAPDIR/recovery.new/boot" \
+        -maxdepth 1 \
+        -type f \
+        -name 'vmlinuz-*' \
+        -printf '%f\n' \
+    | sort -V \
+    | tail -n1
+)"
+
+if [[ -z "$KERNEL" ]]; then
+    echo "ERROR: no kernel found in recovery snapshot."
+    exit 1
+fi
+
+KVER="${KERNEL#vmlinuz-}"
+INITRD="initrd.img-$KVER"
+
+if [[ ! -f "$SNAPDIR/recovery.new/boot/$INITRD" ]]; then
+    echo "ERROR: matching initrd not found:"
+    echo "  $INITRD"
+    exit 1
+fi
+
+echo "Recovery kernel: $KERNEL"
+echo "Recovery initrd: $INITRD"
+
+#
+# Copy snapshot kernel/initrd to current /boot.
+#
+# This intentionally avoids depending on GRUB being able to navigate
+# directly into the recovery subvolume.
+#
+
+mkdir -p /boot/recovery.new
+
+cp -a \
+    "$SNAPDIR/recovery.new/boot/$KERNEL" \
+    "/boot/recovery.new/$KERNEL"
+
+cp -a \
+    "$SNAPDIR/recovery.new/boot/$INITRD" \
+    "/boot/recovery.new/$INITRD"
+
+#
+# Find the actual Btrfs path GRUB currently uses for /boot.
+#
+# Depending on GRUB/Btrfs setup it may be:
+#
+#   /@/boot
+#
+# or:
+#
+#   /boot
+#
+
+GRUB_KERNEL_PATH="$(
+    grep -m1 -E \
+        '^[[:space:]]*linux(efi)?[[:space:]]+/' \
+        /boot/grub/grub.cfg \
+    | awk '{print $2}'
+)"
+
+if [[ -z "$GRUB_KERNEL_PATH" ]]; then
+    echo "ERROR: cannot determine current GRUB kernel path."
+    exit 1
+fi
+
+GRUB_BOOT_DIR="$(dirname "$GRUB_KERNEL_PATH")"
+
+echo "GRUB boot path: $GRUB_BOOT_DIR"
+
+#
+# Preserve one previous generation, but don't expose it in GRUB.
+#
+
+delete_subvolume "$SNAPDIR/recovery.previous"
+delete_subvolume "$SNAPDIR/backup-ro.previous"
+
+rm -rf /boot/recovery.previous
+
+if btrfs subvolume show "$SNAPDIR/recovery" >/dev/null 2>&1; then
+    mv \
+        "$SNAPDIR/recovery" \
+        "$SNAPDIR/recovery.previous"
+fi
+
+if btrfs subvolume show "$SNAPDIR/backup-ro" >/dev/null 2>&1; then
+    mv \
+        "$SNAPDIR/backup-ro" \
+        "$SNAPDIR/backup-ro.previous"
+fi
+
+if [[ -d "$BOOT_RECOVERY" ]]; then
+    mv \
+        "$BOOT_RECOVERY" \
+        /boot/recovery.previous
+fi
+
+mv \
+    "$SNAPDIR/backup-ro.new" \
+    "$SNAPDIR/backup-ro"
+
+mv \
+    "$SNAPDIR/recovery.new" \
+    "$SNAPDIR/recovery"
+
+mv \
+    /boot/recovery.new \
+    "$BOOT_RECOVERY"
+
+#
+# Copy current cmdline but remove root-specific arguments.
+#
+
+EXTRA_ARGS=()
+
+for arg in $(cat /proc/cmdline); do
+    case "$arg" in
+        BOOT_IMAGE=*|root=*|rootflags=*|ro|rw)
+            ;;
+        *)
+            EXTRA_ARGS+=("$arg")
+            ;;
+    esac
+done
+
+EXTRA="${EXTRA_ARGS[*]}"
+
+#
+# Generate GRUB entry
+#
+
+cat > "$GRUB_SCRIPT" <<EOF
+#!/bin/sh
+
+cat <<'GRUBENTRY'
+menuentry 'Ubuntu — Backup snapshot' --class ubuntu --class gnu-linux --class gnu --class os {
+    insmod btrfs
+
+    search --no-floppy \
+        --fs-uuid \
+        --set=root \
+        $ROOT_UUID
+
+    echo 'Loading recovery kernel...'
+
+    linux \
+        $GRUB_BOOT_DIR/recovery/$KERNEL \
+        root=UUID=$ROOT_UUID \
+        rw \
+        rootflags=subvol=.snapshots/recovery \
+        $EXTRA
+
+    echo 'Loading recovery initramfs...'
+
+    initrd \
+        $GRUB_BOOT_DIR/recovery/$INITRD
+}
+GRUBENTRY
+EOF
+
+chmod 755 "$GRUB_SCRIPT"
+
+echo
+echo "Updating GRUB..."
+
+update-grub
+
+echo
+echo "Validating GRUB config..."
+
+grub-script-check /boot/grub/grub.cfg
+
+echo
+echo "Snapshot created successfully."
+echo
+echo "Read-only master:"
+echo "  $SNAPDIR/backup-ro"
+echo
+echo "Bootable recovery:"
+echo "  $SNAPDIR/recovery"
+echo
+echo "Previous generation (hidden):"
+echo "  $SNAPDIR/backup-ro.previous"
+echo "  $SNAPDIR/recovery.previous"
+
