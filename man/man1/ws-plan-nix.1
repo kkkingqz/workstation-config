@@ -767,7 +767,8 @@ phase-0\fR — только ожидаемое: новые проверки veri
 \f(CRapfs\fR не загружен (строка \f(CR/mnt/apple\fR удалена в фазе −1). \f(CRws-baseline\fR
 теперь сравнивает verify без строк состояния git и без встроенного
 \f(CRwsbox check\fR (он зависит от того, запущены ли контейнеры, и сравнивается
-отдельно). CI — после push.
+отдельно). CI зелёный (run 36256163512: \f(CRnix flake check\fR собирает
+поколение, синтаксис скриптов); тег \f(CRnix-phase-0\fR на \f(CR85f70bf\fR.
 .PP
 \fBОткат:\fR \f(CRsudo apt purge nix-bin nix-setup-systemd\fR, убрать строку
 \f(CR@nix\fR из fstab, удалить subvolume \f(CR@nix\fR, группу \f(CRnix-users\fR и ссылки
