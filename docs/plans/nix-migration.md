@@ -82,6 +82,48 @@ initramfs.
 Nix не видят схем GSettings хоста и PyGObject/Atspi из apt. Скрипты не
 упаковываются через `writeShellApplication` и не проходят `patchShebangs`.
 
+## Формат конфигов: только отличия, но целыми файлами
+
+В репозитории хранится только то, чем машина отличается от стандартной
+Ubuntu, GNOME и приложений. Как именно — зависит от того, кому принадлежит
+место, куда пишется настройка:
+
+```text
+Место                           Как храним                      Примеры
+Хранилище с дефолтами схемы     только изменённые ключи          dconf (settings.conf,
+                                                                 shortcuts, Tiling),
+                                                                 Flatpak overrides
+Каталог drop-in у пакета        свой файл целиком; сам файл —    sleep.conf.d, modprobe.d,
+                                дельта, пакетный не трогаем      udev rules.d, modules-load.d,
+                                                                 NetworkManager/conf.d,
+                                                                 default/grub.d
+Файл пакета без drop-in         правка своих ключей на месте,    /etc/default/keyboard,
+                                не копия всего файла             /etc/fstab
+Файл, целиком наш               полный файл                      config/fish, config/ghostty,
+(пакету не принадлежит)                                          xremap.yml, refind_linux.conf,
+                                                                 unit'ы и скрипты system/
+Различия между машинами         только отличающиеся факты        hosts/<name>/facts.nix
+```
+
+Полный файл пакета (как `/etc/default/grub`) в репозиторий не копируется:
+при обновлении пакета ucf будет спрашивать про конфликт, а новые
+дефолты пакета перестанут доходить до машины.
+
+Цена дельт:
+
+- **Удаление ключа из дельты не возвращает значение по умолчанию.** Его надо
+  сбросить явно: `wsflatpak` делает `--reset` приложения перед применением,
+  `ws-gnome` — `rollback`, для dconf-ключей — явное значение по умолчанию.
+- **Дефолт дистрибутива может измениться при обновлении.** Если конкретное
+  значение важно, оно пишется в дельту явно, даже если сейчас совпадает с
+  дефолтом.
+- **`check` сравнивает только наши файлы и ключи.** Целостность пакетных
+  файлов проверяют `dpkg --verify` и `ucfq`.
+
+Ghostty и fish — тот же принцип на уровне приложения: в
+`config/ghostty/*.ghostty` только отличия от дефолтов Ghostty, но хранятся
+они целыми файлами, потому что весь файл наш.
+
 ## Правила на всю миграцию
 
 - **Один владелец.** Перенос части и удаление старого механизма — в одном
@@ -124,8 +166,16 @@ Recovery в нынешнем виде, скорее всего, не подни�
   включая `initrd=boot\initrd.img-…` от rEFInd;
 - ядро для recovery выбирается как самое новое по `sort -V`, без
   предпочтения T2;
-- `GRUB_TIMEOUT_STYLE=hidden` и `GRUB_TIMEOUT=0`: меню с другими ядрами и
-  snapshot'ом приходится ловить клавишей Esc.
+- в `/etc/default/grub.d/` лежит `90-pcie-aspm.cfg` (2026-09-18): он
+  добавляет `pcie_aspm=force pcie_aspm.policy=powersave` ко всем пунктам
+  GRUB, то есть к ядрам, которые грузятся через recovery. С этими
+  параметрами T2 отказывала в stateful suspend (`docs/suspend.md`), из
+  rEFInd они убраны 2026-09-25, а здесь остались.
+
+Меню GRUB уже видно: `99-recovery-menu.cfg` в том же каталоге ставит
+`GRUB_TIMEOUT_STYLE=menu` и `GRUB_TIMEOUT=5` поверх `hidden`/`0` из
+`/etc/default/grub`. В версиях 2 и 3 до 2026-09-26 это было описано
+неверно — смотрелся только `/etc/default/grub`.
 
 Всё это исправляется в фазе −1.
 
@@ -323,9 +373,20 @@ bin/, config/, system/, kernel/, gnome/, docs/, man/, state/   — как сей
    `sudo findmnt --verify`. Делается до обновления recovery, чтобы
    исправленный fstab попал в snapshot.
 
-3. **GRUB как меню восстановления.** В `/etc/default/grub`:
-   `GRUB_TIMEOUT_STYLE=menu`, `GRUB_TIMEOUT=10`, затем `sudo update-grub`.
-   Обычную загрузку это не замедляет: она идёт через rEFInd.
+3. **GRUB: только drop-in'ы.** Меню уже включено `99-recovery-menu.cfg`.
+   - удалить `/etc/default/grub.d/90-pcie-aspm.cfg`: forced ASPM не
+     используется (`docs/suspend.md`), recovery-ядра должны грузиться с теми
+     же параметрами, что и обычные;
+   - свои параметры ядра вынести из `/etc/default/grub` в
+     `/etc/default/grub.d/10-workstation-cmdline.cfg`
+     (`GRUB_CMDLINE_LINUX_DEFAULT="quiet splash intel_iommu=on iommu=pt
+     pm_async=off"`), а сам `/etc/default/grub` вернуть к шаблону пакета
+     (`/usr/share/grub/default/grub`). Итоговый `grub.cfg` не меняется, кроме
+     ушедшего `pcie_aspm` — сверить до и после `update-grub`;
+   - `kdump-tools.cfg` принадлежит пакету `kdump-tools`, не трогать.
+
+   Затем `sudo update-grub`. Обычную загрузку это не затрагивает: она идёт
+   через rEFInd.
 
 4. **`system-backup-snapshot`.** Сначала захватить как есть в
    `system/usr/local/sbin/system-backup-snapshot` (отдельный коммит), затем
@@ -352,7 +413,8 @@ bin/, config/, system/, kernel/, gnome/, docs/, man/, state/   — как сей
    /etc/modules-load.d/t2.conf                       → system/modules-load.d/
    /etc/systemd/system/get-apple-firmware.service    → system/systemd/system/
    /boot/refind_linux.conf                           → system/boot/
-   /etc/default/grub                                 → system/default/  (после шага 3)
+   /etc/default/grub.d/10-workstation-cmdline.cfg    → system/default/grub.d/  (после шага 3)
+   /etc/default/grub.d/99-recovery-menu.cfg          → system/default/grub.d/
    refind.conf с раздела rEFInd                      → system/esp/  (только check)
    ```
 
@@ -658,7 +720,8 @@ Nix собирает дерево файлов хоста из `system/` и `con
 
 ```text
 common           99-workstation-uinput.rules, modules-load.d/ntsync.conf
-boot             /boot/refind_linux.conf, /etc/default/grub,
+boot             /boot/refind_linux.conf, grub.d/10-workstation-cmdline.cfg,
+                 grub.d/99-recovery-menu.cfg,
                  /usr/local/sbin/system-backup-snapshot, refind.conf (check)
 t2-mbp16         90-touchbar-native.rules, 70-bcm4364-no-d3cold.rules,
                  30-amdgpu-pm.rules, 99-network-t2-ncm.rules + NM conf,
@@ -669,7 +732,7 @@ t2-mbp16         90-touchbar-native.rules, 70-bcm4364-no-d3cold.rules,
                  get-apple-firmware.service
 ```
 
-`refind_linux.conf` и `GRUB_CMDLINE_LINUX_DEFAULT` собираются из
+`refind_linux.conf` и `10-workstation-cmdline.cfg` собираются из
 `facts.kernelParams`. Сборка должна дать ровно нынешние файлы.
 
 Сначала работают только `diff` и `check`. **Критерий 4a — первый
@@ -701,7 +764,7 @@ udev             control --reload-rules; trigger --subsystem-match=input
                  --action=change; settle
 initramfs        update-initramfs -u -k $(uname -r) только если изменились
                  modprobe-файлы (опции hid-appletb-kbd читаются из initramfs)
-grub             update-grub только если изменился /etc/default/grub
+grub             update-grub только если изменились файлы grub.d
 проверка         cmp всех файлов; ws-touchbar-fn active; предупреждения
                  про Touch Bar config и tiny-dfr, как сейчас
 ```
@@ -840,3 +903,7 @@ PASS, `ws baseline diff` пуст»:
   не меняются.
 - Фазы: убраны «Внешний вид GNOME», «Flatpak и Distrobox» и «Клавиатурный
   слой»; добавлены «Оркестратор» и «Бинарник xremap».
+- Добавлен раздел «Формат конфигов»: в репозитории только отличия от
+  стандартной системы; `/etc/default/grub` заменён drop-in'ами `grub.d`.
+- Исправлено: меню GRUB уже включено `99-recovery-menu.cfg`; найден
+  устаревший `90-pcie-aspm.cfg`, он удаляется в фазе −1.

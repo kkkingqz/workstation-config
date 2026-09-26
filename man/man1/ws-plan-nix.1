@@ -97,6 +97,58 @@ initramfs.
 Nix не видят схем GSettings хоста и PyGObject/Atspi из apt. Скрипты не
 упаковываются через \f(CRwriteShellApplication\fR и не проходят \f(CRpatchShebangs\fR.
 .SS
+Формат конфигов: только отличия, но целыми файлами
+.LP
+В репозитории хранится только то, чем машина отличается от стандартной
+Ubuntu, GNOME и приложений. Как именно — зависит от того, кому принадлежит
+место, куда пишется настройка:
+.LP
+.EX
+Место                           Как храним                      Примеры
+Хранилище с дефолтами схемы     только изменённые ключи          dconf (settings.conf,
+                                                                 shortcuts, Tiling),
+                                                                 Flatpak overrides
+Каталог drop-in у пакета        свой файл целиком; сам файл —    sleep.conf.d, modprobe.d,
+                                дельта, пакетный не трогаем      udev rules.d, modules-load.d,
+                                                                 NetworkManager/conf.d,
+                                                                 default/grub.d
+Файл пакета без drop-in         правка своих ключей на месте,    /etc/default/keyboard,
+                                не копия всего файла             /etc/fstab
+Файл, целиком наш               полный файл                      config/fish, config/ghostty,
+(пакету не принадлежит)                                          xremap.yml, refind_linux.conf,
+                                                                 unit'ы и скрипты system/
+Различия между машинами         только отличающиеся факты        hosts/<name>/facts.nix
+.EE
+.PP
+Полный файл пакета (как \f(CR/etc/default/grub\fR) в репозиторий не копируется:
+при обновлении пакета ucf будет спрашивать про конфликт, а новые
+дефолты пакета перестанут доходить до машины.
+.PP
+Цена дельт:
+.IP "\(bu" 3
+\fBУдаление ключа из дельты не возвращает значение по умолчанию.\fR Его надо
+сбросить явно: \f(CRwsflatpak\fR делает \f(CR--reset\fR приложения перед применением,
+\f(CRws-gnome\fR — \f(CRrollback\fR, для dconf-ключей — явное значение по умолчанию.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+\fBДефолт дистрибутива может измениться при обновлении.\fR Если конкретное
+значение важно, оно пишется в дельту явно, даже если сейчас совпадает с
+дефолтом.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+\fB\f(CBcheck\fB сравнивает только наши файлы и ключи.\fR Целостность пакетных
+файлов проверяют \f(CRdpkg --verify\fR и \f(CRucfq\fR.
+.LP
+Ghostty и fish — тот же принцип на уровне приложения: в
+\f(CRconfig/ghostty/*.ghostty\fR только отличия от дефолтов Ghostty, но хранятся
+они целыми файлами, потому что весь файл наш.
+.SS
 Правила на всю миграцию
 .IP "\(bu" 3
 \fBОдин владелец.\fR Перенос части и удаление старого механизма — в одном
@@ -173,9 +225,17 @@ snapshot \f(CRrecovery\fR сделан 2026-09-18, в нём только generi
 .if t \
 .sp -0.25v
 .IP "\(bu" 3
-\f(CRGRUB_TIMEOUT_STYLE=hidden\fR и \f(CRGRUB_TIMEOUT=0\fR: меню с другими ядрами и
-snapshot\(cqом приходится ловить клавишей Esc.
+в \f(CR/etc/default/grub.d/\fR лежит \f(CR90-pcie-aspm.cfg\fR (2026-09-18): он
+добавляет \f(CRpcie_aspm=force pcie_aspm.policy=powersave\fR ко всем пунктам
+GRUB, то есть к ядрам, которые грузятся через recovery. С этими
+параметрами T2 отказывала в stateful suspend (\f(CRdocs/suspend.md\fR), из
+rEFInd они убраны 2026-09-25, а здесь остались.
 .LP
+Меню GRUB уже видно: \f(CR99-recovery-menu.cfg\fR в том же каталоге ставит
+\f(CRGRUB_TIMEOUT_STYLE=menu\fR и \f(CRGRUB_TIMEOUT=5\fR поверх \f(CRhidden\fR/\f(CR0\fR из
+\f(CR/etc/default/grub\fR. В версиях 2 и 3 до 2026-09-26 это было описано
+неверно — смотрелся только \f(CR/etc/default/grub\fR.
+.PP
 Всё это исправляется в фазе −1.
 .SS
 \f(CR/nix\fR на отдельном subvolume
@@ -378,9 +438,33 @@ sudo apt-mark hold linux-t2
 \f(CRsudo findmnt --verify\fR. Делается до обновления recovery, чтобы
 исправленный fstab попал в snapshot.
 .IP "3." 4
-\fBGRUB как меню восстановления.\fR В \f(CR/etc/default/grub\fR:
-\f(CRGRUB_TIMEOUT_STYLE=menu\fR, \f(CRGRUB_TIMEOUT=10\fR, затем \f(CRsudo update-grub\fR.
-Обычную загрузку это не замедляет: она идёт через rEFInd.
+\fBGRUB: только drop-in\(cqы.\fR Меню уже включено \f(CR99-recovery-menu.cfg\fR.
+.RS
+.IP "\(bu" 3
+удалить \f(CR/etc/default/grub.d/90-pcie-aspm.cfg\fR: forced ASPM не
+используется (\f(CRdocs/suspend.md\fR), recovery-ядра должны грузиться с теми
+же параметрами, что и обычные;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+свои параметры ядра вынести из \f(CR/etc/default/grub\fR в
+\f(CR/etc/default/grub.d/10-workstation-cmdline.cfg\fR
+(\f(CRGRUB_CMDLINE_LINUX_DEFAULT=\(dqquiet splash intel_iommu=on iommu=pt
+pm_async=off\(dq\fR), а сам \f(CR/etc/default/grub\fR вернуть к шаблону пакета
+(\f(CR/usr/share/grub/default/grub\fR). Итоговый \f(CRgrub.cfg\fR не меняется, кроме
+ушедшего \f(CRpcie_aspm\fR — сверить до и после \f(CRupdate-grub\fR;
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+\f(CRkdump-tools.cfg\fR принадлежит пакету \f(CRkdump-tools\fR, не трогать.
+.RE
+.IP
+Затем \f(CRsudo update-grub\fR. Обычную загрузку это не затрагивает: она идёт
+через rEFInd.
 .IP "4." 4
 \fB\f(CBsystem-backup-snapshot\fB.\fR Сначала захватить как есть в
 \f(CRsystem/usr/local/sbin/system-backup-snapshot\fR (отдельный коммит), затем
@@ -415,7 +499,8 @@ T2 нет.
 /etc/modules-load.d/t2.conf                       → system/modules-load.d/
 /etc/systemd/system/get-apple-firmware.service    → system/systemd/system/
 /boot/refind_linux.conf                           → system/boot/
-/etc/default/grub                                 → system/default/  (после шага 3)
+/etc/default/grub.d/10-workstation-cmdline.cfg    → system/default/grub.d/  (после шага 3)
+/etc/default/grub.d/99-recovery-menu.cfg          → system/default/grub.d/
 refind.conf с раздела rEFInd                      → system/esp/  (только check)
 .EE
 .IP
@@ -837,7 +922,8 @@ Nix собирает дерево файлов хоста из \f(CRsystem/\fR �
 .LP
 .EX
 common           99-workstation-uinput.rules, modules-load.d/ntsync.conf
-boot             /boot/refind_linux.conf, /etc/default/grub,
+boot             /boot/refind_linux.conf, grub.d/10-workstation-cmdline.cfg,
+                 grub.d/99-recovery-menu.cfg,
                  /usr/local/sbin/system-backup-snapshot, refind.conf (check)
 t2-mbp16         90-touchbar-native.rules, 70-bcm4364-no-d3cold.rules,
                  30-amdgpu-pm.rules, 99-network-t2-ncm.rules + NM conf,
@@ -848,7 +934,7 @@ t2-mbp16         90-touchbar-native.rules, 70-bcm4364-no-d3cold.rules,
                  get-apple-firmware.service
 .EE
 .PP
-\f(CRrefind_linux.conf\fR и \f(CRGRUB_CMDLINE_LINUX_DEFAULT\fR собираются из
+\f(CRrefind_linux.conf\fR и \f(CR10-workstation-cmdline.cfg\fR собираются из
 \f(CRfacts.kernelParams\fR. Сборка должна дать ровно нынешние файлы.
 .PP
 Сначала работают только \f(CRdiff\fR и \f(CRcheck\fR. \fBКритерий 4a — первый
@@ -880,7 +966,7 @@ udev             control --reload-rules; trigger --subsystem-match=input
                  --action=change; settle
 initramfs        update-initramfs -u -k $(uname -r) только если изменились
                  modprobe-файлы (опции hid-appletb-kbd читаются из initramfs)
-grub             update-grub только если изменился /etc/default/grub
+grub             update-grub только если изменились файлы grub.d
 проверка         cmp всех файлов; ws-touchbar-fn active; предупреждения
                  про Touch Bar config и tiny-dfr, как сейчас
 .EE
@@ -1226,3 +1312,17 @@ verify.
 .IP "\(bu" 3
 Фазы: убраны «Внешний вид GNOME», «Flatpak и Distrobox» и «Клавиатурный
 слой»; добавлены «Оркестратор» и «Бинарник xremap».
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Добавлен раздел «Формат конфигов»: в репозитории только отличия от
+стандартной системы; \f(CR/etc/default/grub\fR заменён drop-in\(cqами \f(CRgrub.d\fR.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Исправлено: меню GRUB уже включено \f(CR99-recovery-menu.cfg\fR; найден
+устаревший \f(CR90-pcie-aspm.cfg\fR, он удаляется в фазе −1.
