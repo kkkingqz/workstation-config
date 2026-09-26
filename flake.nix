@@ -18,7 +18,10 @@
         let facts = import ./hosts/${host}/facts.nix;
         in home-manager.lib.homeManagerConfiguration {
           inherit pkgs;
-          extraSpecialArgs = { inherit facts; };
+          extraSpecialArgs = {
+            inherit facts;
+            xremap = pkgs.callPackage ./pkgs/xremap.nix { };
+          };
           modules = [ ./hosts/${host}/home.nix ];
         };
     in {
@@ -31,6 +34,7 @@
       packages.${system} = {
         home-manager = home-manager.packages.${system}.home-manager;
         nvd = pkgs.nvd;
+        xremap = pkgs.callPackage ./pkgs/xremap.nix { };
       };
     };
 }

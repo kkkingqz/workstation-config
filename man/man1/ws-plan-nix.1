@@ -1020,6 +1020,15 @@ covers runtime/probe» остаётся до фазы 5.
 .PP
 \fBОткат:\fR предыдущее поколение home-manager; \f(CRruntime/\fR до удаления
 остаётся рядом.
+.PP
+\fBХод (2026-09-26):\fR \f(CRpkgs/xremap.nix\fR (fetchurl zip по SRI-hash, unzip,
+без patchelf/strip) → sha256 бинарника из store \f(CR3da5ec8a…227e\fR равен
+\f(CRruntime/xremap/v0.15.13/xremap\fR; \f(CRmodules/home/xremap.nix\fR — ссылка
+\f(CR\(ti/.local/bin/xremap\fR на store. switch и \f(CRws-keyboard restart\fR: сервис
+активен, аргументы и выбор устройств прежние. verify проверяет, что
+бинарник из Nix и его sha256. \f(CRws baseline diff phase-2 phase-3\fR — только
+путь \f(CRxremap\fR (хэш прежний). Осталось: ручная матрица → reboot → матрица →
+suspend → матрица, затем удалить \f(CRruntime/\fR и поставить тег.
 .LP
 \l'2i'
 .SH ФАЗА 4 — СИСТЕМНЫЙ СЛОЙ

@@ -564,7 +564,19 @@ Git.
 .SS
 Runtime installation
 .LP
-Command helpers устанавливаются в \f(CR\(ti/.local/bin\fR как symlink на repository.
+Command helpers устанавливаются в \f(CR\(ti/.local/bin\fR как symlink на repository
+(ссылки home-manager, \f(CRws switch\fR).
+.PP
+xremap binary — из Nix: \f(CRpkgs/xremap.nix\fR, upstream
+\f(CRxremap-linux-x86_64-gnome.zip\fR v0.15.13 по hash; бинарник байт в байт тот
+же, что раньше лежал в \f(CRruntime/xremap/\fR (verify сверяет sha256):
+.LP
+.EX
+\(ti/.local/bin/xremap -> /nix/store/…-xremap-gnome-0.15.13/bin/xremap
+.EE
+.PP
+Обновление xremap: версия и hash в \f(CRpkgs/xremap.nix\fR и sha256 бинарника в
+\f(CRws-workstation-verify\fR, затем \f(CRws switch\fR и \f(CRws-keyboard restart\fR.
 .PP
 xremap service:
 .LP

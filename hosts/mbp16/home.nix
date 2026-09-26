@@ -5,6 +5,7 @@
   imports = [
     ../../modules/home/links.nix
     ../../modules/home/cli.nix
+    ../../modules/home/xremap.nix
   ];
 
   home.username = facts.user;

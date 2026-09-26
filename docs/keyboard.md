@@ -548,7 +548,19 @@ Git.
 
 ## Runtime installation
 
-Command helpers устанавливаются в `~/.local/bin` как symlink на repository.
+Command helpers устанавливаются в `~/.local/bin` как symlink на repository
+(ссылки home-manager, `ws switch`).
+
+xremap binary — из Nix: `pkgs/xremap.nix`, upstream
+`xremap-linux-x86_64-gnome.zip` v0.15.13 по hash; бинарник байт в байт тот
+же, что раньше лежал в `runtime/xremap/` (verify сверяет sha256):
+
+```text
+~/.local/bin/xremap -> /nix/store/…-xremap-gnome-0.15.13/bin/xremap
+```
+
+Обновление xremap: версия и hash в `pkgs/xremap.nix` и sha256 бинарника в
+`ws-workstation-verify`, затем `ws switch` и `ws-keyboard restart`.
 
 xremap service:
 

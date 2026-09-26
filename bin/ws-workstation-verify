@@ -883,6 +883,19 @@ else
     fail "xremap binary missing"
 fi
 
+# pkgs/xremap.nix: upstream xremap-linux-x86_64-gnome.zip v0.15.13 by hash;
+# the binary must stay byte-identical to the pre-migration one.
+xremap_sha256=3da5ec8a619a326f35a72e952abe84b14053732ff895bfefe7a043714fab227e
+xremap_real="$(readlink -f "$HOME/.local/bin/xremap" 2>/dev/null || true)"
+if [[ "$xremap_real" == /nix/store/*-xremap-gnome-*/bin/xremap ]]; then
+    pass "~/.local/bin/xremap comes from Nix: ${xremap_real#/nix/store/}"
+else
+    warn "~/.local/bin/xremap is not the Nix package (${xremap_real:-missing})"
+fi
+[[ -n "$xremap_real" && "$(sha256sum "$xremap_real" 2>/dev/null | cut -d' ' -f1)" == "$xremap_sha256" ]] \
+    && pass "xremap binary sha256 matches v0.15.13 gnome build" \
+    || fail "xremap binary sha256 differs from the pinned v0.15.13 gnome build"
+
 id -nG | tr ' ' '\n' | grep -Fxq input \
     && pass "user belongs to input group" \
     || fail "user not in input group"
@@ -1492,7 +1505,7 @@ check_symlink_target "$HOME/.local/share/applications/ghostty-open-here.desktop"
 section "14.4 Nix layer (docs/plans/nix-migration.md)"
 
 for path in flake.nix hosts/mbp16/facts.nix hosts/mbp16/home.nix \
-    modules/home/links.nix modules/home/cli.nix \
+    modules/home/links.nix modules/home/cli.nix modules/home/xremap.nix pkgs/xremap.nix \
     config/fish/conf.d/00-nix.fish config/nix/nix.conf .github/workflows/check.yml; do
     tracked "$path" "$path"
 done
