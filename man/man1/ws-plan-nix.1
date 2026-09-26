@@ -593,6 +593,40 @@ snapshot»: система поднимается, встроенная клав
 \fBГотово:\fR hold стоит; recovery грузится с ядром T2 и встроенной
 клавиатурой; эталон \f(CRpre-nix\fR снят; \f(CRpre-nix-root\fR, \f(CRpre-nix-home\fR и тег
 \f(CRpre-nix\fR существуют.
+.PP
+\fBИтог (2026-09-26), фаза закрыта с отступлениями:\fR
+.IP "\(bu" 3
+Вход по suspend не выполнен: 3 чистых цикла из 20; проверку пропустили
+(решение пользователя). Нестабильный suspend после миграции сначала
+сравнивать с этим числом, а не считать регрессией Nix.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Recovery (шаг 11) на деле не загружали: снимок обновлён скриптом,
+\f(CRgrub-script-check\fR чистый, ядро recovery \f(CR7.2.7-1-t2\fR.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+Эталон снят с \f(CR--with-sudo\fR (\f(CRdpkg --verify\fR, initrd, контрольная сумма
+\f(CRrefind.conf\fR) — шаг 1 фазы 0 уже выполнен.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+\f(CRws-gnome-test\fR в эталоне содержит FAIL «legacy extension still
+installed: window-monitor-pro»: противоречит verify 10.1, где расширение
+обязательно. Состояние до миграции, в diff не выйдет; решить отдельно.
+.if n \
+.sp -1
+.if t \
+.sp -0.25v
+.IP "\(bu" 3
+\f(CR/mnt/apple\fR удалён из fstab; пароль root не задан.
 .LP
 \l'2i'
 .SH ФАЗА 0 — @NIX, NIX, СКЕЛЕТ FLAKE, WS, CI
