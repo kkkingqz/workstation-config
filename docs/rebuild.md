@@ -634,6 +634,18 @@ ws-keyboard-install-extensions
 (шаг `extensions` в `ws apply`). После изменения `extension.js` на Wayland
 выполнить logout/login.
 
+Расширения с extensions.gnome.org (`xremap@k0kubun.com`,
+`window-control@carlo9890.github.io`,
+`window-monitor-pro@muhammed.hussien2030.gmail.com`) ставит `ws switch`:
+`pkgs/gnome-extensions.nix` закрепляет zip по версии EGO и hash,
+`modules/home/gnome-extensions.nix` раскладывает файлы ссылками в
+`~/.local/share/gnome-shell/extensions/<uuid>`. Вручную с EGO их не ставить.
+Включить (первый раз на новой машине) — `gnome-extensions enable <uuid>` и
+logout/login. Обновление: версия и hash в `pkgs/gnome-extensions.nix`,
+`ws switch`, logout/login. Если GNOME или Extension Manager обновил
+расширение сам, verify покажет FAIL «files not from Nix»: убрать каталог и
+`ws switch`.
+
 `Window Monitor Pro` не является зависимостью текущего keyboard baseline.
 
 `workstation-dock-spring@local` schema не использует. Общий installer должен

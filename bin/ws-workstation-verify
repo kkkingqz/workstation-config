@@ -1199,6 +1199,26 @@ else
     fail "gnome-extensions binary missing; extension policy cannot be checked"
 fi
 
+# pkgs/gnome-extensions.nix: EGO extensions pinned by version and hash, linked
+# file by file by home-manager. A real file here means GNOME (update) or a
+# manual install replaced the pinned copy.
+for uuid in \
+    window-control@carlo9890.github.io \
+    window-monitor-pro@muhammed.hussien2030.gmail.com \
+    xremap@k0kubun.com
+do
+    ext_dir="$HOME/.local/share/gnome-shell/extensions/$uuid"
+    ext_foreign="$(find "$ext_dir" -type f 2>/dev/null | head -n1)"
+    ext_meta="$(readlink -f "$ext_dir/metadata.json" 2>/dev/null || true)"
+    if [[ -n "$ext_foreign" ]]; then
+        fail "$uuid has files not from Nix ($(q "$ext_foreign")); move the directory away and ws switch"
+    elif [[ "$ext_meta" == /nix/store/*-gnome-shell-extension-*/share/gnome-shell/extensions/"$uuid"/metadata.json ]]; then
+        pass "$uuid from Nix: ${ext_meta#/nix/store/}"
+    else
+        fail "$uuid not installed from Nix (${ext_meta:-missing}); ws switch"
+    fi
+done
+
 
 dock_spring="$repo/gnome/extensions/workstation-dock-spring@local/extension.js"
 if [[ -r "$dock_spring" ]]; then
@@ -1524,6 +1544,7 @@ section "14.4 Nix layer (docs/plans/nix-migration.md)"
 for path in flake.nix hosts/mbp16/facts.nix hosts/mbp16/home.nix \
     modules/home/links.nix modules/home/cli.nix modules/home/xremap.nix pkgs/xremap.nix \
     modules/home/man.nix pkgs/man.nix pkgs/lowdown.nix \
+    modules/home/gnome-extensions.nix pkgs/gnome-extensions.nix \
     modules/system/default.nix modules/system/common.nix \
     modules/system/boot/refind-grub-recovery.nix modules/system/hardware/t2-mbp16.nix \
     config/fish/conf.d/00-nix.fish config/nix/nix.conf .github/workflows/check.yml; do

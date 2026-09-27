@@ -996,7 +996,18 @@ PASS, `ws baseline diff` пуст»:
   Wants-ссылку ставит home-manager, поэтому `ws-keyboard restore` и откат
   apply выключают xremap флагом `~/.local/state/workstation/keyboard/
   xremap.disabled` (`ConditionPathExists`), а не `systemctl disable`.
-- Расширения с EGO по версии и hash.
+- ~~Расширения с EGO по версии и hash~~ — **сделано (2026-09-27):**
+  `pkgs/gnome-extensions.nix` — zip с extensions.gnome.org по версии EGO
+  (номер в URL, не version-name) и hash: `xremap@k0kubun.com` v15,
+  `window-control@carlo9890.github.io` v1 (version-name 11),
+  `window-monitor-pro@…` v3; все три байт в байт как установленные и
+  последние для GNOME 50. `modules/home/gnome-extensions.nix` ставит файлы
+  ссылками (`recursive = true`); прежние каталоги перенесены в
+  `~/.local/state/workstation/extensions-before-nix`. Включение
+  (`enabled-extensions`) не менялось — задача GNOME/dconf. verify: FAIL, если
+  в каталоге расширения появился обычный файл (обновление GNOME или ручная
+  установка). Противоречие прежнее: `window-monitor-pro` verify требует,
+  `ws-gnome-test` и `gnome.md` считают legacy.
 - Скрипты в store (`writeShellApplication`) вместо ссылок на checkout.
 - ~~`man/` собирать при сборке, а не хранить в git~~ — **сделано
   (2026-09-27):** `pkgs/man.nix` запускает `bin/ws-doc-build` с lowdown

@@ -759,7 +759,8 @@ workstation-config/
 Nix доставляет, владельцы слоёв не меняются (`helpws plan-nix`):
 home-manager ставит ссылки на checkout (`~/.local/bin`, fish, Ghostty), man pages
 и CLI (fzf, zoxide, eza, micro, nvd, xremap), unit `xremap.service` с
-`xremap.yml` из store; `ws system apply` ставит копии
+`xremap.yml` из store, расширения GNOME с EGO по версии и hash
+(`pkgs/gnome-extensions.nix`); `ws system apply` ставит копии
 системных файлов из сборки `modules/system`; GNOME, Flatpak, Distrobox,
 клавиатура — прежние `bin/`-владельцы, их по порядку вызывает `ws apply`.
 Основная проверка — `ws check`.

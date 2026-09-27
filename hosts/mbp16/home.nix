@@ -7,6 +7,7 @@
     ../../modules/home/cli.nix
     ../../modules/home/xremap.nix
     ../../modules/home/man.nix
+    ../../modules/home/gnome-extensions.nix
   ];
 
   home.username = facts.user;
