@@ -408,12 +408,18 @@ Host сознательно не используется как общий deve
 Source of truth:
 
 ```text
-config/distrobox/containers.ini
-config/distrobox/exports.ini
-config/distrobox/host/modules-load.d/ntsync.conf
-config/distrobox/arch/wsbox-host-ntsync/
+modules/home/distrobox.nix                контейнеры и экспорты
+system/modules-load.d/ntsync.conf         ставит ws system apply
+config/distrobox/arch/wsbox-host-ntsync/  PKGBUILD для arch
 bin/wsbox
 ```
+
+С 2026-09-27 контейнеры объявлены в `modules/home/distrobox.nix` (общие
+значения по умолчанию, у контейнера — только образ, HOME, пакеты,
+экспорты). `ws switch` собирает из них `containers.ini` (формат
+`distrobox assemble`) и `exports.ini` в `~/.config/workstation/distrobox/`,
+`wsbox` читает оттуда. Изменение: правка `distrobox.nix`, `ws switch`,
+затем `wsbox apply NAME` или `wsbox recreate NAME`.
 
 Managed containers:
 
@@ -428,14 +434,14 @@ touchbar-build  Ubuntu 26.04, порт Touch Bar (~/touchbar): dev-пакеты 
 
 `ubuntu`, `arch`, `wine` используют отдельный persistent HOME под
 `~/.local/share/distrobox-homes/`; build-контейнеры — общий HOME хоста, в нём
-лежат исходники. Rootfs считается disposable: пакеты — `additional_packages`
-в `containers.ini`.
+лежат исходники. Rootfs считается disposable: пакеты — `packages` контейнера
+в `distrobox.nix` (`additional_packages` в собранном `containers.ini`).
 
-Образ `arch` (rolling) закреплён по digest в `containers.ini`; `wsbox check`
+Образ `arch` (rolling) закреплён по digest в `distrobox.nix`; `wsbox check`
 сравнивает контейнер с ним по repo digest. Обновление Arch: взять новый digest
 (`podman pull docker.io/library/archlinux:latest`, затем
 `podman image inspect --format '{{.Digest}}' docker.io/library/archlinux:latest`),
-записать его в `containers.ini` и выполнить `wsbox recreate arch`: rootfs
+записать его в `distrobox.nix`, `ws switch` и `wsbox recreate arch`: rootfs
 пересоздаётся, HOME `arch` остаётся, пакеты из AUR ставятся заново
 (`helpws rebuild`, раздел 6.3).
 

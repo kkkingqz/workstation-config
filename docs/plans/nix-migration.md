@@ -1086,6 +1086,18 @@ PASS, `ws baseline diff` пуст»:
      стартует; `PROFILE` и `PC_MODIFIER_LAYOUT` проверяли единственное
      значение и убраны; `GNOME_XREMAP_EXTENSION_UUID` никто не читал.
      Факт `keyboard.physical` (фаза 6) появится, когда понадобится.
+  4. **Сделано (2026-09-27).** Distrobox (добавлен 2026-09-27, в шагах 1–3 был пропущен):
+     контейнеры и экспорты — в `modules/home/distrobox.nix` с общими
+     значениями по умолчанию; `ws switch` собирает `containers.ini`
+     (формат `distrobox assemble`) и `exports.ini` в
+     `~/.config/workstation/distrobox/`, `wsbox` читает оттуда.
+     `config/distrobox/host/modules-load.d/ntsync.conf` — в
+     `system/modules-load.d/`. Список пакетов из кода `wsbox check` — из
+     `hosts/apt.txt`. `PKGBUILD` `wsbox-host-ntsync` остаётся (формат
+     makepkg). Контейнеры не пересоздаются. Собранные `containers.ini` и
+     `exports.ini` совпали с прежними (без комментариев, они — в
+     `distrobox.nix`); `wsbox check` FAIL 0 WARN 0, `ws system diff` пуст.
+     `wsbox check` проверяет только наличие команд, пакеты — `ws check apt`.
 - ~~Убрать `t2bce-build` и `touchbar-build`~~ — **сделано иначе
   (2026-09-27):** по решению пользователя оба оставлены и описаны в
   `containers.ini` (общий HOME хоста, `additional_packages` по фактически

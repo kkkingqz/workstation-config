@@ -670,9 +670,7 @@ section "5.3 Managed Distrobox / Podman layer"
 for path in \
     bin/wsbox \
     config/fish/completions/wsbox.fish \
-    config/distrobox/containers.ini \
-    config/distrobox/exports.ini \
-    config/distrobox/host/modules-load.d/ntsync.conf \
+    system/modules-load.d/ntsync.conf \
     config/distrobox/arch/wsbox-host-ntsync/PKGBUILD \
     config/distrobox/arch/wsbox-host-ntsync/README.md \
     docs/plans/development.md
@@ -696,7 +694,7 @@ if [[ -e "$repo/config/fish/completions/wsbox.fish" ]]; then
         "Fish wsbox completion points into repo"
 fi
 
-ntsync_source="$repo/config/distrobox/host/modules-load.d/ntsync.conf"
+ntsync_source="$repo/system/modules-load.d/ntsync.conf"
 ntsync_runtime="/etc/modules-load.d/ntsync.conf"
 compare_file "$ntsync_source" "$ntsync_runtime" \
     "host NTSync modules-load config matches repo source"
@@ -764,13 +762,20 @@ fi
 # are already running; otherwise tell the operator to run wsbox check separately.
 wsbox_all_running=true
 wsbox_box_count=0
-if [[ -r "$repo/config/distrobox/containers.ini" ]] && have podman; then
+wsbox_manifest="$HOME/.config/workstation/distrobox/containers.ini"
+wsbox_manifest_real="$(readlink -f "$wsbox_manifest" 2>/dev/null || true)"
+if [[ "$wsbox_manifest_real" == /nix/store/*-workstation-distrobox-config/containers.ini ]]; then
+    pass "Distrobox manifest from Nix: ${wsbox_manifest_real#/nix/store/}"
+else
+    fail "$wsbox_manifest is not the Nix build (${wsbox_manifest_real:-missing}); ws switch"
+fi
+if [[ -r "$wsbox_manifest" ]] && have podman; then
     while IFS= read -r box; do
         [[ -n "$box" ]] || continue
         ((wsbox_box_count++))
         state="$(podman inspect -f '{{.State.Running}}' "$box" 2>/dev/null || true)"
         [[ "$state" == "true" ]] || wsbox_all_running=false
-    done < <(sed -nE 's/^\[([^]]+)\]$/\1/p' "$repo/config/distrobox/containers.ini")
+    done < <(sed -nE 's/^\[([^]]+)\]$/\1/p' "$wsbox_manifest")
 else
     wsbox_all_running=false
 fi
@@ -1535,6 +1540,7 @@ for path in flake.nix hosts/mbp16/facts.nix hosts/mbp16/home.nix \
     modules/home/man.nix pkgs/man.nix pkgs/lowdown.nix \
     modules/home/gnome-extensions.nix pkgs/gnome-extensions.nix \
     modules/home/flatpak.nix modules/home/gnome.nix \
+    modules/home/keyboard.nix modules/home/distrobox.nix \
     modules/system/default.nix modules/system/common.nix \
     modules/system/boot/refind-grub-recovery.nix modules/system/hardware/t2-mbp16.nix \
     config/fish/conf.d/00-nix.fish config/nix/nix.conf .github/workflows/check.yml; do
@@ -1785,6 +1791,9 @@ legacy_repo_paths=(
     config/gnome/settings.conf
     bin/ws-gnome-apply
     config/keyboard/settings.conf
+    config/distrobox/containers.ini
+    config/distrobox/exports.ini
+    config/distrobox/host/modules-load.d/ntsync.conf
     system/udev/70-workstation-uinput.rules
     config/tiny-dfr/config.toml
 )

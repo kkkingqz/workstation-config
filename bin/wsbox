@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-repo="${WORKSTATION_CONFIG:-$HOME/.local/share/workstation-config}"
-manifest="$repo/config/distrobox/containers.ini"
-exports_manifest="$repo/config/distrobox/exports.ini"
+# Declared in modules/home/distrobox.nix; ws switch builds
+# ~/.config/workstation/distrobox. wsbox only reads it.
+cfg="${WSBOX_CONFIG:-$HOME/.config/workstation/distrobox}"
+manifest="$cfg/containers.ini"
+exports_manifest="$cfg/exports.ini"
 
 usage() {
     cat <<'USAGE'
@@ -38,8 +40,8 @@ ensure_base() {
     need podman
     need distrobox
     need distrobox-assemble
-    [[ -r "$manifest" ]] || die "manifest not found: $manifest"
-    [[ -r "$exports_manifest" ]] || die "exports manifest not found: $exports_manifest"
+    [[ -r "$manifest" ]] || die "manifest not found: $manifest (run ws switch)"
+    [[ -r "$exports_manifest" ]] || die "exports manifest not found: $exports_manifest (run ws switch)"
 }
 
 managed_boxes() {
@@ -434,20 +436,13 @@ cmd_check() {
         printf '  FAIL  %s\n' "$*"
     }
 
-    for p in \
-        podman \
-        distrobox \
-        uidmap \
-        fuse-overlayfs \
-        slirp4netns \
-        passt
-    do
-        if dpkg-query -W -f='${Status}' "$p" 2>/dev/null \
-            | grep -qx 'install ok installed'
-        then
-            pass "package installed: $p"
+    # Host packages (podman, distrobox, uidmap, …) are listed in hosts/apt.txt
+    # and checked by `ws check apt`.
+    for p in podman distrobox distrobox-assemble; do
+        if command -v "$p" >/dev/null 2>&1; then
+            pass "command present: $p"
         else
-            fail "package missing: $p"
+            fail "command missing: $p (hosts/apt.txt, ws check apt)"
         fi
     done
 

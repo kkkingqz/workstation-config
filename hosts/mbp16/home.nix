@@ -11,6 +11,7 @@
     ../../modules/home/flatpak.nix
     ../../modules/home/gnome.nix
     ../../modules/home/keyboard.nix
+    ../../modules/home/distrobox.nix
   ];
 
   home.username = facts.user;

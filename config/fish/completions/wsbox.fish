@@ -27,13 +27,8 @@ function __wsbox_remove_needs_box
 end
 
 function __wsbox_managed_boxes
-    set -l repo ~/.local/share/workstation-config
-
-    if set -q WORKSTATION_CONFIG
-        set repo $WORKSTATION_CONFIG
-    end
-
-    set -l manifest $repo/config/distrobox/containers.ini
+    # Built by home-manager from modules/home/distrobox.nix.
+    set -l manifest ~/.config/workstation/distrobox/containers.ini
 
     if test -f $manifest
         string match -rg '^\[([^]]+)\]$' < $manifest
@@ -42,13 +37,8 @@ end
 
 function __wsbox_export_aliases_for_box
     set -l box $argv[1]
-    set -l repo ~/.local/share/workstation-config
-
-    if set -q WORKSTATION_CONFIG
-        set repo $WORKSTATION_CONFIG
-    end
-
-    set -l manifest $repo/config/distrobox/exports.ini
+    # Built by home-manager from modules/home/distrobox.nix.
+    set -l manifest ~/.config/workstation/distrobox/exports.ini
 
     if test -f $manifest
         awk -F= -v section="[$box]" '

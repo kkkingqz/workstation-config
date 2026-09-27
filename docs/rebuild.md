@@ -309,14 +309,14 @@ ln -sfn \
 Host NTSync source of truth:
 
 ```text
-config/distrobox/host/modules-load.d/ntsync.conf
+system/modules-load.d/ntsync.conf
 ```
 
-Применить:
+Ставит его `ws system apply` (раздел 6.0); вручную:
 
 ```console
 sudo install -Dm644 \
-    "$repo/config/distrobox/host/modules-load.d/ntsync.conf" \
+    "$repo/system/modules-load.d/ntsync.conf" \
     /etc/modules-load.d/ntsync.conf
 
 sudo modprobe ntsync
@@ -423,8 +423,9 @@ application layer относится к `plan-windows`.
 wsbox check
 ```
 
-Ожидаемо `FAIL=0 WARN=0`. Build-контейнеры `t2bce-build` и
-`touchbar-build` тоже в `containers.ini`; Rust в `touchbar-build` ставится
+Ожидаемо `FAIL=0 WARN=0`. Контейнеры объявлены в
+`modules/home/distrobox.nix` (`containers.ini` собирает `ws switch`);
+build-контейнеры `t2bce-build` и `touchbar-build` тоже там; Rust в `touchbar-build` ставится
 вручную (`helpws workstation`, Managed Distrobox layer).
 
 Подробности:
