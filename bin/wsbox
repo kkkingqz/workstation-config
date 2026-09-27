@@ -320,8 +320,8 @@ apply_exports_for() {
         source="$(export_source "$name" "$alias")"
 
         if [[ -z "$source" ]] || ! export_source_exists "$name" "$source"; then
-            printf '  WARN  managed export source missing: %s/%s: %s\n' \
-                "$name" "$alias" "${source:-<empty>}"
+            printf '  WARN  managed export source missing: %s/%s: %s (install it, then wsbox apply %s)\n' \
+                "$name" "$alias" "${source:-<empty>}" "$name"
             continue
         fi
 
@@ -733,6 +733,10 @@ cmd_remove() {
         "Managed definition and custom HOME were kept. Use 'wsbox apply $name' to recreate it."
 }
 
+# --replace removes the old container with distrobox rm, which also deletes
+# its exported launchers; they are exported again here. An application that
+# is not installed yet (e.g. AUR in arch) is reported: install it, then
+# wsbox apply NAME.
 cmd_recreate() {
     local name="${1:-}"
 
@@ -742,6 +746,8 @@ cmd_recreate() {
         --replace \
         --file "$manifest" \
         --name "$name"
+
+    apply_exports_for "$name"
 }
 
 show_managed_exports() {

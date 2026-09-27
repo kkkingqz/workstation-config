@@ -355,6 +355,10 @@ touchbar-build
 
 Custom HOME каждого box находится в `~/distrobox/<имя>/` и не
 удаляется `wsbox remove --force`/`recreate`.
+`distrobox rm` (его вызывают `remove --force` и `recreate`) удаляет
+экспортированные ярлыки контейнера; `recreate` экспортирует их заново, а
+если приложения ещё нет (AUR в `arch`), пишет WARN — после установки
+`wsbox apply NAME`.
 
 Virtual provider host NTSync (`wsbox-host-ntsync`, `NTSYNC-MODULE`) Arch
 ставит сам при создании: `base-devel` и `git` — пакеты контейнера, init hook
