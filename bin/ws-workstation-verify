@@ -1035,42 +1035,37 @@ contains "$xcfg" 'Alt-Right:[[:space:]]*Alt-F' "terminal Option+Right -> Alt-F"
 
 section "9. GNOME core bindings"
 
-if have gsettings; then
-    gcontains org.gnome.desktop.wm.keybindings switch-applications '<Super>Tab' "Cmd/Win+Tab app switch"
-    same_app="$(gget org.gnome.desktop.wm.keybindings switch-group)"
-    if [[ "$same_app" == *"<Super>Above_Tab"* && "$same_app" == *"<Control>Down"* ]]; then
-        pass "same-app window switch (<Super>Above_Tab + <Control>Down)"
-    else
-        fail "same-app window switch — got: ${same_app:-MISSING}"
-    fi
-    gcontains org.gnome.desktop.wm.keybindings minimize '<Super>m' "Cmd/Win+M minimize"
-    gcontains org.gnome.desktop.wm.keybindings toggle-fullscreen '<Control><Super>f' "Ctrl+Cmd/Win+F fullscreen"
-    gcontains org.gnome.desktop.wm.keybindings show-desktop 'F11' "F11 show desktop"
-    gcontains org.gnome.shell.keybindings toggle-overview '<Super>space' "Cmd/Win+Space overview"
-    gcontains org.gnome.settings-daemon.plugins.media-keys screensaver '<Control><Super>q' "Ctrl+Cmd/Win+Q lock"
-
-    overlay="$(gget org.gnome.mutter overlay-key)"
-    [[ "$overlay" == "''" ]] \
-        && pass "single Super/Command disabled" \
-        || fail "single Super/Command not disabled: $overlay"
-
-    numeric_ok=true
-    for n in $(seq 1 9); do
-        v="$(gget org.gnome.shell.keybindings "switch-to-application-$n")"
-        [[ "$v" == "@as []" || "$v" == "[]" ]] || numeric_ok=false
-    done
-    [[ "$numeric_ok" == true ]] \
-        && pass "GNOME Super+1..9 launcher bindings disabled" \
-        || fail "one or more GNOME Super+1..9 bindings are enabled"
-
-    if gsettings range org.gnome.shell.extensions.dash-to-dock hot-keys >/dev/null 2>&1; then
-        dock="$(gget org.gnome.shell.extensions.dash-to-dock hot-keys)"
-        [[ "$dock" == "false" ]] \
-            && pass "Ubuntu Dock numeric hotkeys disabled" \
-            || fail "Ubuntu Dock numeric hotkeys enabled"
-    fi
+# The profile of modules/home/keyboard.nix, set by ws-keyboard-apply.
+kb_dir="$HOME/.config/workstation/keyboard"
+kb_real="$(readlink -f "$kb_dir/gnome-shortcuts.tsv" 2>/dev/null || true)"
+if [[ "$kb_real" == /nix/store/* ]]; then
+    pass "keyboard shortcut data from Nix: ${kb_real#/nix/store/}"
 else
-    fail "gsettings binary missing"
+    fail "$kb_dir/gnome-shortcuts.tsv is not the Nix build (${kb_real:-missing}); ws switch"
+fi
+
+if have gsettings && [[ -r "$kb_dir/gnome-shortcuts.tsv" ]]; then
+    kb_total=0
+    kb_bad=0
+    while IFS=$'\t' read -r schema key value kind; do
+        [[ -z "$schema" || "$schema" == \#* ]] && continue
+        if [[ "$kind" == optional ]] && ! gsettings range "$schema" "$key" >/dev/null 2>&1; then
+            continue
+        fi
+        ((kb_total += 1))
+        actual="$(gget "$schema" "$key")"
+        # A string-typed key holds the first element of the declared array.
+        if [[ "$actual" != "$value" && "$actual" == \'* && "$value" == \[* ]]; then
+            value="$(sed -E "s/^\[('([^'\\\\]|\\\\.)*')?.*$/\1/" <<<"$value")"
+        fi
+        if [[ "$actual" != "$value" ]]; then
+            ((kb_bad += 1))
+            fail "GNOME shortcut $schema $key = ${actual:-MISSING}, profile: $value (ws apply keyboard)"
+        fi
+    done < "$kb_dir/gnome-shortcuts.tsv"
+    ((kb_bad == 0)) && pass "GNOME shortcuts match modules/home/keyboard.nix ($kb_total keys)"
+else
+    fail "gsettings or keyboard shortcut data missing"
 fi
 
 section "10. GNOME extensions / D-Bus"
@@ -1235,15 +1230,15 @@ section "11. Tiling Assistant private bindings"
 ta_schema="org.gnome.shell.extensions.tiling-assistant"
 if have gsettings && gsettings list-keys "$ta_schema" >/dev/null 2>&1; then
     pass "Tiling Assistant GSettings schema present"
-    gcontains "$ta_schema" tile-left-half '<Shift><Control><Alt><Super>Left' "private tile-left"
-    gcontains "$ta_schema" tile-right-half '<Shift><Control><Alt><Super>Right' "private tile-right"
-    gcontains "$ta_schema" tile-top-half '<Shift><Control><Alt><Super>Up' "private tile-top"
-    gcontains "$ta_schema" tile-bottom-half '<Shift><Control><Alt><Super>Down' "private tile-bottom"
-    gcontains "$ta_schema" tile-maximize '<Shift><Control><Alt><Super>f' "private Fill"
-    gcontains "$ta_schema" center-window '<Shift><Control><Alt><Super>c' "private Center"
-    gcontains "$ta_schema" restore-window '<Shift><Control><Alt><Super>r' "private Restore"
-    gcontains "$ta_schema" tile-edit-mode '<Shift><Control><Alt><Super>e' "private Tile Editing Mode"
-    gcontains "$ta_schema" toggle-always-on-top '<Shift><Control><Alt><Super>t' "private Always on Top"
+    # Private chords of modules/home/keyboard.nix, appended by ws-tiling-apply.
+    if [[ -r "$kb_dir/tiling-bindings.tsv" ]]; then
+        while IFS=$'\t' read -r key binding; do
+            [[ -z "$key" || "$key" == \#* ]] && continue
+            gcontains "$ta_schema" "$key" "'$binding'" "private $key: $binding"
+        done < "$kb_dir/tiling-bindings.tsv"
+    else
+        fail "missing $kb_dir/tiling-bindings.tsv (ws switch)"
+    fi
 else
     fail "Tiling Assistant GSettings schema missing"
 fi

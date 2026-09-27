@@ -54,46 +54,18 @@ systemctl --user is-active --quiet xremap.service 2>/dev/null && ok "Service" ||
 
 echo
 echo "GNOME bindings"
-for spec in \
-    "org.gnome.desktop.wm.keybindings|switch-applications" \
-    "org.gnome.desktop.wm.keybindings|switch-group" \
-    "org.gnome.desktop.wm.keybindings|minimize" \
-    "org.gnome.desktop.wm.keybindings|toggle-fullscreen" \
-    "org.gnome.desktop.wm.keybindings|switch-to-workspace-left" \
-    "org.gnome.desktop.wm.keybindings|switch-to-workspace-right" \
-    "org.gnome.desktop.wm.keybindings|switch-input-source" \
-    "org.gnome.mutter|overlay-key" \
-    "org.gnome.shell.keybindings|toggle-overview" \
-    "org.gnome.shell.keybindings|toggle-application-view" \
-    "org.gnome.shell.keybindings|toggle-message-tray" \
-    "org.gnome.shell.keybindings|toggle-quick-settings" \
-    "org.gnome.shell.keybindings|focus-active-notification" \
-    "org.gnome.shell.keybindings|screenshot" \
-    "org.gnome.shell.keybindings|show-screenshot-ui" \
-    "org.gnome.settings-daemon.plugins.media-keys|screensaver"
-do
-    schema="${spec%%|*}"
-    key="${spec#*|}"
+# Keys of the profile in modules/home/keyboard.nix (built by ws switch).
+kb_shortcuts="$HOME/.config/workstation/keyboard/gnome-shortcuts.tsv"
+[[ -r "$kb_shortcuts" ]] || warn "Shortcut data" "missing $kb_shortcuts (ws switch)"
+[[ -r "$kb_shortcuts" ]] && while IFS=$'\t' read -r schema key _ _; do
+    [[ -z "$schema" || "$schema" == \#* ]] && continue
     if gsettings list-keys "$schema" 2>/dev/null | grep -Fxq "$key"; then
         printf '  %-30s %s\n' "$key" "$(gsettings get "$schema" "$key")"
     fi
-done
+done < "$kb_shortcuts"
 
 if command -v xremap >/dev/null 2>&1; then
     echo
 echo "Detected input devices"
     xremap --list-devices 2>/dev/null || true
 fi
-
-echo
-echo "Numeric launcher conflicts"
-for n in $(seq 1 9); do
-    printf "  switch-to-application-%-2s     %s\n" \
-        "$n" "$(gsettings get org.gnome.shell.keybindings "switch-to-application-$n" 2>/dev/null || echo MISSING)"
-done
-
-if gsettings range org.gnome.shell.extensions.dash-to-dock hot-keys >/dev/null 2>&1; then
-    printf "  Ubuntu Dock hot-keys          %s\n" \
-        "$(gsettings get org.gnome.shell.extensions.dash-to-dock hot-keys)"
-fi
-

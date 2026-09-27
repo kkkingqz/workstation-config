@@ -1070,9 +1070,14 @@ PASS, `ws baseline diff` пуст»:
      `ubuntu.json`), `disabled-extensions` = `[]`; все 13 остались ACTIVE.
      Installer больше не включает расширения сам. Ручное включение или
      выключение расширения откатывается следующим switch.
-  2. Клавиатура: сочетания GNOME из `ws-keyboard-apply` и привязки из
-     `ws-tiling-apply` — данными в `modules/home/keyboard.nix`, скрипты
-     применяют собранный файл, `ws-keyboard restore` сохраняется.
+  2. **Сделано (2026-09-27).** Клавиатура: сочетания GNOME из
+     `ws-keyboard-apply` и привязки из `ws-tiling-apply` — данными в
+     `modules/home/keyboard.nix`, скрипты применяют собранный файл,
+     `ws-keyboard restore` сохраняется. Из того же файла preflight берёт
+     обязательные ключи, backup — список ключей, verify сравнивает все 30
+     значений точно (раньше проверял часть «содержит»), `ws-keyboard-status`
+     показывает их; привязки Tiling verify проверяет все 16. Значения не
+     изменились: dconf до и после `ws apply tiling keyboard` одинаков.
   3. `config/keyboard/settings.conf` — факты в `hosts/<name>/facts.nix`.
 - ~~Убрать `t2bce-build` и `touchbar-build`~~ — **сделано иначе
   (2026-09-27):** по решению пользователя оба оставлены и описаны в

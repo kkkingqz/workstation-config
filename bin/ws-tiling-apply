@@ -1,26 +1,39 @@
 #!/usr/bin/env python3
 
 import ast
+import os
+from pathlib import Path
 import subprocess
 
 SCHEMA = "org.gnome.shell.extensions.tiling-assistant"
 
-# Private chords emitted by xremap (config/keyboard/xremap.yml). They are
-# appended to the Tiling Assistant defaults, never replace them.
-#   <Shift><Control><Alt><Super>...  Fn+Ctrl+arrows, Fn+Ctrl+F/C/R, Fn+Option+E/T
-#   <Control><Alt><Super>F13..F19    earlier private chords; nothing emits them
-#                                    now, kept so existing setups do not change
-BINDINGS = {
-    "tile-left-half": ["<Shift><Control><Alt><Super>Left", "<Control><Alt><Super>F13"],
-    "tile-right-half": ["<Shift><Control><Alt><Super>Right", "<Control><Alt><Super>F14"],
-    "tile-top-half": ["<Shift><Control><Alt><Super>Up", "<Control><Alt><Super>F15"],
-    "tile-bottom-half": ["<Shift><Control><Alt><Super>Down", "<Control><Alt><Super>F16"],
-    "tile-maximize": ["<Shift><Control><Alt><Super>f", "<Control><Alt><Super>F17"],
-    "center-window": ["<Shift><Control><Alt><Super>c", "<Control><Alt><Super>F18"],
-    "restore-window": ["<Shift><Control><Alt><Super>r", "<Control><Alt><Super>F19"],
-    "tile-edit-mode": ["<Shift><Control><Alt><Super>e"],
-    "toggle-always-on-top": ["<Shift><Control><Alt><Super>t"],
-}
+# Private chords emitted by xremap, appended to the Tiling Assistant defaults
+# (never replacing them). Declared in modules/home/keyboard.nix, built by
+# ws switch as KEY<TAB>BINDING lines.
+BINDINGS_FILE = Path(
+    os.environ.get(
+        "WS_TILING_BINDINGS",
+        Path.home() / ".config/workstation/keyboard/tiling-bindings.tsv",
+    )
+)
+
+
+def load_bindings():
+    if not BINDINGS_FILE.is_file():
+        raise SystemExit(
+            f"ws-tiling-apply: missing {BINDINGS_FILE} (run ws switch)"
+        )
+
+    bindings = {}
+    for line in BINDINGS_FILE.read_text().splitlines():
+        if not line or line.startswith("#"):
+            continue
+        key, binding = line.split("\t")
+        bindings.setdefault(key, []).append(binding)
+
+    if not bindings:
+        raise SystemExit(f"ws-tiling-apply: no bindings in {BINDINGS_FILE}")
+    return bindings
 
 
 def run(*args):
@@ -40,6 +53,7 @@ def parse_array(raw):
 
 
 def main():
+    BINDINGS = load_bindings()
     keys = set(run("gsettings", "list-keys", SCHEMA).splitlines())
     missing = [key for key in BINDINGS if key not in keys]
     if missing:

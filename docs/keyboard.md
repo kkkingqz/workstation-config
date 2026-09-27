@@ -501,6 +501,7 @@ Repository:
 ```text
 config/keyboard/settings.conf
 config/keyboard/xremap.yml
+modules/home/keyboard.nix          сочетания GNOME и private chords Tiling
 
 bin/ws-keyboard
 bin/ws-keyboard-apply
@@ -599,13 +600,33 @@ home-manager перезапускает сервис (`--watch=config` store-ф�
 
 ## Apply
 
+Сочетания GNOME профиля и private chords Tiling Assistant объявлены данными
+в `modules/home/keyboard.nix` (с 2026-09-27; раньше были записаны в самих
+скриптах). `ws switch` собирает из них
+`~/.config/workstation/keyboard/gnome-shortcuts.tsv` и `tiling-bindings.tsv`;
+по ним работают `ws-keyboard-apply` (preflight, backup, установка),
+`ws-tiling-apply`, verify и `ws-keyboard-status`. Это не `dconf.settings`:
+сочетания ставятся только после preflight и запуска xremap, и
+`ws-keyboard restore` должен уметь вернуть исходные.
+
+Изменить сочетание:
+
+```console
+$EDITOR ~/.local/share/workstation-config/modules/home/keyboard.nix
+ws switch
+ws-keyboard apply      # или ws-tiling-apply для Tiling
+```
+
+Исходное значение нового ключа в существующий backup не попадает: backup
+делается один раз, до первого apply.
+
 Основной профиль:
 
 ```console
 ws-keyboard apply
 ```
 
-Tiling private bindings хранятся и применяются через:
+Tiling private bindings применяются через:
 
 ```console
 ws-tiling-apply

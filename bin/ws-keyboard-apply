@@ -11,7 +11,12 @@ backup="$state_dir/gsettings-backup.tsv"
 # its ConditionPathExists, so a restored profile stays off after a reboot.
 xremap_off="$state_dir/xremap.disabled"
 
+# The GNOME shortcuts of the profile: modules/home/keyboard.nix, built by
+# ws switch (SCHEMA<TAB>KEY<TAB>VALUE<TAB>required|optional).
+shortcuts="${WS_KEYBOARD_SHORTCUTS:-$HOME/.config/workstation/keyboard/gnome-shortcuts.tsv}"
+
 [[ -r "$settings" ]] || { echo "ws-keyboard-apply: missing $settings" >&2; exit 66; }
+[[ -r "$shortcuts" ]] || { echo "ws-keyboard-apply: missing $shortcuts (run ws switch)" >&2; exit 66; }
 # shellcheck disable=SC1090
 source "$settings"
 
@@ -26,6 +31,11 @@ schema_has_key() {
     gsettings range "$schema" "$key" >/dev/null 2>&1
 }
 
+# Declared shortcuts, optionally only one kind: required or optional.
+shortcut_lines() {
+    awk -F '\t' -v want="${1:-}" '!/^#/ && NF == 4 && (want == "" || $4 == want)' "$shortcuts"
+}
+
 backup_key() {
     local schema="$1" key="$2"
     if schema_has_key "$schema" "$key"; then
@@ -38,45 +48,24 @@ backup_once() {
     [[ -f "$backup" ]] && return
 
     local tmp="$backup.tmp"
+    local schema key value kind
     : > "$tmp"
-    backup_key org.gnome.desktop.wm.keybindings switch-applications >> "$tmp"
-    backup_key org.gnome.desktop.wm.keybindings switch-applications-backward >> "$tmp"
-    backup_key org.gnome.desktop.wm.keybindings switch-group >> "$tmp"
-    backup_key org.gnome.desktop.wm.keybindings switch-group-backward >> "$tmp"
-    backup_key org.gnome.desktop.wm.keybindings minimize >> "$tmp"
-    backup_key org.gnome.desktop.wm.keybindings toggle-fullscreen >> "$tmp"
-    backup_key org.gnome.desktop.wm.keybindings show-desktop >> "$tmp"
-    backup_key org.gnome.desktop.wm.keybindings switch-to-workspace-left >> "$tmp"
-    backup_key org.gnome.desktop.wm.keybindings switch-to-workspace-right >> "$tmp"
-    backup_key org.gnome.desktop.wm.keybindings switch-input-source >> "$tmp"
-    backup_key org.gnome.desktop.wm.keybindings switch-input-source-backward >> "$tmp"
-    backup_key org.gnome.mutter overlay-key >> "$tmp"
-    backup_key org.gnome.shell.keybindings toggle-overview >> "$tmp"
-    backup_key org.gnome.shell.keybindings toggle-application-view >> "$tmp"
-    backup_key org.gnome.shell.keybindings toggle-message-tray >> "$tmp"
-    backup_key org.gnome.shell.keybindings toggle-quick-settings >> "$tmp"
-    backup_key org.gnome.shell.keybindings focus-active-notification >> "$tmp"
-    backup_key org.gnome.shell.keybindings switch-to-application-1 >> "$tmp"
-    backup_key org.gnome.shell.keybindings switch-to-application-2 >> "$tmp"
-    backup_key org.gnome.shell.keybindings switch-to-application-3 >> "$tmp"
-    backup_key org.gnome.shell.keybindings switch-to-application-4 >> "$tmp"
-    backup_key org.gnome.shell.keybindings switch-to-application-5 >> "$tmp"
-    backup_key org.gnome.shell.keybindings switch-to-application-6 >> "$tmp"
-    backup_key org.gnome.shell.keybindings switch-to-application-7 >> "$tmp"
-    backup_key org.gnome.shell.keybindings switch-to-application-8 >> "$tmp"
-    backup_key org.gnome.shell.keybindings switch-to-application-9 >> "$tmp"
-    if schema_has_key org.gnome.shell.extensions.dash-to-dock hot-keys; then
-        backup_key org.gnome.shell.extensions.dash-to-dock hot-keys >> "$tmp"
-    fi
-    backup_key org.gnome.shell.keybindings screenshot >> "$tmp"
-    backup_key org.gnome.shell.keybindings show-screenshot-ui >> "$tmp"
-    backup_key org.gnome.settings-daemon.plugins.media-keys screensaver >> "$tmp"
+    while IFS=$'\t' read -r schema key value kind; do
+        backup_key "$schema" "$key" >> "$tmp"
+    done < <(shortcut_lines)
     mv "$tmp" "$backup"
     echo "Saved original GNOME shortcuts: $backup"
 }
 
 set_key() {
     local schema="$1" key="$2" value="$3"
+    # A string key where the profile has an array (screensaver on some GNOME
+    # builds): set its first element.
+    if [[ "$value" == \[* ]] \
+        && gsettings range "$schema" "$key" 2>/dev/null | head -n1 | grep -qx 'type s'; then
+        value="$(sed -E "s/^\[('([^'\\\\]|\\\\.)*')?.*$/\1/" <<<"$value")"
+        [[ -n "$value" ]] || value="''"
+    fi
     if schema_has_key "$schema" "$key"; then
         gsettings set "$schema" "$key" "$value"
         printf 'set %-48s %s\n' "$schema:$key" "$value"
@@ -154,44 +143,12 @@ preflight_failed=false
 
 # Require the exact GNOME schema keys used by this profile. Do not silently
 # produce a partial profile on a different GNOME build.
-for spec in \
-    "org.gnome.desktop.wm.keybindings|switch-applications" \
-    "org.gnome.desktop.wm.keybindings|switch-applications-backward" \
-    "org.gnome.desktop.wm.keybindings|switch-group" \
-    "org.gnome.desktop.wm.keybindings|switch-group-backward" \
-    "org.gnome.desktop.wm.keybindings|minimize" \
-    "org.gnome.desktop.wm.keybindings|toggle-fullscreen" \
-    "org.gnome.desktop.wm.keybindings|show-desktop" \
-    "org.gnome.desktop.wm.keybindings|switch-to-workspace-left" \
-    "org.gnome.desktop.wm.keybindings|switch-to-workspace-right" \
-    "org.gnome.desktop.wm.keybindings|switch-input-source" \
-    "org.gnome.desktop.wm.keybindings|switch-input-source-backward" \
-    "org.gnome.mutter|overlay-key" \
-    "org.gnome.shell.keybindings|toggle-overview" \
-    "org.gnome.shell.keybindings|toggle-application-view" \
-    "org.gnome.shell.keybindings|toggle-message-tray" \
-    "org.gnome.shell.keybindings|toggle-quick-settings" \
-    "org.gnome.shell.keybindings|focus-active-notification" \
-    "org.gnome.shell.keybindings|switch-to-application-1" \
-    "org.gnome.shell.keybindings|switch-to-application-2" \
-    "org.gnome.shell.keybindings|switch-to-application-3" \
-    "org.gnome.shell.keybindings|switch-to-application-4" \
-    "org.gnome.shell.keybindings|switch-to-application-5" \
-    "org.gnome.shell.keybindings|switch-to-application-6" \
-    "org.gnome.shell.keybindings|switch-to-application-7" \
-    "org.gnome.shell.keybindings|switch-to-application-8" \
-    "org.gnome.shell.keybindings|switch-to-application-9" \
-    "org.gnome.shell.keybindings|screenshot" \
-    "org.gnome.shell.keybindings|show-screenshot-ui" \
-    "org.gnome.settings-daemon.plugins.media-keys|screensaver"
-do
-    schema="${spec%%|*}"
-    key="${spec#*|}"
+while IFS=$'\t' read -r schema key _ _; do
     schema_has_key "$schema" "$key" || {
         echo "missing required GSettings key: $schema $key" >&2
         preflight_failed=true
     }
-done
+done < <(shortcut_lines required)
 
 command -v xremap >/dev/null 2>&1 || { echo "xremap not found in PATH" >&2; preflight_failed=true; }
 systemctl --user cat xremap.service >/dev/null 2>&1 || { echo "xremap.service not installed; run ws switch" >&2; preflight_failed=true; }
@@ -286,71 +243,14 @@ rollback_apply() {
 
 trap rollback_apply EXIT
 
-# Application / window switching
-set_key org.gnome.desktop.wm.keybindings switch-applications "['<Super>Tab']"
-set_key org.gnome.desktop.wm.keybindings switch-applications-backward "['<Shift><Super>Tab']"
-set_key org.gnome.desktop.wm.keybindings switch-group "['<Super>Above_Tab', '<Control>Down']"
-set_key org.gnome.desktop.wm.keybindings switch-group-backward "['<Shift><Super>Above_Tab']"
-
-# Window actions
-set_key org.gnome.desktop.wm.keybindings minimize "['<Super>m']"
-set_key org.gnome.desktop.wm.keybindings toggle-fullscreen "['<Control><Super>f']"
-set_key org.gnome.desktop.wm.keybindings show-desktop "['F11']"
-
-# Workspaces. Physical Ctrl+Left/Right are translated by xremap into these
-# private chords, leaving emitted application Ctrl+Left/Right unclaimed by GNOME.
-set_key org.gnome.desktop.wm.keybindings switch-to-workspace-left "['<Control><Alt><Super>Left']"
-set_key org.gnome.desktop.wm.keybindings switch-to-workspace-right "['<Control><Alt><Super>Right']"
-
-# Input sources
-set_key org.gnome.desktop.wm.keybindings switch-input-source "['<Control>space']"
-set_key org.gnome.desktop.wm.keybindings switch-input-source-backward "['<Control><Alt>space']"
-
-# Free GNOME Shell Super-letter shortcuts that conflict with macOS
-# application semantics. Without this, GNOME Shell consumes the event before
-# xremap/Ghostty can see it.
-set_key org.gnome.shell.keybindings toggle-application-view "[]"
-set_key org.gnome.shell.keybindings toggle-message-tray "[]"
-set_key org.gnome.shell.keybindings toggle-quick-settings "[]"
-set_key org.gnome.shell.keybindings focus-active-notification "[]"
-
-# Free Super+number shortcuts from GNOME Shell / Ubuntu Dock.
-# This is required for macOS-style Shift+Super+3/4/5 screenshots and
-# also leaves Command/Win+number available to applications.
-set_key org.gnome.shell.keybindings switch-to-application-1 "[]"
-set_key org.gnome.shell.keybindings switch-to-application-2 "[]"
-set_key org.gnome.shell.keybindings switch-to-application-3 "[]"
-set_key org.gnome.shell.keybindings switch-to-application-4 "[]"
-set_key org.gnome.shell.keybindings switch-to-application-5 "[]"
-set_key org.gnome.shell.keybindings switch-to-application-6 "[]"
-set_key org.gnome.shell.keybindings switch-to-application-7 "[]"
-set_key org.gnome.shell.keybindings switch-to-application-8 "[]"
-set_key org.gnome.shell.keybindings switch-to-application-9 "[]"
-if schema_has_key org.gnome.shell.extensions.dash-to-dock hot-keys; then
-    set_key org.gnome.shell.extensions.dash-to-dock hot-keys "false"
-fi
-
-# Make Super a pure modifier. macOS Command alone does nothing, and
-# disabling Mutter's overlay key prevents accidental Overview after
-# Command/Win+Arrow remaps.
-set_key org.gnome.mutter overlay-key "''"
-
-# Overview / Spotlight-style search
-set_key org.gnome.shell.keybindings toggle-overview "['<Super>space', '<Control>Up']"
-
-# Screenshots
-set_key org.gnome.shell.keybindings screenshot "['<Shift><Super>3']"
-set_key org.gnome.shell.keybindings show-screenshot-ui "['<Shift><Super>4', '<Shift><Super>5']"
-
-# Lock screen. Some GNOME builds expose this as a string, others as a string array.
-if schema_has_key org.gnome.settings-daemon.plugins.media-keys screensaver; then
-    type="$(gsettings range org.gnome.settings-daemon.plugins.media-keys screensaver 2>/dev/null | head -n1 || true)"
-    if [[ "$type" == *"type s"* ]]; then
-        gsettings set org.gnome.settings-daemon.plugins.media-keys screensaver "'<Control><Super>q'"
-    else
-        gsettings set org.gnome.settings-daemon.plugins.media-keys screensaver "['<Control><Super>q']"
+# The profile: modules/home/keyboard.nix (why each binding is there is
+# commented there). Optional keys are set only where the schema has them.
+while IFS=$'\t' read -r schema key value kind; do
+    if [[ "$kind" == optional ]] && ! schema_has_key "$schema" "$key"; then
+        continue
     fi
-fi
+    set_key "$schema" "$key" "$value"
+done < <(shortcut_lines)
 
 apply_succeeded=true
 trap - EXIT
