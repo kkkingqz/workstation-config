@@ -431,6 +431,14 @@ touchbar-build  Ubuntu 26.04, порт Touch Bar (~/touchbar): dev-пакеты 
 лежат исходники. Rootfs считается disposable: пакеты — `additional_packages`
 в `containers.ini`.
 
+Образ `arch` (rolling) закреплён по digest в `containers.ini`; `wsbox check`
+сравнивает контейнер с ним по repo digest. Обновление Arch: взять новый digest
+(`podman pull docker.io/library/archlinux:latest`, затем
+`podman image inspect --format '{{.Digest}}' docker.io/library/archlinux:latest`),
+записать его в `containers.ini` и выполнить `wsbox recreate arch`: rootfs
+пересоздаётся, HOME `arch` остаётся, пакеты из AUR ставятся заново
+(`helpws rebuild`, раздел 6.3).
+
 `arch` использует NTSync из host T2 kernel. Host загружает `ntsync`, а
 `wsbox-host-ntsync` внутри Arch только удовлетворяет virtual dependency
 `NTSYNC-MODULE`, поэтому container-local `linux`/`mkinitcpio` не нужны.

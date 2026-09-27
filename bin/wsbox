@@ -165,6 +165,18 @@ container_image() {
         || printf 'unknown\n'
 }
 
+# The container runs the manifest image: same name, or, for an image pinned
+# by digest (name@sha256:...), an image with that repo digest.
+image_matches() {
+    local name="$1" expected="$2" id
+
+    [[ "$(container_image "$name")" == "$expected" ]] && return 0
+    [[ "$expected" == *@sha256:* ]] || return 1
+    id="$(podman inspect --format '{{.Image}}' "$name" 2>/dev/null)" || return 1
+    podman image inspect --format '{{range .RepoDigests}}{{println .}}{{end}}' "$id" 2>/dev/null \
+        | grep -Fxq -- "$expected"
+}
+
 container_exec() {
     local name="$1"
     shift
@@ -487,7 +499,7 @@ cmd_check() {
 
         actual_image="$(container_image "$name")"
 
-        if [[ "$actual_image" == "$expected_image" ]]; then
+        if image_matches "$name" "$expected_image"; then
             pass "$name image matches manifest"
         else
             fail "$name image drift: got $actual_image, expected $expected_image"

@@ -531,6 +531,14 @@ touchbar-build  Ubuntu 26.04, порт Touch Bar (\(ti/touchbar): dev-пакет
 лежат исходники. Rootfs считается disposable: пакеты — \f(CRadditional_packages\fR
 в \f(CRcontainers.ini\fR.
 .PP
+Образ \f(CRarch\fR (rolling) закреплён по digest в \f(CRcontainers.ini\fR; \f(CRwsbox check\fR
+сравнивает контейнер с ним по repo digest. Обновление Arch: взять новый digest
+(\f(CRpodman pull docker.io/library/archlinux:latest\fR, затем
+\f(CRpodman image inspect --format '{{.Digest}}' docker.io/library/archlinux:latest\fR),
+записать его в \f(CRcontainers.ini\fR и выполнить \f(CRwsbox recreate arch\fR: rootfs
+пересоздаётся, HOME \f(CRarch\fR остаётся, пакеты из AUR ставятся заново
+(\f(CRhelpws rebuild\fR, раздел 6.3).
+.PP
 \f(CRarch\fR использует NTSync из host T2 kernel. Host загружает \f(CRntsync\fR, а
 \f(CRwsbox-host-ntsync\fR внутри Arch только удовлетворяет virtual dependency
 \f(CRNTSYNC-MODULE\fR, поэтому container-local \f(CRlinux\fR/\f(CRmkinitcpio\fR не нужны.

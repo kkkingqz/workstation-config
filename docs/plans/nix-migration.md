@@ -991,8 +991,9 @@ PASS, `ws baseline diff` пуст»:
 - `man/` собирать при сборке, а не хранить в git.
 - Фикс t2bce через DKMS — только если сборка в podman станет неудобной;
   `build-essential` на хосте противоречит правилу roadmap про toolchains.
-- Закрепить образ `arch` по digest (сейчас `wsbox check` сравнивает с
-  `archlinux:latest`).
+- ~~Закрепить образ `arch` по digest~~ — **сделано (2026-09-27):**
+  `archlinux@sha256:917e543c…` (образ 2026-09-21, на котором работает
+  контейнер); `wsbox check` сравнивает по repo digest, чужой digest — FAIL.
 - Удалить `state/` после переноса `gsettings-backup.tsv`.
 - ~~Убрать `t2bce-build` и `touchbar-build`~~ — **сделано иначе
   (2026-09-27):** по решению пользователя оба оставлены и описаны в
