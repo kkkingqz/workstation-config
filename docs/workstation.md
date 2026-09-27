@@ -429,12 +429,12 @@ arch     Arch rolling (archlinux:latest) / AUR applications; WinBox 3.x
 wine     Ubuntu 26.04 empty base reserved for plan-windows
 t2bce-build     Ubuntu релиза хоста, сборка ядра/модулей вручную (kernel headers с хоста)
 touchbar-build  Ubuntu релиза хоста, порт Touch Bar (~/touchbar): dev-пакеты DRM/Wayland,
-                Rust через rustup в /opt/rust (ставится вручную)
+                Rust (rustup) в HOME контейнера: ~/.rustup, ~/.cargo
 ```
 
-`ubuntu`, `arch`, `wine` используют отдельный persistent HOME под
-`~/.local/share/distrobox-homes/`; build-контейнеры — общий HOME хоста, в нём
-лежат исходники. Rootfs считается disposable: пакеты — `packages` контейнера
+У каждого контейнера свой persistent HOME — `~/distrobox/<имя>/` (так же
+для новых); HOME хоста смонтирован в контейнер по своему пути, исходники
+(`~/touchbar`) видны как `/home/<user>/touchbar`. Rootfs считается disposable: пакеты — `packages` контейнера
 в `distrobox.nix` (`additional_packages` в собранном `containers.ini`).
 
 Образы — теги, не digest. Пакеты внутри обновляет `wsbox update [NAME...]`
@@ -463,7 +463,7 @@ wsbox apply [NAME]
 WinBox prefix хранится в custom HOME и переживает destructive rebuild:
 
 ```text
-~/.local/share/distrobox-homes/arch/.winbox/wine
+~/distrobox/arch/.winbox/wine
 LogPixels = 0xc0 = 192 DPI = 200%
 ```
 

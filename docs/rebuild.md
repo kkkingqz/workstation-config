@@ -349,9 +349,11 @@ Managed set:
 ubuntu
 arch
 wine
+t2bce-build
+touchbar-build
 ```
 
-Custom HOME каждого box находится в `~/.local/share/distrobox-homes/` и не
+Custom HOME каждого box находится в `~/distrobox/<имя>/` и не
 удаляется `wsbox remove --force`/`recreate`.
 
 Для Arch перед установкой Wine/WinBox обязательно установить virtual provider
@@ -361,10 +363,19 @@ host NTSync, чтобы pacman не тянул container-local kernel:
 wsbox enter arch
 
 sudo pacman -Syu --needed base-devel git
+```
 
-cd ~/wsconfig/distrobox/arch/wsbox-host-ntsync
+Внутри контейнера `~` — его HOME (`~/distrobox/arch`), checkout хоста — по
+своему пути `/home/$USER/wsconfig`; собирать в копии, не в checkout:
+
+```fish
+set tmp (mktemp -d)
+cp -r /home/$USER/wsconfig/distrobox/arch/wsbox-host-ntsync $tmp/
+cd $tmp/wsbox-host-ntsync
 makepkg --clean --cleanbuild --force
 sudo pacman -U ./wsbox-host-ntsync-1-1-any.pkg.tar.zst
+cd
+rm -rf $tmp
 ```
 
 Если `paru` ещё не установлен:
@@ -436,8 +447,9 @@ wsbox check
 
 Ожидаемо `FAIL=0 WARN=0`. Контейнеры объявлены в
 `distrobox/distrobox.nix` (`containers.ini` собирает `ws switch`);
-build-контейнеры `t2bce-build` и `touchbar-build` тоже там; Rust в `touchbar-build` ставится
-вручную (`helpws workstation`, Managed Distrobox layer).
+build-контейнеры `t2bce-build` и `touchbar-build` тоже там; Rust в `touchbar-build` —
+rustup в его HOME (`~/distrobox/touchbar-build/.rustup`, `.cargo`), на новой
+машине ставится вручную (`helpws workstation`, Managed Distrobox layer).
 
 Подробности:
 

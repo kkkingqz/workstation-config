@@ -33,12 +33,14 @@ let
   # host release upgrade wsbox check reports image drift: wsbox recreate NAME.
   hostUbuntu = "docker.io/library/ubuntu:@HOST_VERSION_ID@";
 
-  # In manifest order. home: own directory under
-  # ~/.local/share/distrobox-homes/NAME unless sharedHome.
+  # In manifest order. HOME of every container: ~/distrobox/NAME (survives
+  # recreate). The host HOME is mounted as well, at its own path: sources
+  # such as ~/touchbar are reached as /home/<user>/touchbar.
   containers = [
     {
       name = "ubuntu";
       image = "docker.io/library/ubuntu:26.04";
+      packages = [ "ca-certificates" "libgtk-3-bin" "mesa-utils" "qt6-wayland" "vulkan-tools" ];
     }
     {
       name = "arch";
@@ -53,21 +55,18 @@ let
       image = "docker.io/library/ubuntu:26.04";
     }
     {
-      # Build containers share the host HOME: sources live in ~ (e.g.
-      # ~/touchbar). t2bce modules themselves are built by ws-suspend in a
-      # one-off container.
+      # Manual kernel/module builds; the t2bce modules themselves are built by
+      # ws-suspend in a one-off container.
       name = "t2bce-build";
       image = hostUbuntu;
-      sharedHome = true;
       packages = [ "build-essential" "bison" "flex" "kmod" "libelf-dev" "libssl-dev" ];
     }
     {
-      # Touch Bar port (~/touchbar). Rust is installed by hand with rustup
-      # into /opt/rust (owned by the user), used with
-      # RUSTUP_HOME=/opt/rust/rustup CARGO_HOME=/opt/rust/cargo.
+      # Touch Bar port (/home/<user>/touchbar). Rust: rustup in the
+      # container HOME (~/distrobox/touchbar-build/.rustup, .cargo; PATH from
+      # its .profile and fish conf.d), so it survives recreate.
       name = "touchbar-build";
       image = hostUbuntu;
-      sharedHome = true;
       packages = [
         "build-essential" "git" "pkg-config" "libdrm-dev" "libegl-dev" "libgles-dev"
         "libinput-dev" "libsystemd-dev" "libudev-dev" "libwayland-dev" "ripgrep"
@@ -80,9 +79,7 @@ let
 
   containerSection = c:
     let
-      home = if c.sharedHome or false
-        then "\${HOME}"
-        else "\${HOME}/.local/share/distrobox-homes/${c.name}";
+      home = "\${HOME}/distrobox/${c.name}";
     in
     ''
       [${c.name}]

@@ -1803,11 +1803,12 @@ section "17. Legacy artifacts that should be gone"
 
 # Generated files live in ~/.local/share/workstation (before 2026-09-27:
 # ~/.config/workstation and ~/.cache/ws-suspend).
-for old in "$HOME/.config/workstation" "$HOME/.cache/ws-suspend"; do
+for old in "$HOME/.config/workstation" "$HOME/.cache/ws-suspend" \
+    "$HOME/.local/share/distrobox-homes"; do
     if [[ -e "$old" || -L "$old" ]]; then
-        cleanup "obsolete generated directory: $(q "$old") (now ~/.local/share/workstation)"
+        cleanup "obsolete directory: $(q "$old") (docs/workstation.md: ~/.local/share/workstation, ~/distrobox)"
     else
-        pass "obsolete generated directory absent: $old"
+        pass "obsolete directory absent: $old"
     fi
 done
 

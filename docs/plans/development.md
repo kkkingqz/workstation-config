@@ -56,9 +56,11 @@ wine
 Каждый использует отдельный persistent HOME:
 
 ```text
-~/.local/share/distrobox-homes/ubuntu
-~/.local/share/distrobox-homes/arch
-~/.local/share/distrobox-homes/wine
+~/distrobox/ubuntu
+~/distrobox/arch
+~/distrobox/wine
+~/distrobox/t2bce-build
+~/distrobox/touchbar-build
 ```
 
 Rootfs контейнера считается disposable. Custom HOME считается persistent state.
@@ -215,10 +217,8 @@ distrobox/arch/wsbox-host-ntsync/README.md
 
 Сборка внутри `arch`:
 
-```console
-cd ~/wsconfig/distrobox/arch/wsbox-host-ntsync
-makepkg --clean --cleanbuild --force
-sudo pacman -U ./wsbox-host-ntsync-1-1-any.pkg.tar.zst
+```text
+в копии checkout хоста (/home/$USER/wsconfig, не ~): `helpws rebuild`, раздел 6.3
 ```
 
 Пакет намеренно не содержит kernel module и только объявляет:
@@ -267,7 +267,7 @@ $HOME/.winbox/wine
 Так как `$HOME` у `arch` — custom HOME Distrobox, prefix находится на host здесь:
 
 ```text
-~/.local/share/distrobox-homes/arch/.winbox/wine
+~/distrobox/arch/.winbox/wine
 ```
 
 Prefix переживает `wsbox remove --force arch` и `wsbox recreate arch`.

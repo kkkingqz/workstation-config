@@ -1149,8 +1149,16 @@ PASS, `ws baseline diff` пуст»:
      (ссылки на `terminal/micro-help/*.json`, `buffers/` пишет micro), в
      checkout ничего не пишется. Существующие сборка t2bce и история micro
      перенесены. verify: старые каталоги — cleanup.
-  3. HOME контейнеров — `~/distrobox/<имя>`, пересоздание (`arch`: AUR
-     вручную; `touchbar-build`: Rust заново).
+  3. **Сделано (2026-09-27), кроме `arch`.** HOME всех контейнеров —
+     `~/distrobox/<имя>` (`sharedHome` убран: HOME хоста и так смонтирован
+     в контейнер, `~/touchbar` виден по своему пути). `ubuntu`, `wine`
+     пересозданы с прежним HOME (перенесён); пакеты, поставленные в
+     `ubuntu` вручную (`ca-certificates`, `libgtk-3-bin`, `mesa-utils`,
+     `qt6-wayland`, `vulkan-tools`), теперь в `distrobox.nix`. Rust
+     `touchbar-build` (rustup 1.98.1) скопирован из `/opt/rust` в его HOME
+     (`.rustup`, `.cargo`, пути в `.cargo/env*` исправлены) — переживает
+     пересоздание. `arch` — пользователь: перенос HOME, `wsbox recreate
+     arch`, AUR (paru, `wsbox-host-ntsync`, winbox3).
 - ~~Убрать `t2bce-build` и `touchbar-build`~~ — **сделано иначе
   (2026-09-27):** по решению пользователя оба оставлены и описаны в
   `containers.ini` (общий HOME хоста, `additional_packages` по фактически
