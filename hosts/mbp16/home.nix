@@ -1,5 +1,5 @@
 # User layer of mbp16: links into the checkout and terminal CLI; layer owners
-# (wsflatpak, wsbox, ws-gnome, ws-keyboard*, ws-suspend) stay as they are.
+# (wsflatpak reads modules/home/flatpak.nix; wsbox, ws-gnome, ws-keyboard*, ws-suspend) stay as they are.
 { facts, ... }:
 {
   imports = [
@@ -8,6 +8,7 @@
     ../../modules/home/xremap.nix
     ../../modules/home/man.nix
     ../../modules/home/gnome-extensions.nix
+    ../../modules/home/flatpak.nix
   ];
 
   home.username = facts.user;

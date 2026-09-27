@@ -28,6 +28,7 @@ checkout, закрепляет бинарники и собирает систе
 Команды ws-*             bin/                                  ссылки в ~/.local/bin
 Внешний вид GNOME        ws-gnome + config/gnome/settings.conf ссылка на команду
 Flatpak                  wsflatpak + config/flatpak/           ссылка на команду
+                         (после миграции: modules/home/flatpak.nix)
 Distrobox                wsbox + config/distrobox/             ссылка на команду
 Клавиатура               ws-keyboard*, ws-tiling-apply,        бинарник xremap
                          ws-keyboard-install-extensions
@@ -961,8 +962,8 @@ sha256). Эталон `nix-v1` (`--with-sudo`, 2026-09-27): dpkg verify, initrd 
 - На generic-ядре есть ограничение AppArmor на user namespaces, в T2-ядре
   его нет. Всё, что зависит от sandbox, проверять там.
 - Что станет фактами хоста, только когда понадобится другое значение:
-  - масштаб 1.5 в `.desktop` Claude (`config/flatpak/desktop/`) — каталог
-    данных хоста для `wsflatpak`;
+  - масштаб 1.5 в `.desktop` Claude (`config/flatpak/desktop/`) и
+    `GDK_SCALE=2` AnyDesk — факты хоста в `modules/home/flatpak.nix`;
   - абсолютный путь `/home/king/…` в `LED_HELPER` расширения
     input-source — если имя пользователя другое (`xremap.yml` уже берёт
     путь из `home.homeDirectory`);
@@ -983,9 +984,16 @@ PASS, `ws baseline diff` пуст»:
 
 - GNOME через `dconf.settings` вместо `ws-gnome apply`. Учесть: home-manager
   применяет значения при каждом switch, ручные правки будут откатываться.
-- Flatpak через nix-flatpak или генерацию `apps.conf`. Учесть: `wsflatpak`
-  пишет в `config/flatpak/`, а его `check` требует ссылку `.desktop` на
-  репозиторий.
+- ~~Flatpak через nix-flatpak или генерацию `apps.conf`~~ — **сделано
+  (2026-09-27), генерацией:** remotes, apps, overrides и desktop overrides
+  объявлены в `modules/home/flatpak.nix`; home-manager собирает
+  `~/.config/workstation/flatpak/` (ссылка на store) и ставит `.desktop` в
+  `~/.local/share/applications`. `wsflatpak apply|check` читают этот каталог;
+  команды записи (`manage`, `host`, `env`, `talk`, `remote-add`, …) печатают
+  строку для `flatpak.nix`. `config/flatpak/{apps,remotes}.conf` и
+  `overrides/` удалены, `config/flatpak/desktop/` остался источником
+  `.desktop`. nix-flatpak не взят: он вызывает `flatpak` из nixpkgs вместо
+  хостового из apt и заменил бы `wsflatpak check`.
 - ~~xremap как `systemd.user.services` и `xremap.yml` со store-путями~~ —
   **сделано (2026-09-27):** `modules/home/xremap.nix` —
   `systemd.user.services.xremap` с прежним содержимым unit (из репозитория

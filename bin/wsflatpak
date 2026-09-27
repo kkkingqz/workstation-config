@@ -7,9 +7,15 @@ import shutil
 import subprocess
 import sys
 
-SELF = Path(__file__).resolve()
-REPO = Path(os.environ.get("WORKSTATION_CONFIG", SELF.parent.parent))
-CFG = REPO / "config" / "flatpak"
+# Declarations live in modules/home/flatpak.nix; home-manager builds them into
+# ~/.config/workstation/flatpak. wsflatpak only reads that directory.
+SOURCE = "modules/home/flatpak.nix"
+CFG = Path(
+    os.environ.get(
+        "WSFLATPAK_CONFIG",
+        Path.home() / ".config/workstation/flatpak",
+    )
+)
 APPS = CFG / "apps.conf"
 REMOTES = CFG / "remotes.conf"
 OVERRIDES = CFG / "overrides"
@@ -30,10 +36,19 @@ def need_flatpak():
 
 
 def ensure_cfg():
-    OVERRIDES.mkdir(parents=True, exist_ok=True)
-    DESKTOP_OVERRIDES.mkdir(parents=True, exist_ok=True)
-    APPS.touch(exist_ok=True)
-    REMOTES.touch(exist_ok=True)
+    if not APPS.is_file() or not REMOTES.is_file():
+        raise SystemExit(
+            f"wsflatpak: {CFG} is missing; run `ws switch` "
+            f"(built from {SOURCE})"
+        )
+
+
+def declare_hint(action, snippet):
+    raise SystemExit(
+        f"wsflatpak: Flatpak state is declared in {SOURCE}.\n"
+        f"{action}:\n\n    {snippet}\n\n"
+        "then: ws switch && wsflatpak apply"
+    )
 
 
 def parse_managed_line(raw):
@@ -221,24 +236,6 @@ def read_override_config(app):
     return cp
 
 
-def write_override_config(app, cp):
-    path = override_file(app)
-
-    empty_sections = []
-    for section in cp.sections():
-        if not list(cp.items(section)):
-            empty_sections.append(section)
-
-    for section in empty_sections:
-        cp.remove_section(section)
-
-    if not cp.sections():
-        path.unlink(missing_ok=True)
-        return
-
-    with path.open("w") as f:
-        cp.write(f, space_around_delimiters=False)
-
 
 def read_managed_filesystems(app):
     cp = read_override_config(app)
@@ -262,22 +259,6 @@ def read_managed_session_bus(app):
 
     return dict(cp.items("Session Bus Policy"))
 
-
-def write_session_bus(app, values):
-    ensure_cfg()
-
-    cp = read_override_config(app)
-
-    if cp.has_section("Session Bus Policy"):
-        cp.remove_section("Session Bus Policy")
-
-    if values:
-        cp.add_section("Session Bus Policy")
-
-        for name, policy in sorted(values.items()):
-            cp.set("Session Bus Policy", name, policy)
-
-    write_override_config(app, cp)
 
 
 def runtime_session_bus(app):
@@ -335,39 +316,6 @@ def managed_host(app):
     return "host" in read_managed_filesystems(app)
 
 
-def write_filesystems(app, values):
-    ensure_cfg()
-
-    cp = read_override_config(app)
-    values = list(dict.fromkeys(values))
-
-    if values:
-        if not cp.has_section("Context"):
-            cp.add_section("Context")
-
-        cp.set("Context", "filesystems", ";".join(values) + ";")
-    elif cp.has_section("Context"):
-        cp.remove_option("Context", "filesystems")
-
-    write_override_config(app, cp)
-
-
-def write_environment(app, values):
-    ensure_cfg()
-
-    cp = read_override_config(app)
-
-    if cp.has_section("Environment"):
-        cp.remove_section("Environment")
-
-    if values:
-        cp.add_section("Environment")
-
-        for key, value in sorted(values.items()):
-            cp.set("Environment", key, value)
-
-    write_override_config(app, cp)
-
 
 def apply_override(app):
     need_flatpak()
@@ -416,133 +364,6 @@ def apply_override(app):
         )
 
 
-def manage(app, remote=None):
-    need_flatpak()
-    ensure_cfg()
-
-    app = resolve_user_app(app)
-
-    if remote is None:
-        remote = installed_origin(app)
-
-    if not remote:
-        raise SystemExit(
-            f"wsflatpak: cannot determine installed origin for {app}"
-        )
-
-    current = managed_remote(app)
-
-    if current == remote:
-        print(f"Already managed: {remote} {app}")
-        return
-
-    lines = []
-    replaced = False
-
-    for raw in APPS.read_text().splitlines():
-        entry = parse_managed_line(raw)
-
-        if entry is not None and entry[1] == app:
-            if not replaced:
-                lines.append(f"{remote} {app}")
-                replaced = True
-            continue
-
-        lines.append(raw)
-
-    if not replaced:
-        if lines and lines[-1].strip():
-            lines.append("")
-        lines.append(f"{remote} {app}")
-
-    APPS.write_text(chr(10).join(lines).rstrip() + chr(10))
-
-    if current and current != remote:
-        print(f"Managed remote updated: {current} -> {remote} {app}")
-    else:
-        print(f"Managed: {remote} {app}")
-
-    if runtime_host(app) and not managed_host(app):
-        print(
-            f"WARNING: {app} has untracked filesystem=host access.",
-            file=sys.stderr,
-        )
-
-def unmanage(app):
-    ensure_cfg()
-
-    if app not in managed_apps():
-        app = resolve_user_app(app)
-
-    if not is_managed(app):
-        print(f"Not managed: {app}")
-        return
-
-    kept = []
-
-    for raw in APPS.read_text().splitlines():
-        entry = parse_managed_line(raw)
-
-        if entry is not None and entry[1] == app:
-            continue
-
-        kept.append(raw)
-
-    APPS.write_text(chr(10).join(kept).rstrip() + chr(10))
-    print(f"Unmanaged: {app}")
-
-    if override_file(app).exists():
-        print(f"NOTE: managed override remains: {override_file(app)}")
-
-def cmd_remote_add(name, url):
-    need_flatpak()
-    ensure_cfg()
-
-    for existing_name, existing_url in parse_remotes():
-        if existing_name == name:
-            if existing_url != url:
-                raise SystemExit(
-                    f"wsflatpak: managed remote {name} already uses "
-                    f"{existing_url}"
-                )
-
-            run(
-                [
-                    "flatpak",
-                    "remote-add",
-                    "--user",
-                    "--if-not-exists",
-                    name,
-                    url,
-                ]
-            )
-
-            print(f"Already managed remote: {name}")
-            return
-
-    current = REMOTES.read_text()
-
-    with REMOTES.open("a") as f:
-        if current and not current.endswith(chr(10)):
-            f.write(chr(10))
-
-        f.write(f"{name} {url}")
-        f.write(chr(10))
-
-    run(
-        [
-            "flatpak",
-            "remote-add",
-            "--user",
-            "--if-not-exists",
-            name,
-            url,
-        ]
-    )
-
-    print(f"Managed remote added: {name}")
-    print(url)
-
 
 def cmd_install(ns):
     need_flatpak()
@@ -582,20 +403,23 @@ def cmd_install(ns):
     else:
         app = resolve_user_app(ns.app)
 
-    if not ns.unmanaged:
-        manage(app, ns.remote)
-
-    if override_file(app).exists():
+    if is_managed(app):
         apply_override(app)
+    else:
+        print(
+            f"\nNot managed yet. To manage {app}, add to apps in {SOURCE}:"
+            f'\n\n    "{app}" = "{ns.remote}";\n\n'
+            "then: ws switch && wsflatpak apply"
+        )
 
 def cmd_remove(ns):
     need_flatpak()
     app = resolve_user_app(ns.app)
 
-    if is_managed(app) and not ns.unmanage:
+    if is_managed(app):
         raise SystemExit(
-            f"wsflatpak: {app} is managed; "
-            "use --unmanage to remove it from managed state"
+            f"wsflatpak: {app} is managed; remove it from apps "
+            f"(and overrides) in {SOURCE}, `ws switch`, then remove again"
         )
 
     cmd = ["flatpak", "uninstall", "--user"]
@@ -606,142 +430,12 @@ def cmd_remove(ns):
     cmd.append(app)
     run(cmd)
 
-    if ns.unmanage:
-        unmanage(app)
-
-
-def cmd_filesystem(app, spec):
-    need_flatpak()
-    app = resolve_user_app(app)
-
-    if spec == "host":
-        raise SystemExit(
-            "wsflatpak: use `wsflatpak host APP` for filesystem=host"
-        )
-
-    values = read_managed_filesystems(app)
-
-    if spec not in values:
-        values.append(spec)
-
-    write_filesystems(app, values)
-    apply_override(app)
-
-    print(f"Tracked filesystem permission enabled: {app}")
-    print(spec)
-
-
-def cmd_unfilesystem(app, spec):
-    need_flatpak()
-    app = resolve_user_app(app)
-
-    if spec == "host":
-        raise SystemExit(
-            "wsflatpak: use `wsflatpak unhost APP` for filesystem=host"
-        )
-
-    values = [
-        x for x in read_managed_filesystems(app)
-        if x != spec
-    ]
-
-    write_filesystems(app, values)
-    apply_override(app)
-
-    print(f"Tracked filesystem permission removed: {app}")
-    print(spec)
-
-
-def cmd_host(app):
-    need_flatpak()
-    app = resolve_user_app(app)
-
-    if not installed_user(app):
-        raise SystemExit(f"wsflatpak: {app} is not installed in user scope")
-
-    fs = read_managed_filesystems(app)
-    if "host" not in fs:
-        fs.append("host")
-
-    write_filesystems(app, fs)
-    apply_override(app)
-
-    print(f"Tracked filesystem=host access enabled: {app}")
-
-
-def cmd_unhost(app):
-    need_flatpak()
-    app = resolve_user_app(app)
-
-    fs = [x for x in read_managed_filesystems(app) if x != "host"]
-    write_filesystems(app, fs)
-    apply_override(app)
-
-    print(f"filesystem=host access removed: {app}")
-
-
-def cmd_env(app, key, value):
-    need_flatpak()
-    app = resolve_user_app(app)
-
-    env = read_managed_environment(app)
-    env[key] = value
-
-    write_environment(app, env)
-    apply_override(app)
-
-    print(f"Tracked environment override set: {app}")
-    print(f"{key}={value}")
-
-
-def cmd_unenv(app, key):
-    need_flatpak()
-    app = resolve_user_app(app)
-
-    env = read_managed_environment(app)
-
-    if key in env:
-        del env[key]
-
-    write_environment(app, env)
-    apply_override(app)
-
-    print(f"Tracked environment override removed: {app}")
-    print(key)
-
-def cmd_talk(app, name):
-    need_flatpak()
-    app = resolve_user_app(app)
-
-    values = read_managed_session_bus(app)
-    values[name] = "talk"
-
-    write_session_bus(app, values)
-    apply_override(app)
-
-    print(f"Tracked session-bus talk permission enabled: {app}")
-    print(name)
-
-
-def cmd_untalk(app, name):
-    need_flatpak()
-    app = resolve_user_app(app)
-
-    values = read_managed_session_bus(app)
-    values.pop(name, None)
-
-    write_session_bus(app, values)
-    apply_override(app)
-
-    print(f"Tracked session-bus talk permission removed: {app}")
-    print(name)
 
 
 def cmd_reset_permissions(app):
     need_flatpak()
     app = resolve_user_app(app)
 
-    override_file(app).unlink(missing_ok=True)
     run(["flatpak", "override", "--user", "--reset", app], check=False)
 
     # Portal permissions are a separate store. Failure here is non-fatal
@@ -749,6 +443,12 @@ def cmd_reset_permissions(app):
     run(["flatpak", "permission-reset", app], check=False)
 
     print(f"Overrides and portal permissions reset: {app}")
+
+    if override_file(app).exists():
+        print(
+            f"NOTE: {app} has declared overrides in {SOURCE}; "
+            "`wsflatpak apply` sets them again"
+        )
 
 
 def cmd_permissions(app):
@@ -847,42 +547,6 @@ def desktop_override_ok(source):
 
     return destination.resolve() == source.resolve()
 
-
-def sync_desktop_overrides():
-    entries = managed_desktop_entries()
-
-    if not entries:
-        return False
-
-    USER_APPLICATIONS.mkdir(parents=True, exist_ok=True)
-    changed = False
-
-    for source in entries:
-        destination = desktop_override_destination(source)
-
-        if desktop_override_ok(source):
-            continue
-
-        if destination.exists() or destination.is_symlink():
-            if destination.is_dir():
-                raise SystemExit(
-                    f"wsflatpak: desktop override destination is "
-                    f"a directory: {destination}"
-                )
-            destination.unlink()
-
-        destination.symlink_to(source.resolve())
-        changed = True
-
-    updater = shutil.which("update-desktop-database")
-
-    if updater:
-        run(
-            [updater, str(USER_APPLICATIONS)],
-            check=False,
-        )
-
-    return changed
 
 
 def cmd_status():
@@ -1134,7 +798,8 @@ def cmd_check():
             )
         else:
             fail(
-                f"managed desktop override not applied: {source.name}"
+                f"managed desktop override not applied: {source.name} "
+                "(run ws switch)"
             )
 
     if failures:
@@ -1271,22 +936,55 @@ def cmd_apply():
                 file=sys.stderr,
             )
 
-    if sync_desktop_overrides():
-        print("Managed desktop overrides synchronized")
-
     print("\nApply complete. Running policy check...")
     return cmd_check()
+
+DECLARE = {
+    "manage": ("Add to apps", '"{0}" = "{1}";'),
+    "unmanage": ("Remove from apps", '"{0}" = ...;'),
+    "remote-add": ("Add to remotes", '{0} = "{1}";'),
+    "host": ("Add to overrides", '"{0}".Context.filesystems = [ "host" ];'),
+    "unhost": ("Remove from overrides", '"{0}".Context.filesystems "host"'),
+    "filesystem": (
+        "Add to overrides",
+        '"{0}".Context.filesystems = [ "{1}" ];',
+    ),
+    "unfilesystem": (
+        "Remove from overrides",
+        '"{0}".Context.filesystems "{1}"',
+    ),
+    "env": ("Add to overrides", '"{0}".Environment.{1} = "{2}";'),
+    "unenv": ("Remove from overrides", '"{0}".Environment.{1}'),
+    "talk": (
+        "Add to overrides",
+        '"{0}"."Session Bus Policy"."{1}" = "talk";',
+    ),
+    "untalk": (
+        "Remove from overrides",
+        '"{0}"."Session Bus Policy"."{1}"',
+    ),
+}
+
+
+def cmd_declare(cmd, args):
+    action, snippet = DECLARE[cmd]
+    args = list(args) + ["..."] * 3
+
+    if cmd != "remote-add" and args[0] != "...":
+        need_flatpak()
+        args[0] = resolve_user_app(args[0])
+
+        if cmd == "manage":
+            args[1] = installed_origin(args[0]) or "flathub"
+
+    declare_hint(action, snippet.format(*args))
+
 
 def build_parser():
     p = argparse.ArgumentParser(prog="wsflatpak")
     sp = p.add_subparsers(dest="cmd", required=True)
 
     q = sp.add_parser("install")
-    q.add_argument(
-        "--unmanaged",
-        action="store_true",
-        help="install without adding the app to managed state",
-    )
     q.add_argument(
         "--remote",
         default="flathub",
@@ -1295,51 +993,18 @@ def build_parser():
     q.add_argument("app")
     q.add_argument("extra", nargs=argparse.REMAINDER)
 
-    q = sp.add_parser("remote-add")
-    q.add_argument("name")
-    q.add_argument("url")
-
     q = sp.add_parser("remove", aliases=["uninstall"])
     q.add_argument("--keep-data", action="store_true")
-    q.add_argument("--unmanage", action="store_true")
     q.add_argument("app")
 
-    for name in (
-        "manage",
-        "unmanage",
-        "permissions",
-        "host",
-        "unhost",
-        "reset-permissions",
-        "info",
-    ):
+    for name in ("permissions", "reset-permissions", "info"):
         q = sp.add_parser(name)
         q.add_argument("app")
 
-    q = sp.add_parser("filesystem")
-    q.add_argument("app")
-    q.add_argument("spec")
-
-    q = sp.add_parser("unfilesystem")
-    q.add_argument("app")
-    q.add_argument("spec")
-
-    q = sp.add_parser("env")
-    q.add_argument("app")
-    q.add_argument("key")
-    q.add_argument("value")
-
-    q = sp.add_parser("unenv")
-    q.add_argument("app")
-    q.add_argument("key")
-
-    q = sp.add_parser("talk")
-    q.add_argument("app")
-    q.add_argument("name")
-
-    q = sp.add_parser("untalk")
-    q.add_argument("app")
-    q.add_argument("name")
+    # Former commands that wrote config/flatpak/: print what to declare.
+    for name in DECLARE:
+        q = sp.add_parser(name)
+        q.add_argument("args", nargs="*")
 
     for name in ("update", "cleanup", "list", "search"):
         q = sp.add_parser(name)
@@ -1375,34 +1040,14 @@ def main():
 
     if ns.cmd == "install":
         cmd_install(ns)
-    elif ns.cmd == "remote-add":
-        cmd_remote_add(ns.name, ns.url)
+    elif ns.cmd in DECLARE:
+        cmd_declare(ns.cmd, ns.args)
     elif ns.cmd in ("remove", "uninstall"):
         cmd_remove(ns)
-    elif ns.cmd == "manage":
-        manage(ns.app)
-    elif ns.cmd == "unmanage":
-        unmanage(ns.app)
     elif ns.cmd == "permissions":
         cmd_permissions(ns.app)
-    elif ns.cmd == "filesystem":
-        cmd_filesystem(ns.app, ns.spec)
-    elif ns.cmd == "unfilesystem":
-        cmd_unfilesystem(ns.app, ns.spec)
-    elif ns.cmd == "host":
-        cmd_host(ns.app)
-    elif ns.cmd == "unhost":
-        cmd_unhost(ns.app)
     elif ns.cmd == "reset-permissions":
         cmd_reset_permissions(ns.app)
-    elif ns.cmd == "env":
-        cmd_env(ns.app, ns.key, ns.value)
-    elif ns.cmd == "unenv":
-        cmd_unenv(ns.app, ns.key)
-    elif ns.cmd == "talk":
-        cmd_talk(ns.app, ns.name)
-    elif ns.cmd == "untalk":
-        cmd_untalk(ns.app, ns.name)
     elif ns.cmd == "update":
         need_flatpak()
         run(["flatpak", "update", "--user"] + ns.args)

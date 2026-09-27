@@ -219,6 +219,12 @@ ws check            # verify, wsflatpak, wsbox, ws-gnome, ws-suspend, ws system,
 `ws check apt` сравнивает списки apt с установленными пакетами и только
 сообщает о различиях.
 
+Flatpak: remotes, приложения и overrides объявлены в
+`modules/home/flatpak.nix`; `ws switch` собирает из них
+`~/.config/workstation/flatpak/` и ставит `.desktop` Claude, шаг `flatpak`
+в `ws apply` (`wsflatpak apply`) добавляет remotes, ставит приложения и
+применяет overrides (`helpws plan-flatpak`).
+
 Разделы 6.1–10 ниже описывают те же шаги по отдельности.
 
 # 6.1. Managed GNOME appearance

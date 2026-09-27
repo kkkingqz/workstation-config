@@ -1544,7 +1544,7 @@ section "14.4 Nix layer (docs/plans/nix-migration.md)"
 for path in flake.nix hosts/mbp16/facts.nix hosts/mbp16/home.nix \
     modules/home/links.nix modules/home/cli.nix modules/home/xremap.nix pkgs/xremap.nix \
     modules/home/man.nix pkgs/man.nix pkgs/lowdown.nix \
-    modules/home/gnome-extensions.nix pkgs/gnome-extensions.nix \
+    modules/home/gnome-extensions.nix pkgs/gnome-extensions.nix modules/home/flatpak.nix \
     modules/system/default.nix modules/system/common.nix \
     modules/system/boot/refind-grub-recovery.nix modules/system/hardware/t2-mbp16.nix \
     config/fish/conf.d/00-nix.fish config/nix/nix.conf .github/workflows/check.yml; do
@@ -1554,6 +1554,15 @@ check_symlink_target "$HOME/.config/fish/conf.d/00-nix.fish" \
     "$repo/config/fish/conf.d/00-nix.fish" "~/.config/fish/conf.d/00-nix.fish points into repo"
 check_symlink_target "$HOME/.config/nix/nix.conf" \
     "$repo/config/nix/nix.conf" "~/.config/nix/nix.conf points into repo"
+flatpak_cfg="$(readlink -f "$HOME/.config/workstation/flatpak" 2>/dev/null || true)"
+if [[ "$flatpak_cfg" == /nix/store/*-workstation-flatpak-config ]]; then
+    pass "wsflatpak config from Nix: ${flatpak_cfg#/nix/store/}"
+else
+    fail "~/.config/workstation/flatpak is not the Nix build (${flatpak_cfg:-missing}); ws switch"
+fi
+if compgen -G "$repo/config/flatpak/overrides/*.conf" >/dev/null; then
+    fail "config/flatpak/overrides/*.conf is ignored; declare overrides in modules/home/flatpak.nix"
+fi
 
 if [[ -d /nix/var/nix ]]; then
     nix_source="$(findmnt -rno SOURCE /nix 2>/dev/null || true)"
@@ -1773,6 +1782,9 @@ legacy_repo_paths=(
     bin/ws-nautilus-go
     systemd/user/ws-touchbar-fn.service
     systemd/user/xremap.service
+    config/flatpak/apps.conf
+    config/flatpak/remotes.conf
+    config/flatpak/overrides/README.md
     system/udev/70-workstation-uinput.rules
     config/tiny-dfr/config.toml
 )

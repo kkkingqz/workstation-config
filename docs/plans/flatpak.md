@@ -8,6 +8,26 @@ volume: User Commands
 
 # PLAN — FLATPAK DESKTOP APPS
 
+**2026-09-27: декларации перенесены в Nix.** Remotes, managed apps, overrides
+и desktop overrides объявляются в `modules/home/flatpak.nix`. home-manager
+собирает из них `~/.config/workstation/flatpak/` (ссылка на store:
+`remotes.conf`, `apps.conf`, `overrides/APP.conf`, `desktop/`) и ставит
+`.desktop`-ссылки в `~/.local/share/applications`. `wsflatpak apply|check|test`
+работают как раньше, но читают этот каталог. Команды, которые раньше писали
+в `config/flatpak/` (`manage`, `unmanage`, `remote-add`, `host`, `unhost`,
+`filesystem`, `unfilesystem`, `env`, `unenv`, `talk`, `untalk`), теперь только
+печатают строку для `flatpak.nix`. Изменение:
+
+```console
+$EDITOR ~/.local/share/workstation-config/modules/home/flatpak.nix
+ws switch
+wsflatpak apply
+```
+
+nix-flatpak не используется: он вызывает `flatpak` из nixpkgs, а не
+системный из apt, и заменил бы проверки `wsflatpak check`. Разделы ниже
+описывают реализацию и проверки; примеры команд обновлены под Nix.
+
 ## Цель
 
 Flatpak является стандартным application layer для обычных сторонних GUI-приложений.
@@ -42,11 +62,7 @@ flathub  -> https://dl.flathub.org/repo/flathub.flatpakrepo
 flatpark -> https://dl.flatpark.org/flatpark.flatpakrepo
 ```
 
-Новый remote добавляется через:
-
-```console
-wsflatpak remote-add NAME URL
-```
+Новый remote объявляется в `remotes` в `modules/home/flatpak.nix`.
 
 Подтверждено:
 
@@ -73,10 +89,9 @@ Source of truth:
 
 ```text
 bin/wsflatpak
-config/flatpak/apps.conf
-config/flatpak/remotes.conf
-config/flatpak/overrides/
-config/flatpak/desktop/
+modules/home/flatpak.nix                  remotes, apps, overrides
+config/flatpak/desktop/                   полные .desktop-файлы
+~/.config/workstation/flatpak/            сборка из Nix, читает wsflatpak
 config/fish/completions/wsflatpak.fish
 ```
 
@@ -84,16 +99,11 @@ config/fish/completions/wsflatpak.fish
 
 ```text
 install / remove
-remote-add
-manage / unmanage
 list / search / info / run
 update / cleanup
-permissions
-host / unhost
-filesystem / unfilesystem
-env / unenv
-talk / untalk
+permissions / reset-permissions
 status / check / test / apply
+manage, host, env, talk, …   подсказка для flatpak.nix
 ```
 
 Fish completion поддерживает подкоманды, options и установленные App ID.
@@ -108,13 +118,9 @@ Fish completion поддерживает подкоманды, options и уст
 wsflatpak install APP
 ```
 
-автоматически добавляет установленное приложение в managed state.
-
-Исключение:
-
-```console
-wsflatpak install --unmanaged APP
-```
+ставит приложение и печатает строку для `apps` в `modules/home/flatpak.nix`
+(с 2026-09-27; раньше добавляло его в managed state само). Пока строки нет,
+`wsflatpak check` показывает WARN unmanaged user app.
 
 Установка из конкретного managed remote:
 
@@ -153,11 +159,11 @@ Managed application нельзя удалить случайно:
 wsflatpak remove APP
 ```
 
-Для удаления managed application требуется явно одновременно вывести его из
-source of truth:
+Для удаления managed application его сначала убирают из `apps` (и
+`overrides`) в `modules/home/flatpak.nix`, `ws switch`, затем:
 
 ```console
-wsflatpak remove --unmanage APP
+wsflatpak remove APP
 ```
 
 По умолчанию удаляются также application data.
@@ -165,7 +171,7 @@ wsflatpak remove --unmanage APP
 Для сохранения данных:
 
 ```console
-wsflatpak remove --unmanage --keep-data APP
+wsflatpak remove --keep-data APP
 ```
 
 Практически проверено на Kate:
@@ -178,8 +184,7 @@ default delete-data             PASS
 managed state consistency       PASS
 ```
 
-`unmanage` выполняется после успешного uninstall, поэтому ошибка или отмена
-удаления не должна оставлять установленное приложение unmanaged.
+До 2026-09-27 это делалось одной командой `wsflatpak remove --unmanage`.
 
 Kate использовался как Qt6/lifecycle test application и в итоговый managed set
 не входит.
@@ -190,18 +195,17 @@ Kate использовался как Qt6/lifecycle test application и в ит
 
 Глобальный `filesystem=host` запрещён.
 
-Широкий host access выдаётся только явно:
+Широкий host access выдаётся только явно, в `overrides` в
+`modules/home/flatpak.nix`:
 
-```console
-wsflatpak host APP
-wsflatpak unhost APP
+```nix
+"APP".Context.filesystems = [ "host" ];
 ```
 
 Предпочтительный вариант — точечные filesystem permissions:
 
-```console
-wsflatpak filesystem APP SPEC
-wsflatpak unfilesystem APP SPEC
+```nix
+"APP".Context.filesystems = [ "SPEC" ];
 ```
 
 Примеры Flatpak filesystem specs:
@@ -226,18 +230,13 @@ permission removal               PASS
 
 # 6. Environment overrides — DONE
 
-Tracked environment overrides:
+Tracked environment overrides объявляются в `modules/home/flatpak.nix`:
 
-```console
-wsflatpak env APP KEY VALUE
-wsflatpak unenv APP KEY
+```nix
+"APP".Environment.KEY = "VALUE";
 ```
 
-Они хранятся в:
-
-```text
-config/flatpak/overrides/APP.conf
-```
+Сборка кладёт их в `~/.config/workstation/flatpak/overrides/APP.conf`
 
 и восстанавливаются через:
 
@@ -251,9 +250,8 @@ wsflatpak apply
 
 Tracked session bus permissions:
 
-```console
-wsflatpak talk APP BUS_NAME
-wsflatpak untalk APP BUS_NAME
+```nix
+"APP"."Session Bus Policy"."BUS_NAME" = "talk";
 ```
 
 Managed override может одновременно содержать несколько типов настроек:
@@ -286,7 +284,7 @@ org.kde.StatusNotifierWatcher=talk
 Source of truth:
 
 ```text
-config/flatpak/overrides/com.anydesk.Anydesk.conf
+modules/home/flatpak.nix (overrides."com.anydesk.Anydesk")
 ```
 
 Проверено:
@@ -335,7 +333,7 @@ org.freedesktop.Flatpak=talk
 Source of truth:
 
 ```text
-config/flatpak/overrides/com.anthropic.ClaudeDesktop.conf
+modules/home/flatpak.nix (overrides."com.anthropic.ClaudeDesktop")
 ```
 
 Claude является Electron/Chromium application. Для корректного fractional scale
@@ -352,7 +350,8 @@ Launcher добавляет:
 --force-device-scale-factor=1.5
 ```
 
-Managed desktop override публикуется как symlink в:
+Managed desktop override объявлен в `desktop` в `modules/home/flatpak.nix`;
+home-manager публикует его как symlink (в store) в:
 
 ```text
 ~/.local/share/applications/com.anthropic.ClaudeDesktop.desktop
@@ -408,8 +407,9 @@ missing managed apps from their recorded origin remote
 managed filesystem overrides
 managed environment overrides
 managed session D-Bus permissions
-managed desktop launcher overrides
 ```
+
+Desktop launcher overrides ставит `ws switch` (home-manager).
 
 Reproducibility проверена deliberate drift test:
 
@@ -538,7 +538,7 @@ check      PASS
 Source of truth:
 
 ```text
-config/flatpak/apps.conf
+modules/home/flatpak.nix
 ```
 
 На текущем verified baseline используются:
@@ -556,7 +556,7 @@ flathub  com.mattjakeman.ExtensionManager
 ```
 
 Этот список в документации является snapshot состояния на момент закрытия.
-Authoritative inventory всегда находится в `config/flatpak/apps.conf`.
+Authoritative inventory всегда находится в `modules/home/flatpak.nix`.
 
 ---
 
