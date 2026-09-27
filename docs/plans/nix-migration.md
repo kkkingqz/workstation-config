@@ -1029,7 +1029,14 @@ PASS, `ws baseline diff` пуст»:
   пользователь): расширение используется, обязательно и в `ws-gnome-test`,
   и в `gnome.md`. Старые копии `extensions-before-nix` и `state-before-nix`
   удалены.
-- Скрипты в store (`writeShellApplication`) вместо ссылок на checkout.
+- ~~Скрипты в store (`writeShellApplication`) вместо ссылок на checkout~~ —
+  **не делаем (2026-09-27, решение пользователя):** `bin/` остаётся
+  ссылками на checkout. Причины: `gsettings`, `gdbus`, `busctl`, `python3`
+  с PyGObject/AT-SPI нужны с хоста, в `runtimeInputs` их не положить;
+  каждая правка потребовала бы `ws switch`; скрипты находят checkout по
+  своему пути, а `xremap.yml`, unit `xremap` и расширение input-source
+  вызывают их по пути в checkout. Пересматривать — только если вторая
+  машина потребует своих утилит.
 - ~~`man/` собирать при сборке, а не хранить в git~~ — **сделано
   (2026-09-27):** `pkgs/man.nix` запускает `bin/ws-doc-build` с lowdown
   2.0.4 (`pkgs/lowdown.nix`: версия apt, 16 страниц байт в байт как в
