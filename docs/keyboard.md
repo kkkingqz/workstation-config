@@ -515,7 +515,8 @@ bin/ws-keyboard-install-extensions
 bin/ws-keyboard-system-apply
 bin/ws-workstation-verify
 
-systemd/user/xremap.service
+modules/home/xremap.nix
+pkgs/xremap.nix
 system/udev/99-workstation-uinput.rules
 
 system/udev/90-touchbar-native.rules
@@ -562,12 +563,28 @@ xremap binary — из Nix: `pkgs/xremap.nix`, upstream
 Обновление xremap: версия и hash в `pkgs/xremap.nix` и sha256 бинарника в
 `ws-workstation-verify`, затем `ws switch` и `ws-keyboard restart`.
 
-xremap service:
+xremap service — `systemd.user.services.xremap` home-manager
+(`modules/home/xremap.nix`); unit и ссылку в
+`graphical-session.target.wants` ставит `ws switch`:
 
 ```text
-~/.config/systemd/user/xremap.service
-  -> ~/.local/share/workstation-config/systemd/user/xremap.service
+~/.config/systemd/user/xremap.service -> /nix/store/…-xremap.service
+Environment=XREMAP_BIN=/nix/store/…-xremap-gnome-0.15.13/bin/xremap
+Environment=XREMAP_CONFIG=/nix/store/…-xremap.yml
+ExecStart=/usr/bin/bash ~/.local/share/workstation-config/bin/ws-xremap
 ```
+
+`XREMAP_CONFIG` — сборка `config/keyboard/xremap.yml` в store: `@repo@` в
+путях `launch` (`@repo@/bin/ws-input-source`) заменяется на checkout этого
+home. Правка `xremap.yml` применяется через `ws switch`: unit меняется, и
+home-manager перезапускает сервис (`--watch=config` store-файл не видит).
+Без `XREMAP_CONFIG` `ws-xremap` не запускается.
+
+Включает сервис home-manager; решает, работает ли xremap, по-прежнему
+`ws-keyboard`. `restore` и неудачный `apply` создают флаг
+`~/.local/state/workstation/keyboard/xremap.disabled` (в unit —
+`ConditionPathExists=!…`), поэтому xremap не стартует и после
+перезагрузки; `ws-keyboard apply` и `ws-keyboard start` флаг удаляют.
 
 Наши GNOME extensions устанавливаются как реальные directories в:
 
@@ -623,7 +640,9 @@ ws-keyboard-system-apply
 ws-keyboard restore
 ```
 
-восстанавливает исходный snapshot GNOME shortcuts и останавливает xremap.
+восстанавливает исходный snapshot GNOME shortcuts, останавливает xremap и
+ставит флаг `xremap.disabled` (см. «Runtime installation»): xremap не
+стартует до `ws-keyboard apply` или `ws-keyboard start`.
 
 Он не удаляет Tiling Assistant, Window Control, `ws-touchbar-fn` или локальные
 GNOME extensions. Их lifecycle управляется отдельно.

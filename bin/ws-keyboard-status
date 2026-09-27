@@ -43,10 +43,12 @@ else
 fi
 
 if [[ -L "$HOME/.config/systemd/user/xremap.service" ]]; then
-    printf '  %-24s %s\n' "Service link" "$(readlink "$HOME/.config/systemd/user/xremap.service")"
+    printf '  %-24s %s\n' "Service unit" "$(readlink -f "$HOME/.config/systemd/user/xremap.service")"
 else
-    warn "Service link" "MISSING"
+    warn "Service unit" "MISSING (ws switch)"
 fi
+[[ -e "$HOME/.local/state/workstation/keyboard/xremap.disabled" ]] \
+    && warn "Restore flag" "xremap off (ws-keyboard apply turns it on)"
 
 systemctl --user is-active --quiet xremap.service 2>/dev/null && ok "Service" || warn "Service" "$(systemctl --user is-active xremap.service 2>/dev/null || echo inactive)"
 

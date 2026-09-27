@@ -10,7 +10,7 @@ Commands:
   apply       Apply GNOME shortcuts, symlinks and start xremap if ready
   restore     Restore backed-up GNOME shortcuts and disable xremap
   status      Show keyboard/xremap/GNOME status
-  start       Enable and start xremap user service
+  start       Start xremap user service (clears the restore flag)
   stop        Stop xremap user service
   restart     Restart xremap user service
   logs        Follow xremap user-service log
@@ -23,9 +23,9 @@ case "${1:-status}" in
     apply) exec "$repo/bin/ws-keyboard-apply" ;;
     restore) exec "$repo/bin/ws-keyboard-apply" --restore ;;
     status) exec "$repo/bin/ws-keyboard-status" ;;
-    start) systemctl --user daemon-reload; systemctl --user enable --now xremap.service ;;
+    start) rm -f "$HOME/.local/state/workstation/keyboard/xremap.disabled"; systemctl --user start xremap.service ;;
     stop) systemctl --user stop xremap.service ;;
-    restart) systemctl --user daemon-reload; systemctl --user restart xremap.service ;;
+    restart) systemctl --user restart xremap.service ;;
     logs) exec journalctl --user -fu xremap.service ;;
     devices) exec xremap --list-devices ;;
     gnome-apps) exec busctl --user call org.gnome.Shell /com/k0kubun/Xremap com.k0kubun.Xremap WMClasses ;;

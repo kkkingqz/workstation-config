@@ -17,6 +17,9 @@
 # GNOME Wayland application filtering requires the xremap GNOME extension.
 # ws-xremap refuses to start without its D-Bus bridge, so terminal exclusions
 # can never silently stop working.
+#
+# xremap reads the store build of this file (modules/home/xremap.nix), where
+# @repo@ becomes the checkout path; edits take effect on `ws switch`.
 
 modmap:
   - name: Apple Fn mode
@@ -77,20 +80,20 @@ keymap:
       # Fn+Option+T: toggle Always on Top
       Alt-T: Shift-Ctrl-Alt-Super-T
       # Fn+CapsLock: select Ukrainian layout
-      CapsLock: { launch: ["/home/king/.local/share/workstation-config/bin/ws-input-source", "ua"] }
-      Alt-CapsLock: { launch: ["/home/king/.local/share/workstation-config/bin/ws-input-source", "ua"] }
+      CapsLock: { launch: ["@repo@/bin/ws-input-source", "ua"] }
+      Alt-CapsLock: { launch: ["@repo@/bin/ws-input-source", "ua"] }
   - name: CapsLock input-source selector
     exact_match: true
     remap:
       # Logical CapsLock: OFF=EN, ON=RU. Real CapsLock modifier is suppressed.
-      CapsLock: { launch: ["/home/king/.local/share/workstation-config/bin/ws-input-source", "caps"] }
+      CapsLock: { launch: ["@repo@/bin/ws-input-source", "caps"] }
 
       # Ukrainian override; does not change remembered EN/RU Caps state.
-      Alt-CapsLock: { launch: ["/home/king/.local/share/workstation-config/bin/ws-input-source", "ua"] }
+      Alt-CapsLock: { launch: ["@repo@/bin/ws-input-source", "ua"] }
 
       # Deterministic input-source cycle
-      Ctrl-Space: { launch: ["/home/king/.local/share/workstation-config/bin/ws-input-source", "next"] }
-      Ctrl-Alt-Space: { launch: ["/home/king/.local/share/workstation-config/bin/ws-input-source", "prev"] }
+      Ctrl-Space: { launch: ["@repo@/bin/ws-input-source", "next"] }
+      Ctrl-Alt-Space: { launch: ["@repo@/bin/ws-input-source", "prev"] }
   - name: macOS Spaces
     exact_match: true
     remap:

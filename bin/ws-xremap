@@ -3,7 +3,9 @@ set -euo pipefail
 
 repo="${WORKSTATION_CONFIG:-$HOME/.local/share/workstation-config}"
 settings="$repo/config/keyboard/settings.conf"
-config="$repo/config/keyboard/xremap.yml"
+# xremap.service (modules/home/xremap.nix) passes the store build of
+# config/keyboard/xremap.yml (@repo@ substituted) and the pinned binary.
+config="${XREMAP_CONFIG:-}"
 
 if [[ -r "$settings" ]]; then
     # shellcheck disable=SC1090
@@ -13,9 +15,10 @@ fi
 desktop="${XREMAP_DESKTOP:-gnome}"
 watch="${XREMAP_WATCH:-config,device}"
 
+[[ -n "$config" ]] || { echo "ws-xremap: XREMAP_CONFIG unset; start it as xremap.service (ws-keyboard start)" >&2; exit 64; }
 [[ -r "$config" ]] || { echo "ws-xremap: missing config: $config" >&2; exit 66; }
 
-xremap_bin="$(command -v xremap || true)"
+xremap_bin="${XREMAP_BIN:-$(command -v xremap || true)}"
 [[ -n "$xremap_bin" ]] || { echo "ws-xremap: xremap is not installed or not in PATH" >&2; exit 127; }
 
 # Application-specific exclusions are safety-critical: without the GNOME

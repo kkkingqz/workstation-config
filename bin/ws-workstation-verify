@@ -442,20 +442,29 @@ else
 fi
 rm -f /tmp/ws-verify-secret.$$
 
+# xremap.yml launches ws-input-source as "@repo@/bin/ws-input-source";
+# modules/home/xremap.nix substitutes the checkout path in the store build.
 expected_input_helper="$repo/bin/ws-input-source"
-input_helper_paths="$(grep -oE '"/[^"]*/ws-input-source"' "$repo/config/keyboard/xremap.yml" 2>/dev/null | tr -d '"' | sort -u || true)"
-if [[ -z "$input_helper_paths" ]]; then
-    fail "xremap contains no absolute ws-input-source launch path"
+if grep -qE '"/[^"]*/ws-input-source"' "$repo/config/keyboard/xremap.yml" 2>/dev/null; then
+    fail "xremap.yml has an absolute ws-input-source path; use @repo@/bin/ws-input-source"
+elif ! grep -qF '"@repo@/bin/ws-input-source"' "$repo/config/keyboard/xremap.yml" 2>/dev/null; then
+    fail "xremap.yml contains no @repo@/bin/ws-input-source launch path"
 else
-    bad_input_path=false
-    while IFS= read -r p; do
-        [[ -n "$p" ]] || continue
-        if [[ "$p" != "$expected_input_helper" ]]; then
-            bad_input_path=true
-            warn "xremap ws-input-source path mismatch: $(q "$p"), expected $(q "$expected_input_helper")"
-        fi
-    done <<<"$input_helper_paths"
-    [[ "$bad_input_path" == false ]] && pass "xremap absolute ws-input-source path matches current repo"
+    pass "xremap.yml launches ws-input-source through @repo@"
+fi
+xremap_env="$(systemctl --user show -P Environment xremap.service 2>/dev/null || true)"
+xremap_cfg="$(tr ' ' '\n' <<<"$xremap_env" | sed -n 's/^XREMAP_CONFIG=//p')"
+xremap_env_bin="$(tr ' ' '\n' <<<"$xremap_env" | sed -n 's/^XREMAP_BIN=//p')"
+if [[ "$xremap_cfg" != /nix/store/* || ! -r "$xremap_cfg" ]]; then
+    fail "xremap.service has no store XREMAP_CONFIG (${xremap_cfg:-unset}); run ws switch"
+elif grep -q '@repo@' "$xremap_cfg"; then
+    fail "xremap store config still contains @repo@: $xremap_cfg"
+elif ! grep -qF "\"$expected_input_helper\"" "$xremap_cfg"; then
+    fail "xremap store config does not launch $(q "$expected_input_helper")"
+elif [[ "$(sed "s|@repo@|$repo|g" "$repo/config/keyboard/xremap.yml" | sha256sum)" != "$(sha256sum < "$xremap_cfg")" ]]; then
+    warn "xremap store config differs from config/keyboard/xremap.yml; run ws switch"
+else
+    pass "xremap store config matches config/keyboard/xremap.yml (${xremap_cfg#/nix/store/})"
 fi
 
 expected_led_helper="$repo/bin/ws-caps-led"
@@ -469,7 +478,6 @@ fi
 current_home_prefix="${HOME%/}/"
 other_hardcoded_home="$(git -C "$repo" grep -nF "$current_home_prefix" -- \
     ':!docs/**' \
-    ':!config/keyboard/xremap.yml' \
     ':!bin/ws-workstation-verify' \
     ':!gnome/extensions/workstation-input-source@local/extension.js' \
     2>/dev/null || true)"
@@ -513,7 +521,6 @@ for path in \
     bin/ws-keyboard-apply \
     bin/ws-keyboard-status \
     bin/ws-xremap \
-    systemd/user/xremap.service \
     system/udev/99-workstation-uinput.rules \
     docs/keyboard.md \
     docs/touchbar.md
@@ -911,14 +918,21 @@ systemctl --user is-active --quiet xremap.service 2>/dev/null \
     && pass "xremap.service active" \
     || fail "xremap.service not active"
 
-systemctl --user is-enabled --quiet xremap.service 2>/dev/null \
-    && pass "xremap.service enabled" \
-    || warn "xremap.service not enabled"
-
-check_symlink_target \
-    "$HOME/.config/systemd/user/xremap.service" \
-    "$repo/systemd/user/xremap.service" \
-    "xremap user-service link points into repo"
+# modules/home/xremap.nix: home-manager owns the unit and its wants link;
+# `ws-keyboard restore` switches xremap off with a ConditionPathExists flag.
+xremap_unit="$(readlink -f "$HOME/.config/systemd/user/xremap.service" 2>/dev/null || true)"
+[[ "$xremap_unit" == /nix/store/* ]] \
+    && pass "xremap.service unit comes from home-manager: ${xremap_unit#/nix/store/}" \
+    || fail "xremap.service unit is not from home-manager (${xremap_unit:-missing}); run ws switch"
+[[ -L "$HOME/.config/systemd/user/graphical-session.target.wants/xremap.service" ]] \
+    && pass "xremap.service wanted by graphical-session.target" \
+    || fail "xremap.service wants link missing; run ws switch"
+[[ -e "$HOME/.local/state/workstation/keyboard/xremap.disabled" ]] \
+    && warn "xremap switched off by ws-keyboard restore (ws-keyboard apply turns it on)" \
+    || pass "xremap not switched off by ws-keyboard restore"
+[[ -n "$xremap_env_bin" && "$xremap_env_bin" == "$xremap_real" ]] \
+    && pass "xremap.service runs the same binary as ~/.local/bin/xremap" \
+    || fail "xremap.service XREMAP_BIN ${xremap_env_bin:-unset} differs from ~/.local/bin/xremap"
 
 for name in ws-keyboard ws-keyboard-apply ws-keyboard-status ws-xremap; do
     [[ -e "$repo/bin/$name" ]] && check_symlink_target \
@@ -1737,6 +1751,7 @@ section "17. Legacy artifacts that should be gone"
 legacy_repo_paths=(
     bin/ws-nautilus-go
     systemd/user/ws-touchbar-fn.service
+    systemd/user/xremap.service
     system/udev/70-workstation-uinput.rules
     config/tiny-dfr/config.toml
 )

@@ -963,8 +963,9 @@ sha256). Эталон `nix-v1` (`--with-sudo`, 2026-09-27): dpkg verify, initrd 
 - Что станет фактами хоста, только когда понадобится другое значение:
   - масштаб 1.5 в `.desktop` Claude (`config/flatpak/desktop/`) — каталог
     данных хоста для `wsflatpak`;
-  - абсолютные пути `/home/king/…` в `xremap.yml` и в `LED_HELPER`
-    расширения input-source — если имя пользователя другое;
+  - абсолютный путь `/home/king/…` в `LED_HELPER` расширения
+    input-source — если имя пользователя другое (`xremap.yml` уже берёт
+    путь из `home.homeDirectory`);
   - `keyboard.physical = "pc"` — своя клавиша для UA вместо Fn+CapsLock;
   - verify: проверки T2 и Touch Bar — только для `hardware = "t2-mbp16"`.
 - Реальная машина: новый `hosts/<name>/` и при необходимости
@@ -985,7 +986,16 @@ PASS, `ws baseline diff` пуст»:
 - Flatpak через nix-flatpak или генерацию `apps.conf`. Учесть: `wsflatpak`
   пишет в `config/flatpak/`, а его `check` требует ссылку `.desktop` на
   репозиторий.
-- xremap как `systemd.user.services` и `xremap.yml` со store-путями.
+- ~~xremap как `systemd.user.services` и `xremap.yml` со store-путями~~ —
+  **сделано (2026-09-27):** `modules/home/xremap.nix` —
+  `systemd.user.services.xremap` с прежним содержимым unit (из репозитория
+  `systemd/user/xremap.service` удалён); бинарник и `xremap.yml` передаются
+  в `ws-xremap` store-путями (`XREMAP_BIN`, `XREMAP_CONFIG`); в `xremap.yml`
+  вместо `/home/king/…` — `@repo@`, подставляется из `home.homeDirectory`.
+  Правка yml — через `ws switch` (unit меняется, сервис перезапускается).
+  Wants-ссылку ставит home-manager, поэтому `ws-keyboard restore` и откат
+  apply выключают xremap флагом `~/.local/state/workstation/keyboard/
+  xremap.disabled` (`ConditionPathExists`), а не `systemctl disable`.
 - Расширения с EGO по версии и hash.
 - Скрипты в store (`writeShellApplication`) вместо ссылок на checkout.
 - ~~`man/` собирать при сборке, а не хранить в git~~ — **сделано

@@ -257,7 +257,7 @@ gnome/extensions/workstation-input-source@local/
 gnome/extensions/workstation-smart-popup@local/
 gnome/extensions/workstation-dock-spring@local/
 
-systemd/user/xremap.service
+modules/home/xremap.nix
 system/udev/99-workstation-uinput.rules
 
 system/udev/90-touchbar-native.rules
@@ -753,14 +753,13 @@ workstation-config/
 │   ├── systemd/system/ws-touchbar-fn.service
 │   ├── udev/90-touchbar-native.rules, 99-workstation-uinput.rules
 │   └── usr/local/libexec/ws-touchbar-fn
-├── systemd/user/
-│   └── xremap.service
 └── docs/
 ```
 
 Nix доставляет, владельцы слоёв не меняются (`helpws plan-nix`):
 home-manager ставит ссылки на checkout (`~/.local/bin`, fish, Ghostty), man pages
-и CLI (fzf, zoxide, eza, micro, nvd, xremap); `ws system apply` ставит копии
+и CLI (fzf, zoxide, eza, micro, nvd, xremap), unit `xremap.service` с
+`xremap.yml` из store; `ws system apply` ставит копии
 системных файлов из сборки `modules/system`; GNOME, Flatpak, Distrobox,
 клавиатура — прежние `bin/`-владельцы, их по порядку вызывает `ws apply`.
 Основная проверка — `ws check`.
