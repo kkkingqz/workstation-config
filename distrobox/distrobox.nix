@@ -13,7 +13,7 @@
 # `wsbox update` (distrobox upgrade), a new image is used on recreate. A
 # digest (repo@sha256:...) still works where a fixed image is needed; wsbox
 # check then compares the repo digest.
-{ lib, pkgs, ... }:
+{ config, lib, pkgs, facts, ... }:
 let
   # The same for every container unless a container sets it.
   defaults = {
@@ -33,6 +33,9 @@ let
   # host release upgrade wsbox check reports image drift: wsbox recreate NAME.
   hostUbuntu = "docker.io/library/ubuntu:@HOST_VERSION_ID@";
 
+  # The checkout as seen inside a container (the host HOME is mounted there).
+  wsconfig = "${config.home.homeDirectory}/${facts.wsconfig}";
+
   # In manifest order. HOME of every container: ~/distrobox/NAME (survives
   # recreate). The host HOME is mounted as well, at its own path: sources
   # such as ~/touchbar are reached as /home/<user>/touchbar.
@@ -48,6 +51,11 @@ let
       # when needed; AUR packages are installed again by hand
       # (docs/rebuild.md).
       image = "docker.io/library/archlinux:latest";
+      # base-devel: makepkg for the hook and for AUR (paru).
+      packages = [ "base-devel" "git" ];
+      # Before any Wine package: the host kernel provides ntsync, the
+      # virtual provider keeps pacman/paru from pulling an Arch kernel.
+      initHooks = [ "${wsconfig}/distrobox/arch/wsbox-host-ntsync/install-hook" ];
       exports.winbox3 = "/usr/share/applications/winbox3.desktop";
     }
     {
@@ -89,7 +97,8 @@ let
     + lib.concatMapStrings (k: "${k}=${value (defaults // (c.settings or { })).${k}}\n")
       keyOrder
     + lib.optionalString (c ? packages)
-      "additional_packages=\"${lib.concatStringsSep " " c.packages}\"\n";
+      "additional_packages=\"${lib.concatStringsSep " " c.packages}\"\n"
+    + lib.concatMapStrings (h: "init_hooks=\"${h}\"\n") (c.initHooks or [ ]);
 
   exportSection = c: ''
     [${c.name}]

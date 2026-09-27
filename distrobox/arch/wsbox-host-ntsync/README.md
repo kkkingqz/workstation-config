@@ -20,9 +20,15 @@ It does not contain a kernel module and must only be installed when the host
 kernel actually provides NTSync and `/dev/ntsync` is available to the
 container.
 
-Expected recovery order:
+Installed automatically: `install-hook` is the init hook of the `arch`
+container in `distrobox/distrobox.nix`; distrobox runs it as root at the end
+of container setup (and at every start, where it does nothing once the
+package is installed). It builds the package as the owner of the checkout
+(makepkg refuses root) and installs it with pacman.
 
-1. Load `ntsync` on the host.
-2. Build and install this package in the Arch Distrobox.
-3. Install Wine / WinBox.
+Recovery order:
+
+1. Load `ntsync` on the host (`ws system apply`: modules-load.d/ntsync.conf).
+2. `wsbox apply arch` or `wsbox recreate arch` (the hook installs this package).
+3. Install Wine / WinBox (paru).
 4. Run `wsbox apply arch` to restore managed application exports.

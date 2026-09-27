@@ -1,0 +1,20 @@
+#!/bin/sh
+# Init hook of the arch container (distrobox/distrobox.nix): distrobox runs
+# it as root at the end of every container start. Installs
+# wsbox-host-ntsync, the virtual NTSYNC-MODULE provider (README.md), so
+# that nothing pulls an Arch kernel for ntsync-autoload. Does nothing once
+# the package is installed.
+set -eu
+
+pacman -Q wsbox-host-ntsync >/dev/null 2>&1 && exit 0
+
+src="$(dirname "$(readlink -f "$0")")"
+# makepkg refuses root: build as the owner of the checkout.
+user="$(stat -c %U "$src/PKGBUILD")"
+tmp="$(mktemp -d)"
+trap 'rm -rf "$tmp"' EXIT
+
+cp "$src/PKGBUILD" "$src/README.md" "$tmp/"
+chown -R "$user" "$tmp"
+runuser -u "$user" -- sh -c "cd '$tmp' && makepkg --clean --cleanbuild --force"
+pacman -U --noconfirm "$tmp"/wsbox-host-ntsync-*.pkg.tar.zst

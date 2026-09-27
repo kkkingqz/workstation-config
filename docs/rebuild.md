@@ -356,26 +356,15 @@ touchbar-build
 Custom HOME каждого box находится в `~/distrobox/<имя>/` и не
 удаляется `wsbox remove --force`/`recreate`.
 
-Для Arch перед установкой Wine/WinBox обязательно установить virtual provider
-host NTSync, чтобы pacman не тянул container-local kernel:
+Virtual provider host NTSync (`wsbox-host-ntsync`, `NTSYNC-MODULE`) Arch
+ставит сам при создании: `base-devel` и `git` — пакеты контейнера, init hook
+`distrobox/arch/wsbox-host-ntsync/install-hook` собирает пакет от имени
+пользователя и ставит его (при каждом старте контейнера, если его нет). Без
+него pacman/paru тянут в контейнер ядро `linux` для `ntsync-autoload`.
+Проверка:
 
 ```console
-wsbox enter arch
-
-sudo pacman -Syu --needed base-devel git
-```
-
-Внутри контейнера `~` — его HOME (`~/distrobox/arch`), checkout хоста — по
-своему пути `/home/$USER/wsconfig`; собирать в копии, не в checkout:
-
-```fish
-set tmp (mktemp -d)
-cp -r /home/$USER/wsconfig/distrobox/arch/wsbox-host-ntsync $tmp/
-cd $tmp/wsbox-host-ntsync
-makepkg --clean --cleanbuild --force
-sudo pacman -U ./wsbox-host-ntsync-1-1-any.pkg.tar.zst
-cd
-rm -rf $tmp
+wsbox run arch pacman -Qi wsbox-host-ntsync
 ```
 
 Если `paru` ещё не установлен:

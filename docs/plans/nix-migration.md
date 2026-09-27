@@ -1159,6 +1159,12 @@ PASS, `ws baseline diff` пуст»:
      (`.rustup`, `.cargo`, пути в `.cargo/env*` исправлены) — переживает
      пересоздание. `arch` — пользователь: перенос HOME, `wsbox recreate
      arch`, AUR (paru, `wsbox-host-ntsync`, winbox3).
+     Сделано пользователем (2026-09-27, `ws check` зелёный). После этого
+     `wsbox-host-ntsync` (NTSYNC-MODULE) — часть описания `arch`: пакеты
+     `base-devel git` и init hook `distrobox/arch/wsbox-host-ntsync/install-hook`
+     (root, в конце настройки контейнера; собирает от имени владельца
+     checkout, ставит pacman, при повторных стартах ничего не делает).
+     Проверено на временном контейнере из того же манифеста.
 - ~~Убрать `t2bce-build` и `touchbar-build`~~ — **сделано иначе
   (2026-09-27):** по решению пользователя оба оставлены и описаны в
   `containers.ini` (общий HOME хоста, `additional_packages` по фактически

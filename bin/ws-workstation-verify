@@ -678,6 +678,7 @@ for path in \
     system/files/modules-load.d/ntsync.conf \
     distrobox/arch/wsbox-host-ntsync/PKGBUILD \
     distrobox/arch/wsbox-host-ntsync/README.md \
+    distrobox/arch/wsbox-host-ntsync/install-hook \
     docs/plans/development.md
 do
     tracked "$path" "$path"
@@ -726,6 +727,17 @@ if [[ -r "$ntsync_pkgbuild" ]]; then
         "$ntsync_pkgbuild" \
         'provides=("NTSYNC-MODULE")' \
         "Arch host-NTSync package provides NTSYNC-MODULE"
+fi
+ntsync_hook="distrobox/arch/wsbox-host-ntsync/install-hook"
+if [[ -e "$repo/$ntsync_hook" ]]; then
+    check_exec_tracked "$ntsync_hook"
+else
+    fail "$ntsync_hook missing"
+fi
+if grep -Fxq "init_hooks=\"$repo/$ntsync_hook\"" "$HOME/.local/share/workstation/distrobox/containers.ini" 2>/dev/null; then
+    pass "arch manifest runs $ntsync_hook at container setup"
+else
+    fail "arch manifest has no init_hooks for $ntsync_hook (distrobox/distrobox.nix; ws switch)"
 fi
 
 if have podman && podman container exists arch >/dev/null 2>&1; then
