@@ -15,22 +15,22 @@
       pkgs = nixpkgs.legacyPackages.${system};
 
       mkHome = host:
-        let facts = import ./hosts/${host}/facts.nix;
+        let facts = import ./nix/hosts/${host}/facts.nix;
         in home-manager.lib.homeManagerConfiguration {
           inherit pkgs;
           extraSpecialArgs = {
             inherit facts man;
-            xremap = pkgs.callPackage ./pkgs/xremap.nix { };
+            xremap = pkgs.callPackage ./nix/pkgs/xremap.nix { };
           };
-          modules = [ ./hosts/${host}/home.nix ];
+          modules = [ ./nix/hosts/${host}/home.nix ];
         };
 
       # Man pages from docs/ with lowdown from nixpkgs.
-      man = pkgs.callPackage ./pkgs/man.nix { };
+      man = pkgs.callPackage ./nix/pkgs/man.nix { };
 
       # System file tree of the host; `ws system diff|check` compares it.
-      mkSystem = host: pkgs.callPackage ./modules/system {
-        facts = import ./hosts/${host}/facts.nix;
+      mkSystem = host: pkgs.callPackage ./system {
+        facts = import ./nix/hosts/${host}/facts.nix;
       };
     in {
       homeConfigurations."king@mbp16" = mkHome "mbp16";
@@ -45,7 +45,7 @@
       packages.${system} = {
         home-manager = home-manager.packages.${system}.home-manager;
         nvd = pkgs.nvd;
-        xremap = pkgs.callPackage ./pkgs/xremap.nix { };
+        xremap = pkgs.callPackage ./nix/pkgs/xremap.nix { };
         system-mbp16 = mkSystem "mbp16";
         man = man;
       };

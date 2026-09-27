@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# The profile is declared in modules/home/gnome.nix and written by `ws switch`
+# The profile is declared in gnome/gnome.nix and written by `ws switch`
 # (home-manager dconf.settings). This only compares the session with it.
 profile="${WS_GNOME_PROFILE:-$HOME/.config/workstation/gnome/settings.conf}"
 quiet=false
@@ -13,7 +13,7 @@ Usage:
   ws-gnome-check --quiet   exit status only (for status/verify helpers)
 
 The profile (appearance and Ubuntu Dock) is declared in
-modules/home/gnome.nix and applied by `ws switch`; home-manager builds
+gnome/gnome.nix and applied by `ws switch`; home-manager builds
 ~/.config/workstation/gnome/settings.conf (SCHEMA|KEY|VALUE) for this check.
 USAGE
 }

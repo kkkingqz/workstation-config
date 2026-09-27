@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-repo="${WORKSTATION_CONFIG:-$HOME/.local/share/workstation-config}"
+repo="${WSCONFIG:-$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)}"
 
 die() {
     echo "ws-keyboard-install-extensions: $*" >&2
@@ -90,7 +90,7 @@ install_ego() {
     echo "installed from extensions.gnome.org: $uuid"
 }
 
-# modules/home/gnome-extensions.nix; ws switch builds the list, enables the
+# gnome/gnome-extensions.nix; ws switch builds the list, enables the
 # extensions (enabled-extensions) and links the pinned EGO ones.
 list="$HOME/.config/workstation/gnome/extensions"
 [[ -r "$list" ]] || die "extension list missing: $list (run ws switch)"

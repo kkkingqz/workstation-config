@@ -2,11 +2,11 @@
 set -euo pipefail
 
 # First steps on a fresh Ubuntu (docs/rebuild.md, docs/plans/nix-migration.md):
-# @nix subvolume at /nix → apt packages (hosts/apt.txt, hosts/<host>/apt.txt)
+# @nix subvolume at /nix → apt packages (nix/hosts/apt.txt, nix/hosts/<host>/apt.txt)
 # → nix-users → fish as login shell → first `ws switch`.
 #
-# Runs as the desktop user from the checkout in
-# ~/.local/share/workstation-config and calls sudo itself. Every step checks
+# Runs as the desktop user from the checkout at ~/<wsconfig of
+# nix/hosts/<host>/facts.nix> and calls sudo itself. Every step checks
 # the current state first, so a second run changes nothing.
 #
 #   ./bootstrap.sh [--dry-run]
@@ -15,7 +15,6 @@ set -euo pipefail
 # in → ws apply → ws check.
 
 repo="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-expected="$HOME/.local/share/workstation-config"
 dry_run=false
 
 die() {
@@ -39,22 +38,25 @@ run() {
 }
 
 [[ $EUID -ne 0 ]] || die "run as the desktop user, not root"
-[[ "$repo" == "$expected" ]] \
-    || die "checkout must be $expected (scripts and links point there), not $repo"
 command -v sudo >/dev/null 2>&1 || die "sudo not found"
 [[ "$(findmnt -no FSTYPE /)" == btrfs ]] || die "/ is not Btrfs (rebuild.md, section 3)"
 findmnt -no OPTIONS / | tr ',' '\n' | grep -qx 'subvol=/@' \
     || die "/ is not the subvolume @ (rebuild.md, section 3)"
 
 host="$("$repo/bin/ws" host)"
-host_list="$repo/hosts/$host/apt.txt"
-[[ -r "$repo/hosts/$host/facts.nix" ]] || die "no hosts/$host/facts.nix"
+host_list="$repo/nix/hosts/$host/apt.txt"
+[[ -r "$repo/nix/hosts/$host/facts.nix" ]] || die "no nix/hosts/$host/facts.nix"
+# The checkout path is a fact of the host: home-manager links point there.
+expected="$HOME/$(sed -nE 's/^[[:space:]]*wsconfig = "([^"]+)";.*/\1/p' "$repo/nix/hosts/$host/facts.nix")"
+[[ "$expected" != "$HOME/" ]] || die "no wsconfig in nix/hosts/$host/facts.nix"
+[[ "$repo" == "$expected" ]] \
+    || die "checkout must be $expected (wsconfig in nix/hosts/$host/facts.nix), not $repo"
 echo "Host: $host"
 
 # Package and PPA lines of the apt lists, without comments.
 apt_lines() {
     local f
-    for f in "$repo/hosts/apt.txt" "$host_list"; do
+    for f in "$repo/nix/hosts/apt.txt" "$host_list"; do
         [[ -r "$f" ]] && sed -e 's/#.*//' -e 's/[[:space:]]//g' -e '/^$/d' "$f"
     done
     return 0

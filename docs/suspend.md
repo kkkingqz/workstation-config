@@ -36,7 +36,7 @@ ws-suspend t2bce-rollback [KERNEL]
 ```
 
 `ws-suspend apply` — обёртка над `ws system apply`: ставит все системные
-файлы хоста из `modules/system` (Nix), а не только слой suspend; проверка
+файлы хоста из `system` (Nix), а не только слой suspend; проверка
 без изменений — `ws system diff`.
 
 ## Deep-only sleep
@@ -80,7 +80,7 @@ forced ASPM и Touch Bar в режиме дисплея; без него отк�
 Ядрам, которые грузятся через GRUB (recovery, предыдущие ядра), forced ASPM
 добавлял `/etc/default/grub.d/90-pcie-aspm.cfg`; он удалён 2026-09-26.
 Параметры ядра для GRUB теперь в `/etc/default/grub.d/10-workstation-cmdline.cfg`
-(`system/default/grub.d/`) и совпадают с `refind_linux.conf`.
+(`system/files/default/grub.d/`) и совпадают с `refind_linux.conf`.
 
 ## t2bce: отказ stateful suspend
 
@@ -108,8 +108,8 @@ deqrocks/t2bce#9                          черновик исправлени�
 ### Локальный патч
 
 ```text
-kernel/t2bce/nostate-fix.patch   патч к drivers/staging/t2bce из linux-t2-patches 1001
-kernel/t2bce/sources.conf        версия ядра -> коммит linux-t2-patches
+system/kernel/t2bce/nostate-fix.patch   патч к drivers/staging/t2bce из linux-t2-patches 1001
+system/kernel/t2bce/sources.conf        версия ядра -> коммит linux-t2-patches
 ```
 
 Патч:
@@ -158,7 +158,7 @@ echo Y | sudo tee /sys/module/t2bce_core/parameters/stateful_sleep
 1. Проверить, вошло ли исправление в upstream (#215, deqrocks/t2bce#9,
    `linux-t2-patches`). Если да — локальный патч больше не нужен.
 2. Если нет — найти коммит `linux-t2-patches`, из которого собрано новое
-   ядро, и добавить строку в `kernel/t2bce/sources.conf`.
+   ядро, и добавить строку в `system/kernel/t2bce/sources.conf`.
 3. Снять hold, обновить ядро, собрать и поставить модули, вернуть hold:
 
 ```console
@@ -213,13 +213,13 @@ Touch Bar native mode S3 cycles            OK
 
 ```text
 bin/ws-suspend
-kernel/t2bce/nostate-fix.patch
-kernel/t2bce/sources.conf
-system/sleep.conf.d/80-deep-only.conf
-system/udev/70-bcm4364-no-d3cold.rules
-system/usr/local/sbin/broadcom-aspm-suspend-guard
-system/usr/lib/systemd/system-sleep/80-broadcom-aspm
-system/systemd/system/broadcom-aspm-restore.service
+system/kernel/t2bce/nostate-fix.patch
+system/kernel/t2bce/sources.conf
+system/files/sleep.conf.d/80-deep-only.conf
+system/files/udev/70-bcm4364-no-d3cold.rules
+system/files/usr/local/sbin/broadcom-aspm-suspend-guard
+system/files/usr/lib/systemd/system-sleep/80-broadcom-aspm
+system/files/systemd/system/broadcom-aspm-restore.service
 ```
 
 ## Не использовать

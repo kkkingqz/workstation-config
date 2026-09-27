@@ -9,17 +9,17 @@ volume: User Commands
 # PLAN — FLATPAK DESKTOP APPS
 
 **2026-09-27: декларации перенесены в Nix.** Remotes, managed apps, overrides
-и desktop overrides объявляются в `modules/home/flatpak.nix`. home-manager
+и desktop overrides объявляются в `flatpak/flatpak.nix`. home-manager
 собирает из них `~/.config/workstation/flatpak/` (ссылка на store:
 `remotes.conf`, `apps.conf`, `overrides/APP.conf`, `desktop/`) и ставит
 `.desktop`-ссылки в `~/.local/share/applications`. `wsflatpak apply|check|test`
 работают как раньше, но читают этот каталог. Команды, которые раньше писали
-в `config/flatpak/` (`manage`, `unmanage`, `remote-add`, `host`, `unhost`,
+в `flatpak/` (`manage`, `unmanage`, `remote-add`, `host`, `unhost`,
 `filesystem`, `unfilesystem`, `env`, `unenv`, `talk`, `untalk`), теперь только
 печатают строку для `flatpak.nix`. Изменение:
 
 ```console
-$EDITOR ~/.local/share/workstation-config/modules/home/flatpak.nix
+$EDITOR ~/wsconfig/flatpak/flatpak.nix
 ws switch
 wsflatpak apply
 ```
@@ -62,7 +62,7 @@ flathub  -> https://dl.flathub.org/repo/flathub.flatpakrepo
 flatpark -> https://dl.flatpark.org/flatpark.flatpakrepo
 ```
 
-Новый remote объявляется в `remotes` в `modules/home/flatpak.nix`.
+Новый remote объявляется в `remotes` в `flatpak/flatpak.nix`.
 
 Подтверждено:
 
@@ -89,10 +89,10 @@ Source of truth:
 
 ```text
 bin/wsflatpak
-modules/home/flatpak.nix                  remotes, apps, overrides
-config/flatpak/desktop/                   полные .desktop-файлы
+flatpak/flatpak.nix                  remotes, apps, overrides
+flatpak/desktop/                   полные .desktop-файлы
 ~/.config/workstation/flatpak/            сборка из Nix, читает wsflatpak
-config/fish/completions/wsflatpak.fish
+terminal/fish/completions/wsflatpak.fish
 ```
 
 Основные команды:
@@ -118,7 +118,7 @@ Fish completion поддерживает подкоманды, options и уст
 wsflatpak install APP
 ```
 
-ставит приложение и печатает строку для `apps` в `modules/home/flatpak.nix`
+ставит приложение и печатает строку для `apps` в `flatpak/flatpak.nix`
 (с 2026-09-27; раньше добавляло его в managed state само). Пока строки нет,
 `wsflatpak check` показывает WARN unmanaged user app.
 
@@ -160,7 +160,7 @@ wsflatpak remove APP
 ```
 
 Для удаления managed application его сначала убирают из `apps` (и
-`overrides`) в `modules/home/flatpak.nix`, `ws switch`, затем:
+`overrides`) в `flatpak/flatpak.nix`, `ws switch`, затем:
 
 ```console
 wsflatpak remove APP
@@ -196,7 +196,7 @@ Kate использовался как Qt6/lifecycle test application и в ит
 Глобальный `filesystem=host` запрещён.
 
 Широкий host access выдаётся только явно, в `overrides` в
-`modules/home/flatpak.nix`:
+`flatpak/flatpak.nix`:
 
 ```nix
 "APP".Context.filesystems = [ "host" ];
@@ -230,7 +230,7 @@ permission removal               PASS
 
 # 6. Environment overrides — DONE
 
-Tracked environment overrides объявляются в `modules/home/flatpak.nix`:
+Tracked environment overrides объявляются в `flatpak/flatpak.nix`:
 
 ```nix
 "APP".Environment.KEY = "VALUE";
@@ -284,7 +284,7 @@ org.kde.StatusNotifierWatcher=talk
 Source of truth:
 
 ```text
-modules/home/flatpak.nix (overrides."com.anydesk.Anydesk")
+flatpak/flatpak.nix (overrides."com.anydesk.Anydesk")
 ```
 
 Проверено:
@@ -333,14 +333,14 @@ org.freedesktop.Flatpak=talk
 Source of truth:
 
 ```text
-modules/home/flatpak.nix (overrides."com.anthropic.ClaudeDesktop")
+flatpak/flatpak.nix (overrides."com.anthropic.ClaudeDesktop")
 ```
 
 Claude является Electron/Chromium application. Для корректного fractional scale
 1.5 используется managed desktop launcher override:
 
 ```text
-config/flatpak/desktop/com.anthropic.ClaudeDesktop.desktop
+flatpak/desktop/com.anthropic.ClaudeDesktop.desktop
 ```
 
 Launcher добавляет:
@@ -350,7 +350,7 @@ Launcher добавляет:
 --force-device-scale-factor=1.5
 ```
 
-Managed desktop override объявлен в `desktop` в `modules/home/flatpak.nix`;
+Managed desktop override объявлен в `desktop` в `flatpak/flatpak.nix`;
 home-manager публикует его как symlink (в store) в:
 
 ```text
@@ -538,7 +538,7 @@ check      PASS
 Source of truth:
 
 ```text
-modules/home/flatpak.nix
+flatpak/flatpak.nix
 ```
 
 На текущем verified baseline используются:
@@ -556,7 +556,7 @@ flathub  com.mattjakeman.ExtensionManager
 ```
 
 Этот список в документации является snapshot состояния на момент закрытия.
-Authoritative inventory всегда находится в `modules/home/flatpak.nix`.
+Authoritative inventory всегда находится в `flatpak/flatpak.nix`.
 
 ---
 

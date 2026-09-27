@@ -8,7 +8,7 @@ import subprocess
 SCHEMA = "org.gnome.shell.extensions.tiling-assistant"
 
 # Private chords emitted by xremap, appended to the Tiling Assistant defaults
-# (never replacing them). Declared in modules/home/keyboard.nix, built by
+# (never replacing them). Declared in keyboard/keyboard.nix, built by
 # ws switch as KEY<TAB>BINDING lines.
 BINDINGS_FILE = Path(
     os.environ.get(

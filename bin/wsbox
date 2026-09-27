@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Declared in modules/home/distrobox.nix; ws switch builds
+# Declared in distrobox/distrobox.nix; ws switch builds
 # ~/.config/workstation/distrobox. wsbox only reads it; the manifest is
 # rendered first (@HOST_VERSION_ID@: the host release from /etc/os-release).
 cfg="${WSBOX_CONFIG:-$HOME/.config/workstation/distrobox}"
@@ -461,13 +461,13 @@ cmd_check() {
         printf '  FAIL  %s\n' "$*"
     }
 
-    # Host packages (podman, distrobox, uidmap, …) are listed in hosts/apt.txt
+    # Host packages (podman, distrobox, uidmap, …) are listed in nix/hosts/apt.txt
     # and checked by `ws check apt`.
     for p in podman distrobox distrobox-assemble; do
         if command -v "$p" >/dev/null 2>&1; then
             pass "command present: $p"
         else
-            fail "command missing: $p (hosts/apt.txt, ws check apt)"
+            fail "command missing: $p (nix/hosts/apt.txt, ws check apt)"
         fi
     done
 

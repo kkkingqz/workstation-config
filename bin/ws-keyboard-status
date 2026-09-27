@@ -50,7 +50,7 @@ systemctl --user is-active --quiet xremap.service 2>/dev/null && ok "Service" ||
 
 echo
 echo "GNOME bindings"
-# Keys of the profile in modules/home/keyboard.nix (built by ws switch).
+# Keys of the profile in keyboard/keyboard.nix (built by ws switch).
 kb_shortcuts="$HOME/.config/workstation/keyboard/gnome-shortcuts.tsv"
 [[ -r "$kb_shortcuts" ]] || warn "Shortcut data" "missing $kb_shortcuts (ws switch)"
 [[ -r "$kb_shortcuts" ]] && while IFS=$'\t' read -r schema key _ _; do

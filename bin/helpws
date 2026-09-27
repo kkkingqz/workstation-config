@@ -1,8 +1,8 @@
 #!/usr/bin/env sh
 set -eu
 
-repo="${WORKSTATION_CONFIG:-$HOME/.local/share/workstation-config}"
-micro_cfg="$repo/config/micro-help"
+repo="${WSCONFIG:-$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)}"
+micro_cfg="$repo/terminal/micro-help"
 topic="${1:-terminal}"
 
 open_md() {

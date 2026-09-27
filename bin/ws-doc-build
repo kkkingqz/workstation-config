@@ -2,10 +2,10 @@
 set -eu
 
 # Man pages from docs/**/*.md, one per `title:` (lowdown -s -t man).
-# pkgs/man.nix runs this in the Nix build with lowdown from nixpkgs; `ws switch`
+# nix/pkgs/man.nix runs this in the Nix build with lowdown from nixpkgs; `ws switch`
 # installs the result. A run by hand writes the untracked man/ for preview.
 
-repo="${WORKSTATION_CONFIG:-$HOME/.local/share/workstation-config}"
+repo="${WSCONFIG:-$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)}"
 mandir="$repo/man/man1"
 
 mkdir -p "$mandir"

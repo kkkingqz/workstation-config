@@ -1,0 +1,287 @@
+# =============================================================================
+# Workstation macOS-style keyboard layer
+# =============================================================================
+#
+# Semantic modifier model:
+#
+#   Apple keyboard       PC / Windows keyboard       Linux
+#   Command              Win                         Super
+#   Option               Alt                         Alt
+#   Control              Ctrl                        Ctrl
+#
+# Do NOT globally swap Ctrl/Super. Ctrl must remain Ctrl for terminals/TUI apps.
+#
+# GNOME owns system shortcuts. xremap translates application shortcuts and
+# converts physical Ctrl+Left/Right into private GNOME workspace chords.
+#
+# GNOME Wayland application filtering requires the xremap GNOME extension.
+# ws-xremap refuses to start without its D-Bus bridge, so terminal exclusions
+# can never silently stop working.
+#
+# xremap reads the store build of this file (keyboard/xremap.nix), where
+# @repo@ becomes the checkout path; edits take effect on `ws switch`.
+
+modmap:
+  - name: Apple Fn mode
+    device:
+      only:
+        - ids:0x05ac:0
+    remap:
+      Fn:
+        skip_key_event: false
+        press: { set_mode: apple_fn }
+        release: { set_mode: default }
+
+
+keymap:
+  - name: macOS tiling on Apple keyboards
+    exact_match: true
+    mode: apple_fn
+    device:
+      only:
+        - ids:0x05ac:0
+    remap:
+      Ctrl-Home: Shift-Ctrl-Alt-Super-Left
+      Ctrl-End: Shift-Ctrl-Alt-Super-Right
+      Ctrl-PageUp: Shift-Ctrl-Alt-Super-Up
+      Ctrl-PageDown: Shift-Ctrl-Alt-Super-Down
+
+      Ctrl-F: Shift-Ctrl-Alt-Super-F
+      Ctrl-C: Shift-Ctrl-Alt-Super-C
+      Ctrl-R: Shift-Ctrl-Alt-Super-R
+
+      # Fn+Option: spatial focus / Tile Editing Mode
+      # Fn+Left/Right/Up/Down is normalized to Home/End/PageUp/PageDown.
+      Alt-Home:
+        - Shift-Ctrl-Alt-Super-E
+        - { sleep: 120 }
+        - Left
+        - { sleep: 30 }
+        - Enter
+      Alt-End:
+        - Shift-Ctrl-Alt-Super-E
+        - { sleep: 120 }
+        - Right
+        - { sleep: 30 }
+        - Enter
+      Alt-PageUp:
+        - Shift-Ctrl-Alt-Super-E
+        - { sleep: 120 }
+        - Up
+        - { sleep: 30 }
+        - Enter
+      Alt-PageDown:
+        - Shift-Ctrl-Alt-Super-E
+        - { sleep: 120 }
+        - Down
+        - { sleep: 30 }
+        - Enter
+      Alt-E: Shift-Ctrl-Alt-Super-E
+      # Fn+Option+T: toggle Always on Top
+      Alt-T: Shift-Ctrl-Alt-Super-T
+      # Fn+CapsLock: select Ukrainian layout
+      CapsLock: { launch: ["@repo@/bin/ws-input-source", "ua"] }
+      Alt-CapsLock: { launch: ["@repo@/bin/ws-input-source", "ua"] }
+  - name: CapsLock input-source selector
+    exact_match: true
+    remap:
+      # Logical CapsLock: OFF=EN, ON=RU. Real CapsLock modifier is suppressed.
+      CapsLock: { launch: ["@repo@/bin/ws-input-source", "caps"] }
+
+      # Ukrainian override; does not change remembered EN/RU Caps state.
+      Alt-CapsLock: { launch: ["@repo@/bin/ws-input-source", "ua"] }
+
+      # Deterministic input-source cycle
+      Ctrl-Space: { launch: ["@repo@/bin/ws-input-source", "next"] }
+      Ctrl-Alt-Space: { launch: ["@repo@/bin/ws-input-source", "prev"] }
+  - name: macOS Spaces
+    exact_match: true
+    remap:
+      Ctrl-Left: Ctrl-Alt-Super-Left
+      Ctrl-Right: Ctrl-Alt-Super-Right
+
+  # Terminal-specific macOS navigation.
+  # GNOME normally consumes Super+Left/Right for window tiling. xremap sees
+  # the physical event first and converts it before Mutter receives it.
+  - name: macOS app/window actions
+    exact_match: true
+    remap:
+      Alt-Super-Esc: { launch: ["ws-window", "task-manager"] }
+      Super-H: { launch: ["ws-window", "hide-current"] }
+      Alt-Super-H: { launch: ["ws-window", "hide-others"] }
+      Alt-Super-W: { launch: ["ws-window", "close-current"] }
+      Alt-Super-M: { launch: ["ws-window", "minimize-current"] }
+      Super-Shift-Q: { launch: ["ws-window", "logout"] }
+      Alt-Super-Shift-Q: { launch: ["ws-window", "logout-now"] }
+
+  - name: macOS tiling on PC keyboards
+    exact_match: true
+    device:
+      not:
+        - ids:0x05ac:0
+    remap:
+      Ctrl-Super-Left: Shift-Ctrl-Alt-Super-Left
+      Ctrl-Super-Right: Shift-Ctrl-Alt-Super-Right
+      Ctrl-Super-Up: Shift-Ctrl-Alt-Super-Up
+      Ctrl-Super-Down: Shift-Ctrl-Alt-Super-Down
+
+      # PC equivalent of Fn+Option on Apple: Alt+Win.
+      Alt-Super-Left:
+        - Shift-Ctrl-Alt-Super-E
+        - { sleep: 120 }
+        - Left
+        - { sleep: 30 }
+        - Enter
+      Alt-Super-Right:
+        - Shift-Ctrl-Alt-Super-E
+        - { sleep: 120 }
+        - Right
+        - { sleep: 30 }
+        - Enter
+      Alt-Super-Up:
+        - Shift-Ctrl-Alt-Super-E
+        - { sleep: 120 }
+        - Up
+        - { sleep: 30 }
+        - Enter
+      Alt-Super-Down:
+        - Shift-Ctrl-Alt-Super-E
+        - { sleep: 120 }
+        - Down
+        - { sleep: 30 }
+        - Enter
+      Alt-Super-E: Shift-Ctrl-Alt-Super-E
+      # Alt+Win+T: toggle Always on Top
+      Alt-Super-T: Shift-Ctrl-Alt-Super-T
+  - name: Smart Popup on Apple right modifiers
+    exact_match: true
+    device:
+      only:
+        - ids:0x05ac:0
+    remap:
+      # Right Option + Right Command, either press order.
+      ALT_R-SUPER_R: Shift-Ctrl-Alt-Super-Space
+      SUPER_R-ALT_R: Shift-Ctrl-Alt-Super-Space
+
+  - name: Smart Popup on PC right modifiers
+    exact_match: true
+    device:
+      not:
+        - ids:0x05ac:0
+    remap:
+      # Right Alt + Right Win, either press order.
+      ALT_R-SUPER_R: Shift-Ctrl-Alt-Super-Space
+      SUPER_R-ALT_R: Shift-Ctrl-Alt-Super-Space
+
+  - name: macOS terminal shortcuts
+    exact_match: true
+    application:
+      only:
+        - '/.*[Gg]hostty.*/'
+        - '/.*[Ww]ave.*/'
+        - '/.*[Tt]erminal.*/'
+        - '/.*[Pp]tyxis.*/'
+        - '/.*[Kk]itty.*/'
+        - '/.*[Aa]lacritty.*/'
+    remap:
+      Super-Left: Ctrl-A
+      Super-Right: Ctrl-E
+      Super-Backspace: Ctrl-U
+      Alt-Left: Alt-B
+      Alt-Right: Alt-F
+
+  - name: macOS Nautilus / Finder shortcuts
+    exact_match: true
+    application:
+      only:
+        - '/.*[Nn]autilus.*/'
+    remap:
+      # Finder view modes
+      # Finder Command+1 = Icons; Nautilus Ctrl+2 = Grid
+      Super-1: Ctrl-2
+      # Finder Command+2 = List; Nautilus Ctrl+1 = List
+      Super-2: Ctrl-1
+
+      # Finder Go locations
+      Super-Shift-H: Alt-Home
+      Super-Shift-C:
+        - Ctrl-L
+        - { launch: ["ws-nautilus-current", "computer"] }
+        - { sleep: 300 }
+        - Enter
+      Super-Shift-O:
+        - Ctrl-L
+        - { launch: ["ws-nautilus-current", "documents"] }
+        - { sleep: 300 }
+        - Enter
+      Super-Shift-D:
+        - Ctrl-L
+        - { launch: ["ws-nautilus-current", "desktop"] }
+        - { sleep: 300 }
+        - Enter
+      Super-Up: Alt-Up
+      Super-Down: Enter
+      Super-LeftBrace: Back
+      Super-RightBrace: Forward
+
+      # Finder file actions
+      Super-I: Alt-Enter
+      Super-Backspace: Delete
+      Super-Delete: Delete
+      Super-Shift-N: Ctrl-Shift-N
+
+      # Finder "Go to Folder" / "Connect to Server".
+      # Nautilus uses the location entry for both local paths and URIs
+      # such as smb:// and sftp://.
+      Super-Shift-G: Ctrl-L
+      Super-K: { launch: ["nautilus", "x-network-view:///"] }
+
+      # Finder hidden-files toggle
+      Super-Shift-Dot: Ctrl-H
+
+  - name: macOS GUI shortcuts
+    exact_match: true
+    application:
+      not:
+        - '/.*[Gg]hostty.*/'
+        - '/.*[Ww]ave.*/'
+        - '/.*[Tt]erminal.*/'
+        - '/.*[Pp]tyxis.*/'
+        - '/.*[Kk]itty.*/'
+        - '/.*[Aa]lacritty.*/'
+    remap:
+      # Editing
+      Super-C: Ctrl-C
+      Super-V: Ctrl-V
+      Super-X: Ctrl-X
+      Super-A: Ctrl-A
+      Super-Z: Ctrl-Z
+      Super-Shift-Z: Ctrl-Shift-Z
+
+      # Documents / application
+      Super-S: Ctrl-S
+      Super-O: Ctrl-O
+      Super-P: Ctrl-P
+      Super-F: Ctrl-F
+      Super-N: Ctrl-N
+      Super-T: Ctrl-T
+      Super-W: Ctrl-W
+      Super-Q: Ctrl-Q
+      Super-Comma: Ctrl-Comma
+
+      # macOS line/document navigation
+      Super-Left: Home
+      Super-Right: End
+      Super-Up: Ctrl-Home
+      Super-Down: Ctrl-End
+      Super-Shift-Left: Shift-Home
+      Super-Shift-Right: Shift-End
+      Super-Shift-Up: Ctrl-Shift-Home
+      Super-Shift-Down: Ctrl-Shift-End
+
+      # macOS Option word navigation
+      Alt-Left: Ctrl-Left
+      Alt-Right: Ctrl-Right
+      Alt-Shift-Left: Ctrl-Shift-Left
+      Alt-Shift-Right: Ctrl-Shift-Right
+      Alt-Backspace: Ctrl-Backspace

@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-repo="${WORKSTATION_CONFIG:-$HOME/.local/share/workstation-config}"
+repo="${WSCONFIG:-$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)}"
 # Machine-local state, outside the checkout: the GNOME shortcuts saved before
 # the first apply (restore target) and the xremap off flag.
 state_dir="$HOME/.local/state/workstation/keyboard"
 backup="$state_dir/gsettings-backup.tsv"
-# home-manager enables xremap.service (modules/home/xremap.nix); this flag is
+# home-manager enables xremap.service (keyboard/xremap.nix); this flag is
 # its ConditionPathExists, so a restored profile stays off after a reboot.
 xremap_off="$state_dir/xremap.disabled"
 
-# The GNOME shortcuts of the profile: modules/home/keyboard.nix, built by
+# The GNOME shortcuts of the profile: keyboard/keyboard.nix, built by
 # ws switch (SCHEMA<TAB>KEY<TAB>VALUE<TAB>required|optional).
 shortcuts="${WS_KEYBOARD_SHORTCUTS:-$HOME/.config/workstation/keyboard/gnome-shortcuts.tsv}"
 
@@ -112,7 +112,7 @@ if [[ "${XDG_CURRENT_DESKTOP:-}" != *GNOME* ]]; then
     exit 69
 fi
 
-# Runtime paths are symlinks only. Sources stay in workstation-config.
+# Runtime paths are symlinks only. Sources stay in wsconfig.
 # Creating them is safe even if the runtime preflight below fails.
 link_repo_file "$repo/bin/ws-keyboard" "$HOME/.local/bin/ws-keyboard"
 link_repo_file "$repo/bin/ws-keyboard-apply" "$HOME/.local/bin/ws-keyboard-apply"
@@ -233,7 +233,7 @@ rollback_apply() {
 
 trap rollback_apply EXIT
 
-# The profile: modules/home/keyboard.nix (why each binding is there is
+# The profile: keyboard/keyboard.nix (why each binding is there is
 # commented there). Optional keys are set only where the schema has them.
 while IFS=$'\t' read -r schema key value kind; do
     if [[ "$kind" == optional ]] && ! schema_has_key "$schema" "$key"; then

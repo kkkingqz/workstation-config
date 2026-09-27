@@ -5,7 +5,7 @@ set -euo pipefail
 # desktop user and calls sudo itself where needed: `sudo ws` would not find
 # Nix, secure_path does not contain the Nix profile.
 
-repo="${WORKSTATION_CONFIG:-$HOME/.local/share/workstation-config}"
+repo="${WSCONFIG:-$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)}"
 
 usage() {
     cat <<'USAGE'
@@ -44,15 +44,15 @@ update    bring everything that is not pinned to the latest version, in order:
                         of the unpinned EGO extensions, as Extension Manager
                         does; they are installed at the next log out and in
           pinned on purpose and not touched: the kernel (linux-t2 held,
-          kernel/t2bce/sources.conf), xremap (pkgs/xremap.nix), extensions
+          system/kernel/t2bce/sources.conf), xremap (nix/pkgs/xremap.nix), extensions
           with pin, container images by digest
 check     run the owners' checks (ws-workstation-verify, wsflatpak check,
           wsbox check, ws-gnome check, ws-suspend status, ws system check,
           ws check apt) and summarize;
           shows WARN/FAIL lines only, -v shows the full output;
-          check apt compares hosts/apt.txt and hosts/<host>/apt.txt (the
+          check apt compares nix/hosts/apt.txt and nix/hosts/<host>/apt.txt (the
           lists of bootstrap.sh) with the installed packages, report only
-system    build the host system file tree (modules/system) and compare it
+system    build the host system file tree (system) and compare it
           with the live system, read-only: diff shows file differences,
           check also unit states and prints OK/DIFFERS/MISSING per entry;
           files on the rEFInd ESP are compared only when it is mounted;
@@ -606,7 +606,7 @@ cmd_check_apt() {
     local -A listed=() manual=()
 
     h="$(host)"
-    mapfile -t want < <(cat "$repo/hosts/apt.txt" "$repo/hosts/$h/apt.txt" 2>/dev/null \
+    mapfile -t want < <(cat "$repo/nix/hosts/apt.txt" "$repo/nix/hosts/$h/apt.txt" 2>/dev/null \
         | sed -e 's/#.*//' -e 's/[[:space:]]//g' -e '/^$/d' -e '/^ppa:/d' | sort -u)
     while read -r pkg; do
         manual[$pkg]=1
@@ -626,7 +626,7 @@ cmd_check_apt() {
     for pkg in "${!manual[@]}"; do
         [[ -n "${listed[$pkg]:-}" ]] || extra+=("$pkg")
     done
-    printf '\nINFO    %d manual packages are not in hosts/apt.txt or hosts/%s/apt.txt:\n' "${#extra[@]}" "$h"
+    printf '\nINFO    %d manual packages are not in nix/hosts/apt.txt or nix/hosts/%s/apt.txt:\n' "${#extra[@]}" "$h"
     printf '%s\n' "${extra[@]}" | sort | fmt -w 78 | sed 's/^/        /'
 }
 

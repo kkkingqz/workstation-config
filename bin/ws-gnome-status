@@ -2,7 +2,7 @@
 set -u
 set -o pipefail
 
-repo="${WORKSTATION_CONFIG:-$HOME/.local/share/workstation-config}"
+repo="${WSCONFIG:-$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)}"
 
 # Read-only GNOME desktop inventory.
 #
@@ -226,7 +226,7 @@ else
 fi
 
 section "5. GNOME extensions"
-# ego and local extensions of modules/home/gnome-extensions.nix.
+# ego and local extensions of gnome/gnome-extensions.nix.
 for uuid in $(awk '!/^#/ && ($2 == "ego" || $2 == "local") { print $1 }' \
     "$HOME/.config/workstation/gnome/extensions" 2>/dev/null); do
     kv "$uuid" "$(extension_state "$uuid")"
@@ -316,9 +316,9 @@ profile="$HOME/.config/workstation/gnome/settings.conf"
 check_helper="$repo/bin/ws-gnome-check"
 if [[ -r "$profile" && -x "$check_helper" ]]; then
     if "$check_helper" --quiet >/dev/null 2>&1; then
-        kv "modules/home/gnome.nix" "in sync"
+        kv "gnome/gnome.nix" "in sync"
     else
-        kv "modules/home/gnome.nix" "DRIFT — run: ws-gnome check"
+        kv "gnome/gnome.nix" "DRIFT — run: ws-gnome check"
     fi
 else
     kv "managed profile" "not installed yet"

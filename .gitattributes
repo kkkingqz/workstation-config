@@ -1,7 +1,7 @@
 # Patch files keep blank diff context lines (a single space) verbatim.
 kernel/**/*.patch -whitespace
 # Captured byte-for-byte from the running system; keep their trailing blank lines.
-system/boot/refind_linux.conf -whitespace
-system/default/grub.d/99-recovery-menu.cfg -whitespace
-system/usr/local/sbin/system-backup-snapshot -whitespace
-system/esp/refind.conf -whitespace
+system/files/boot/refind_linux.conf -whitespace
+system/files/default/grub.d/99-recovery-menu.cfg -whitespace
+system/files/usr/local/sbin/system-backup-snapshot -whitespace
+system/files/esp/refind.conf -whitespace

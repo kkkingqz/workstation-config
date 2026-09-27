@@ -446,26 +446,32 @@ data             ~/.local/share/<tool>/...
 Единый обычный Git repository:
 
 ```text
-~/.local/share/workstation-config
+~/wsconfig
 ```
 
 Структура:
 
 ```text
-workstation-config/
+wsconfig/
 ├── bin/
 │   ├── dotgit
 │   ├── helpws
 │   └── ws-doc-build
-├── config/
+├── terminal/
 │   ├── fish/
 │   ├── ghostty/
-│   └── micro-help/
+│   ├── micro-help/
+│   └── xdg-terminals/
 ├── docs/
 │   ├── terminal.md
 │   └── workstation.md
-└── pkgs/man.nix          man pages из docs/ (собирает Nix)
+└── nix/pkgs/man.nix      man pages из docs/ (собирает Nix)
 ```
+
+Каталог checkout — настройка хоста: `wsconfig` в
+`nix/hosts/<host>/facts.nix` (относительно `$HOME`). Скрипты находят
+checkout по собственному пути (ссылки в `~/.local/bin`), переменная
+`WSCONFIG` его переопределяет.
 
 Реальные пути в `$HOME` используют symlink'и на repository.
 
@@ -479,7 +485,7 @@ dotgit commit -m "message"
 `dotgit` — wrapper вокруг:
 
 ```console
-git -C ~/.local/share/workstation-config
+git -C ~/wsconfig
 ```
 
 ---
@@ -493,7 +499,7 @@ docs/terminal.md
 docs/workstation.md
 ```
 
-Man pages собирает Nix из `docs/` (`pkgs/man.nix`: `ws-doc-build` с
+Man pages собирает Nix из `docs/` (`nix/pkgs/man.nix`: `ws-doc-build` с
 lowdown из nixpkgs) и ставит `ws switch` в `~/.local/share/man/man1`; в git их
 нет. После правки документа:
 
@@ -538,15 +544,15 @@ man ws-workstation
 ~/.config/fish/completions/helpws.fish
 ```
 
-Все файлы из `config/fish/` (и `config/ghostty/*.ghostty`, команды `bin/`)
-подключены ссылками home-manager в checkout (`modules/home/links.nix`);
+Все файлы из `terminal/fish/` (и `terminal/ghostty/*.ghostty`, команды `bin/`)
+подключены ссылками home-manager в checkout (`nix/home/links.nix`);
 новый файл подключается следующим `ws switch`. Man pages — из сборки Nix
-(`modules/home/man.nix`). fzf, zoxide, eza, micro — из Nix
-(`modules/home/cli.nix`). fzf ≥ 0.70 занимает Shift+Tab; `config.fish` возвращает туда
+(`nix/home/man.nix`). fzf, zoxide, eza, micro — из Nix
+(`nix/home/cli.nix`). fzf ≥ 0.70 занимает Shift+Tab; `config.fish` возвращает туда
 `complete-and-search` fish.
 
 ## Help viewer
 
 ```text
-~/.local/share/workstation-config/config/micro-help/
+~/wsconfig/terminal/micro-help/
 ```

@@ -55,7 +55,7 @@ Source of truth (с 2026-09-27, раньше `config/gnome/settings.conf` и
 `ws-gnome apply`):
 
 ```text
-modules/home/gnome.nix
+gnome/gnome.nix
 ```
 
 Профиль — `dconf.settings` home-manager. Его записывает `ws switch`
@@ -71,7 +71,7 @@ modules/home/gnome.nix
 Изменение:
 
 ```console
-$EDITOR ~/.local/share/workstation-config/modules/home/gnome.nix
+$EDITOR ~/wsconfig/gnome/gnome.nix
 ws switch
 ws-gnome check
 ```
@@ -171,7 +171,7 @@ Exit status:
 
 # Safety ownership rules
 
-`modules/home/gnome.nix` проверяет при сборке (assertion), что во всём
+`gnome/gnome.nix` проверяет при сборке (assertion), что во всём
 `dconf.settings` нет ключей других workstation layers:
 
 ```text
@@ -191,7 +191,7 @@ keyboard, Tiling Assistant или extension baseline.
 
 # GNOME extension policy
 
-Единственный список расширений — `modules/home/gnome-extensions.nix`
+Единственный список расширений — `gnome/gnome-extensions.nix`
 (с 2026-09-27; раньше свои копии были в verify, `ws-gnome-test`,
 `ws-gnome-status`, installer и здесь). Для каждого расширения — uuid и
 источник:
@@ -199,7 +199,7 @@ keyboard, Tiling Assistant или extension baseline.
 ```text
 ubuntu  gnome-shell-ubuntu-extensions (apt), включает режим сессии Ubuntu
 ego     extensions.gnome.org: ставит ws apply extensions, обновляет
-        Extension Manager; с pin — версия через Nix (pkgs/gnome-extensions.nix)
+        Extension Manager; с pin — версия через Nix (nix/pkgs/gnome-extensions.nix)
 local   gnome/extensions/<uuid>, копирует ws-keyboard-install-extensions
 ```
 

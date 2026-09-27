@@ -192,8 +192,8 @@ systemctl --user is-active wireplumber
 
 ```console
 sudo apt install git
-git clone https://github.com/kkkingqz/workstation-config.git ~/.local/share/workstation-config
-~/.local/share/workstation-config/bootstrap.sh
+git clone https://github.com/kkkingqz/wsconfig.git ~/wsconfig
+~/wsconfig/bootstrap.sh
 # logout/login: группа nix-users, PATH из 00-nix.fish, fish как login shell
 ws system apply     # системные файлы (sudo); затем reboot, если менялись modprobe/udev/cmdline
 ws apply            # расширения → tiling → клавиатура → Flatpak → Distrobox
@@ -204,17 +204,17 @@ ws check            # verify, wsflatpak, wsbox, ws-gnome, ws-suspend, ws system,
 
 `bootstrap.sh` (от пользователя, sudo вызывает сам; `--dry-run` только
 показывает шаги): subvolume `@nix` и строка `/nix` в fstab → пакеты из
-`hosts/apt.txt` и `hosts/<host>/apt.txt` (с PPA fish) → `nix-users` → fish
+`nix/hosts/apt.txt` и `nix/hosts/<host>/apt.txt` (с PPA fish) → `nix-users` → fish
 как login shell → первый `ws switch` (заменяемые файлы сохраняются как
 `*.pre-hm`). Хост определяется по hostname (`ws host`); для новой машины —
-`WS_HOST=<name>` и каталог `hosts/<name>/`. Повторный запуск ничего не
+`WS_HOST=<name>` и каталог `nix/hosts/<name>/`. Повторный запуск ничего не
 меняет.
 
 Шаг `ws apply`, чей preflight не прошёл (exit 69), выводится в конце как
 `PREFLIGHT`; отдельный шаг — `ws apply keyboard`.
 
 `ws system diff` сравнивает системные файлы (`/etc`, `/boot`, `/usr/local`,
-`/usr/lib/systemd/system-sleep`), собранные Nix из `modules/system/`, с
+`/usr/lib/systemd/system-sleep`), собранные Nix из `system/`, с
 установленными; ничего не меняет. Пустой вывод — система совпадает с repo.
 `ws check apt` сравнивает списки apt с установленными пакетами и только
 сообщает о различиях.
@@ -224,14 +224,14 @@ ws check            # verify, wsflatpak, wsbox, ws-gnome, ws-suspend, ws system,
 пакеты внутри контейнеров (`wsbox update`) и расширения с
 extensions.gnome.org (GNOME Shell скачивает обновления, как Extension
 Manager; ставятся после logout/login). Отдельный шаг — `ws update nix`.
-Закреплены намеренно: ядро (`linux-t2`, `kernel/t2bce/sources.conf`),
-xremap (`pkgs/xremap.nix`), расширения с `pin`, образы по digest.
+Закреплены намеренно: ядро (`linux-t2`, `system/kernel/t2bce/sources.conf`),
+xremap (`nix/pkgs/xremap.nix`), расширения с `pin`, образы по digest.
 Новости home-manager (изменения опций после обновления `flake.lock`) — `ws
 news`; `ws switch` о них не уведомляет (`news.display = "silent"`), а
 `home-manager news` без `--flake` конфигурацию не находит.
 
 Flatpak: remotes, приложения и overrides объявлены в
-`modules/home/flatpak.nix`; `ws switch` собирает из них
+`flatpak/flatpak.nix`; `ws switch` собирает из них
 `~/.config/workstation/flatpak/` и ставит `.desktop` Claude, шаг `flatpak`
 в `ws apply` (`wsflatpak apply`) добавляет remotes, ставит приложения и
 применяет overrides (`helpws plan-flatpak`).
@@ -250,7 +250,7 @@ ws-gnome check
 Source of truth:
 
 ```text
-modules/home/gnome.nix
+gnome/gnome.nix
 ```
 
 Профиль записывает `ws switch` (home-manager `dconf.settings`); отдельного
@@ -303,31 +303,31 @@ sudo apt install --no-install-recommends -y \
 ```
 
 Runtime helper и Fish completion — ссылки home-manager, их создаёт
-`ws switch` (`modules/home/links.nix`, `helpws plan-nix`). Без Nix —
+`ws switch` (`nix/home/links.nix`, `helpws plan-nix`). Без Nix —
 вручную:
 
 ```console
-repo="$HOME/.local/share/workstation-config"
+repo="$HOME/wsconfig"
 
 mkdir -p "$HOME/.local/bin" "$HOME/.config/fish/completions"
 
 ln -sfn "$repo/bin/wsbox" "$HOME/.local/bin/wsbox"
 ln -sfn \
-    "$repo/config/fish/completions/wsbox.fish" \
+    "$repo/terminal/fish/completions/wsbox.fish" \
     "$HOME/.config/fish/completions/wsbox.fish"
 ```
 
 Host NTSync source of truth:
 
 ```text
-system/modules-load.d/ntsync.conf
+system/files/modules-load.d/ntsync.conf
 ```
 
 Ставит его `ws system apply` (раздел 6.0); вручную:
 
 ```console
 sudo install -Dm644 \
-    "$repo/system/modules-load.d/ntsync.conf" \
+    "$repo/system/files/modules-load.d/ntsync.conf" \
     /etc/modules-load.d/ntsync.conf
 
 sudo modprobe ntsync
@@ -362,7 +362,7 @@ wsbox enter arch
 
 sudo pacman -Syu --needed base-devel git
 
-cd ~/.local/share/workstation-config/config/distrobox/arch/wsbox-host-ntsync
+cd ~/wsconfig/distrobox/arch/wsbox-host-ntsync
 makepkg --clean --cleanbuild --force
 sudo pacman -U ./wsbox-host-ntsync-1-1-any.pkg.tar.zst
 ```
@@ -435,7 +435,7 @@ wsbox check
 ```
 
 Ожидаемо `FAIL=0 WARN=0`. Контейнеры объявлены в
-`modules/home/distrobox.nix` (`containers.ini` собирает `ws switch`);
+`distrobox/distrobox.nix` (`containers.ini` собирает `ws switch`);
 build-контейнеры `t2bce-build` и `touchbar-build` тоже там; Rust в `touchbar-build` ставится
 вручную (`helpws workstation`, Managed Distrobox layer).
 
@@ -448,10 +448,10 @@ helpws distrobox
 
 # 6.4. Keyboard / shortcuts
 
-После clone `workstation-config` восстановить system-level keyboard state:
+После clone `wsconfig` восстановить system-level keyboard state:
 
 ```console
-~/.local/share/workstation-config/bin/ws-keyboard-system-apply
+~/wsconfig/bin/ws-keyboard-system-apply
 ```
 
 Он устанавливает:
@@ -468,7 +468,7 @@ GDM/login layout = US only
 При изменении modprobe-файлов он сам пересобирает initramfs.
 
 Это обёртка над `ws system apply` (нужен Nix, раздел 6.0): он ставит все
-системные файлы из `modules/system` — и suspend layer из раздела 8, и T2
+системные файлы из `system` — и suspend layer из раздела 8, и T2
 base из разделов 4–5, — только отличающиеся, с бэкапом в
 `/var/backups/workstation/system-<время>/`. Без изменений:
 `ws system diff`.
@@ -476,7 +476,7 @@ base из разделов 4–5, — только отличающиеся, с 
 Затем установить наши GNOME extensions:
 
 ```console
-~/.local/share/workstation-config/bin/ws-keyboard-install-extensions
+~/wsconfig/bin/ws-keyboard-install-extensions
 ```
 
 После первой установки extensions на Wayland выполнить logout/login.
@@ -484,8 +484,8 @@ base из разделов 4–5, — только отличающиеся, с 
 Затем:
 
 ```console
-~/.local/share/workstation-config/bin/ws-tiling-apply
-~/.local/share/workstation-config/bin/ws-keyboard-apply
+~/wsconfig/bin/ws-tiling-apply
+~/wsconfig/bin/ws-keyboard-apply
 ```
 
 Расширения, tiling и клавиатура — шаги `extensions`, `tiling`, `keyboard`
@@ -554,7 +554,7 @@ sudo reboot
 ```
 
 `t2bce-build` требует `podman` и `linux-headers` текущего ядра. Если для
-установленного ядра нет строки в `kernel/t2bce/sources.conf`, сначала
+установленного ядра нет строки в `system/kernel/t2bce/sources.conf`, сначала
 проверить upstream (`helpws suspend`, раздел «Обновление ядра»).
 
 Проверить:
@@ -631,10 +631,10 @@ workstation-dock-spring@local
 workstation-input-source@local
 ```
 
-Список всех расширений и источник каждого — `modules/home/gnome-extensions.nix`;
+Список всех расширений и источник каждого — `gnome/gnome-extensions.nix`;
 `enabled-extensions` из него пишет `ws switch`.
 
-`workstation-*` sources находятся в `workstation-config` и устанавливаются
+`workstation-*` sources находятся в `wsconfig` и устанавливаются
 командой:
 
 ```console
@@ -653,7 +653,7 @@ ws-keyboard-install-extensions
 новой машине — logout/login после первого `ws switch` и `ws apply`.
 
 Закрепить версию: `pin = { version = N; hash = "sha256-…"; }` у расширения
-в `modules/home/gnome-extensions.nix` (N — номер из ссылки на zip EGO), `ws
+в `gnome/gnome-extensions.nix` (N — номер из ссылки на zip EGO), `ws
 switch`. Такое расширение ставит Nix ссылками, и обновлять его в Extension
 Manager нельзя: verify покажет FAIL «files not from Nix», `ws update
 extensions` при закреплённых расширениях отказывается.

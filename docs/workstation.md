@@ -102,7 +102,7 @@ baseline от него не зависит.
 `dconf.settings` home-manager и записывается `ws switch`:
 
 ```text
-modules/home/gnome.nix
+gnome/gnome.nix
 ```
 
 Управление:
@@ -240,8 +240,8 @@ GNOME lock screen    EN only
 Source of truth:
 
 ```text
-config/keyboard/
-config/ghostty/
+keyboard/
+terminal/ghostty/
 
 bin/ws-keyboard*
 bin/ws-xremap
@@ -256,13 +256,13 @@ gnome/extensions/workstation-input-source@local/
 gnome/extensions/workstation-smart-popup@local/
 gnome/extensions/workstation-dock-spring@local/
 
-modules/home/xremap.nix
-system/udev/99-workstation-uinput.rules
+keyboard/xremap.nix
+system/files/udev/99-workstation-uinput.rules
 
-system/udev/90-touchbar-native.rules
-system/modprobe/
-system/usr/local/libexec/ws-touchbar-fn
-system/systemd/system/ws-touchbar-fn.service
+system/files/udev/90-touchbar-native.rules
+system/files/modprobe/
+system/files/usr/local/libexec/ws-touchbar-fn
+system/files/systemd/system/ws-touchbar-fn.service
 ```
 
 Generated `gschemas.compiled` и `runtime/` не являются source files и
@@ -408,13 +408,13 @@ Host сознательно не используется как общий deve
 Source of truth:
 
 ```text
-modules/home/distrobox.nix                контейнеры и экспорты
-system/modules-load.d/ntsync.conf         ставит ws system apply
-config/distrobox/arch/wsbox-host-ntsync/  PKGBUILD для arch
+distrobox/distrobox.nix                контейнеры и экспорты
+system/files/modules-load.d/ntsync.conf         ставит ws system apply
+distrobox/arch/wsbox-host-ntsync/  PKGBUILD для arch
 bin/wsbox
 ```
 
-С 2026-09-27 контейнеры объявлены в `modules/home/distrobox.nix` (общие
+С 2026-09-27 контейнеры объявлены в `distrobox/distrobox.nix` (общие
 значения по умолчанию, у контейнера — только образ, HOME, пакеты,
 экспорты). `ws switch` собирает из них `containers.ini` (формат
 `distrobox assemble`) и `exports.ini` в `~/.config/workstation/distrobox/`,
@@ -647,13 +647,13 @@ Micro help-viewer использует true-color scheme и Markdown syntax high
 ## Documentation source
 
 ```text
-~/.local/share/workstation-config/docs/terminal.md
-~/.local/share/workstation-config/docs/workstation.md
+~/wsconfig/docs/terminal.md
+~/wsconfig/docs/workstation.md
 ```
 
 ## Man generation
 
-Man pages собирает Nix (`pkgs/man.nix`): `bin/ws-doc-build` —
+Man pages собирает Nix (`nix/pkgs/man.nix`): `bin/ws-doc-build` —
 `lowdown -s -t man` (lowdown из nixpkgs), по странице на `title:` каждого
 `docs/**/*.md`. `ws switch` ставит их ссылками в `~/.local/share/man/man1`; в git `man/` нет,
 verify предупреждает, если страницы старше `docs/`. После правки документа:
@@ -682,16 +682,16 @@ man ws-workstation
 Исходники собственных wrapper'ов хранятся в Git repository:
 
 ```text
-~/.local/share/workstation-config/bin
+~/wsconfig/bin
 ```
 
 Правило:
 
 ```text
-executable source   workstation-config/bin/<tool>
+executable source   ~/wsconfig/bin/<tool>
 runtime link        ~/.local/bin/<tool>
-config source       workstation-config/config/<tool>/...
-data                  ~/.local/share/<tool>/...
+config source       ~/wsconfig/<область>/...
+generated           ~/.local/share/workstation/...
 ```
 
 Shebang:
@@ -709,23 +709,35 @@ Shebang:
 Единый обычный Git repository:
 
 ```text
-~/.local/share/workstation-config
+~/wsconfig
 ```
 
 Актуальная структура включает:
 
+Всё, что правится, лежит в `~/wsconfig` (каталог задаёт `wsconfig` в
+`nix/hosts/<host>/facts.nix`), по областям: в каждой — её объявление в Nix
+и родные файлы программ. Сгенерированное и скачанное — в
+`~/.local/share/workstation/`, состояние (backup сочетаний, baseline) — в
+`~/.local/state/workstation/`, HOME контейнеров — в `~/distrobox/<имя>/`.
+
 ```text
-workstation-config/
+wsconfig/
 ├── bootstrap.sh          новая машина: @nix → apt → nix-users → fish → ws switch
 ├── flake.nix, flake.lock nixpkgs 26.05 + home-manager, обновляет ws update nix
-├── hosts/
-│   ├── apt.txt           apt-пакеты всех хостов
-│   └── mbp16/            facts.nix, home.nix, apt.txt
-├── modules/
-│   ├── home/             ссылки на checkout, CLI из Nix, xremap
-│   └── system/           дерево системных файлов (common, boot/, hardware/)
-├── pkgs/                xremap.nix (закреплён), man.nix (man из docs/),
-│                         gnome-extensions.nix (расширение EGO с pin)
+├── nix/
+│   ├── hosts/            apt.txt всех хостов; <host>/facts.nix, home.nix, apt.txt
+│   ├── home/             links.nix (ссылки на checkout), cli.nix, man.nix
+│   ├── pkgs/             xremap.nix (закреплён), man.nix (man из docs/),
+│   │                     gnome-extensions.nix (расширение EGO с pin)
+│   └── nix.conf
+├── system/               default.nix, common.nix, boot/, hardware/ (Nix),
+│   ├── files/            файлы для / (udev, modprobe, systemd, usr, esp, …)
+│   └── kernel/t2bce/     патч t2bce и привязка ядра к linux-t2-patches
+├── gnome/                gnome.nix, gnome-extensions.nix, extensions/<uuid>/
+├── keyboard/             keyboard.nix, xremap.nix, xremap.yml
+├── terminal/             fish/, ghostty/, micro-help/, xdg-terminals/
+├── flatpak/              flatpak.nix, desktop/
+├── distrobox/            distrobox.nix, arch/wsbox-host-ntsync/
 ├── bin/
 │   ├── ws                switch, diff, apply, update, check, system, baseline
 │   ├── dotgit
@@ -746,21 +758,6 @@ workstation-config/
 │   ├── ws-input-source
 │   ├── ws-caps-led
 │   └── ws-tiling-apply
-├── config/
-│   ├── fish/
-│   ├── distrobox/
-│   ├── ghostty/
-│   ├── gnome/
-│   ├── keyboard/
-│   └── micro-help/
-├── gnome/extensions/
-│   ├── workstation-input-source@local/
-│   └── workstation-smart-popup@local/
-├── system/
-│   ├── modprobe/tb.conf, touchbar-native.conf
-│   ├── systemd/system/ws-touchbar-fn.service
-│   ├── udev/90-touchbar-native.rules, 99-workstation-uinput.rules
-│   └── usr/local/libexec/ws-touchbar-fn
 └── docs/
 ```
 
@@ -768,10 +765,10 @@ Nix доставляет, владельцы слоёв не меняются (`
 home-manager ставит ссылки на checkout (`~/.local/bin`, fish, Ghostty), man pages
 и CLI (fzf, zoxide, eza, micro, nvd, xremap), unit `xremap.service` с
 `xremap.yml` из store, `enabled-extensions` и закреплённые расширения
-GNOME (`pkgs/gnome-extensions.nix`), конфиг `wsflatpak` из
-`modules/home/flatpak.nix`, профиль внешнего вида GNOME
-(`modules/home/gnome.nix`, `dconf.settings`); `ws system apply` ставит копии
-системных файлов из сборки `modules/system`; GNOME, Flatpak, Distrobox,
+GNOME (`nix/pkgs/gnome-extensions.nix`), конфиг `wsflatpak` из
+`flatpak/flatpak.nix`, профиль внешнего вида GNOME
+(`gnome/gnome.nix`, `dconf.settings`); `ws system apply` ставит копии
+системных файлов из сборки `system`; GNOME, Flatpak, Distrobox,
 клавиатура — прежние `bin/`-владельцы, их по порядку вызывает `ws apply`.
 Основная проверка — `ws check`.
 
@@ -855,5 +852,5 @@ Ubuntu 26.04.1 LTS
         ├── Fish
         ├── fzf / zoxide / eza
         ├── helpws + Micro
-        └── workstation-config Git repository
+        └── wsconfig Git repository
 ```

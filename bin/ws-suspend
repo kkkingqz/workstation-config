@@ -4,22 +4,22 @@ set -euo pipefail
 # Suspend / T2 power layer: deep-only sleep, Broadcom Wi-Fi guards and the
 # patched t2bce modules (no-state fallback fix). See docs/suspend.md.
 
-repo="${WORKSTATION_CONFIG:-$HOME/.local/share/workstation-config}"
+repo="${WSCONFIG:-$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)}"
 cache="${XDG_CACHE_HOME:-$HOME/.cache}/ws-suspend"
 
 # Suspend-layer files compared by status (installed by ws system apply):
 # repo source : runtime destination : mode
 files=(
-    "system/sleep.conf.d/80-deep-only.conf:/etc/systemd/sleep.conf.d/80-deep-only.conf:0644"
-    "system/udev/70-bcm4364-no-d3cold.rules:/etc/udev/rules.d/70-bcm4364-no-d3cold.rules:0644"
-    "system/usr/local/sbin/broadcom-aspm-suspend-guard:/usr/local/sbin/broadcom-aspm-suspend-guard:0755"
-    "system/usr/lib/systemd/system-sleep/80-broadcom-aspm:/usr/lib/systemd/system-sleep/80-broadcom-aspm:0755"
-    "system/systemd/system/broadcom-aspm-restore.service:/etc/systemd/system/broadcom-aspm-restore.service:0644"
+    "system/files/sleep.conf.d/80-deep-only.conf:/etc/systemd/sleep.conf.d/80-deep-only.conf:0644"
+    "system/files/udev/70-bcm4364-no-d3cold.rules:/etc/udev/rules.d/70-bcm4364-no-d3cold.rules:0644"
+    "system/files/usr/local/sbin/broadcom-aspm-suspend-guard:/usr/local/sbin/broadcom-aspm-suspend-guard:0755"
+    "system/files/usr/lib/systemd/system-sleep/80-broadcom-aspm:/usr/lib/systemd/system-sleep/80-broadcom-aspm:0755"
+    "system/files/systemd/system/broadcom-aspm-restore.service:/etc/systemd/system/broadcom-aspm-restore.service:0644"
 )
 
 t2bce_modules=(t2bce_dma t2bce_core t2bce_vhci t2bce_audio t2bce_ave)
-t2bce_patch="$repo/kernel/t2bce/nostate-fix.patch"
-t2bce_sources="$repo/kernel/t2bce/sources.conf"
+t2bce_patch="$repo/system/kernel/t2bce/nostate-fix.patch"
+t2bce_sources="$repo/system/kernel/t2bce/sources.conf"
 # The host release: the modules are built with the compiler of the kernel.
 build_image="docker.io/library/ubuntu:$(. /etc/os-release && echo "$VERSION_ID")"
 
@@ -83,7 +83,7 @@ cmd_status() {
 }
 
 # Since phase 4 of docs/plans/nix-migration.md one owner installs all system
-# files, including the suspend layer: `ws system apply` (modules/system).
+# files, including the suspend layer: `ws system apply` (system).
 cmd_apply() {
     exec "$repo/bin/ws" system apply
 }
@@ -91,7 +91,7 @@ cmd_apply() {
 cmd_t2bce_build() {
     local kver="$1" commit headers work src out m
     commit="$(t2bce_commit "$kver")"
-    [[ -n "$commit" ]] || die "no pinned linux-t2-patches commit for $kver in kernel/t2bce/sources.conf"
+    [[ -n "$commit" ]] || die "no pinned linux-t2-patches commit for $kver in system/kernel/t2bce/sources.conf"
     headers="/usr/src/linux-headers-$kver"
     [[ -d "$headers" ]] || die "kernel headers missing: $headers"
     command -v podman >/dev/null 2>&1 || die "podman not found"

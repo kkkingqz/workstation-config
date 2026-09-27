@@ -7,9 +7,9 @@ import shutil
 import subprocess
 import sys
 
-# Declarations live in modules/home/flatpak.nix; home-manager builds them into
+# Declarations live in flatpak/flatpak.nix; home-manager builds them into
 # ~/.config/workstation/flatpak. wsflatpak only reads that directory.
-SOURCE = "modules/home/flatpak.nix"
+SOURCE = "flatpak/flatpak.nix"
 CFG = Path(
     os.environ.get(
         "WSFLATPAK_CONFIG",
@@ -1001,7 +1001,7 @@ def build_parser():
         q = sp.add_parser(name)
         q.add_argument("app")
 
-    # Former commands that wrote config/flatpak/: print what to declare.
+    # Former commands that wrote flatpak/: print what to declare.
     for name in DECLARE:
         q = sp.add_parser(name)
         q.add_argument("args", nargs="*")

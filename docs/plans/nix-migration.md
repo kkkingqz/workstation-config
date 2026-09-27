@@ -1127,6 +1127,24 @@ PASS, `ws baseline diff` пуст»:
     после обновления Ubuntu `wsbox check` покажет drift → `wsbox recreate`.
     Digest-образы по-прежнему поддерживаются.
   - apt и Flatpak не закреплялись и не менялись.
+- **Схема хранения** (2026-09-27, решение пользователя). Три места:
+  `~/wsconfig` — всё, что правится (репозиторий, GitHub `kkkingqz/wsconfig`),
+  по областям: `nix/` (hosts, home, pkgs, nix.conf), `system/` (Nix-модули,
+  `files/` для `/`, `kernel/t2bce/`), `gnome/`, `keyboard/`, `terminal/`,
+  `flatpak/`, `distrobox/`, `bin/`, `docs/`; `flake.nix`/`flake.lock` — в
+  корне. `~/.local/share/workstation` — сгенерированное и скачанное;
+  `~/.local/state/workstation` остаётся для состояния (backup сочетаний,
+  baseline). `~/distrobox/<имя>` — HOME каждого контейнера, и новых тоже.
+  Путь checkout — настройка хоста (`wsconfig` в `facts.nix`), скрипты
+  находят checkout по своему пути. Шаги:
+  1. **Сделано (2026-09-27).** Раскладка по областям (`git mv`), путь из
+     `facts.nix`, скрипты без жёсткого пути (`WSCONFIG` переопределяет),
+     расширение input-source вызывает `ws-caps-led` через ссылку
+     `~/.local/share/workstation/wsconfig`, переименование репозитория.
+  2. Сгенерированное из `~/.config/workstation` и `~/.cache/ws-suspend` —
+     в `~/.local/share/workstation`; буферы micro из checkout — туда же.
+  3. HOME контейнеров — `~/distrobox/<имя>`, пересоздание (`arch`: AUR
+     вручную; `touchbar-build`: Rust заново).
 - ~~Убрать `t2bce-build` и `touchbar-build`~~ — **сделано иначе
   (2026-09-27):** по решению пользователя оба оставлены и описаны в
   `containers.ini` (общий HOME хоста, `additional_packages` по фактически

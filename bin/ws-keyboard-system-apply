@@ -6,8 +6,8 @@ set -euo pipefail
 # touchbar-native.conf, ws-touchbar-fn + unit).
 #
 # Since phase 4 of docs/plans/nix-migration.md one owner installs all system
-# files: `ws system apply` (modules/system). The name stays: rebuild.md and
+# files: `ws system apply` (system). The name stays: rebuild.md and
 # verify refer to it.
 
-repo="${WORKSTATION_CONFIG:-$HOME/.local/share/workstation-config}"
+repo="${WSCONFIG:-$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)}"
 exec "$repo/bin/ws" system apply "$@"

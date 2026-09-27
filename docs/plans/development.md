@@ -34,15 +34,14 @@ grep "^$USER:" /etc/subuid /etc/subgid
 
 # 2. Source of truth
 
-С 2026-09-27: `modules/home/distrobox.nix`; `containers.ini` и `exports.ini`
+С 2026-09-27: `distrobox/distrobox.nix`; `containers.ini` и `exports.ini`
 собирает `ws switch` в `~/.config/workstation/distrobox/`, host
-`ntsync.conf` — `system/modules-load.d/`. Пути `config/distrobox/…` ниже —
-исходная реализация.
+`ntsync.conf` — `system/files/modules-load.d/`. Ниже —
+исходная реализация (пути уже новые).
 
 ```text
-config/distrobox/containers.ini
-config/distrobox/exports.ini
-config/fish/completions/wsbox.fish
+distrobox/distrobox.nix
+terminal/fish/completions/wsbox.fish
 bin/wsbox
 ```
 
@@ -69,7 +68,7 @@ Rootfs контейнера считается disposable. Custom HOME счит�
 Runtime helper:
 
 ```text
-~/.local/bin/wsbox -> ~/.local/share/workstation-config/bin/wsbox
+~/.local/bin/wsbox -> ~/wsconfig/bin/wsbox
 ```
 
 Основные команды:
@@ -101,7 +100,7 @@ wsbox unexport NAME APP
 Desired exports задаются только в:
 
 ```text
-config/distrobox/exports.ini
+distrobox/distrobox.nix (exports у контейнера)
 ```
 
 Текущий managed export:
@@ -179,7 +178,7 @@ Wine использует NTSync из **host kernel**. Distrobox не имеет
 Host source of truth:
 
 ```text
-config/distrobox/host/modules-load.d/ntsync.conf
+system/files/modules-load.d/ntsync.conf
 ```
 
 Runtime:
@@ -191,9 +190,7 @@ Runtime:
 Применение:
 
 ```console
-sudo install -Dm644 \
-    ~/.local/share/workstation-config/config/distrobox/host/modules-load.d/ntsync.conf \
-    /etc/modules-load.d/ntsync.conf
+ws system apply
 
 sudo modprobe ntsync
 ls -l /dev/ntsync
@@ -212,14 +209,14 @@ NTSYNC-MODULE
 Repo-managed provider:
 
 ```text
-config/distrobox/arch/wsbox-host-ntsync/PKGBUILD
-config/distrobox/arch/wsbox-host-ntsync/README.md
+distrobox/arch/wsbox-host-ntsync/PKGBUILD
+distrobox/arch/wsbox-host-ntsync/README.md
 ```
 
 Сборка внутри `arch`:
 
 ```console
-cd ~/.local/share/workstation-config/config/distrobox/arch/wsbox-host-ntsync
+cd ~/wsconfig/distrobox/arch/wsbox-host-ntsync
 makepkg --clean --cleanbuild --force
 sudo pacman -U ./wsbox-host-ntsync-1-1-any.pkg.tar.zst
 ```

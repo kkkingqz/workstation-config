@@ -23,7 +23,7 @@ Apple Control   = PC Ctrl  = Linux Ctrl
 Профиль один: macOS-style с одинаковой семантикой модификаторов на Apple и
 PC keyboard. Параметры запуска xremap (`--desktop gnome`,
 `--watch=config,device`) заданы в unit `xremap.service`
-(`modules/home/xremap.nix`, переменные `XREMAP_DESKTOP`, `XREMAP_WATCH`);
+(`keyboard/xremap.nix`, переменные `XREMAP_DESKTOP`, `XREMAP_WATCH`);
 до 2026-09-27 они и проверки `PROFILE=macos`,
 `PC_MODIFIER_LAYOUT=semantic` лежали в `config/keyboard/settings.conf`.
 
@@ -497,8 +497,8 @@ helpws touchbar
 Repository:
 
 ```text
-config/keyboard/xremap.yml
-modules/home/keyboard.nix          сочетания GNOME и private chords Tiling
+keyboard/xremap.yml
+keyboard/keyboard.nix          сочетания GNOME и private chords Tiling
 
 bin/ws-keyboard
 bin/ws-keyboard-apply
@@ -513,15 +513,15 @@ bin/ws-keyboard-install-extensions
 bin/ws-keyboard-system-apply
 bin/ws-workstation-verify
 
-modules/home/xremap.nix
-pkgs/xremap.nix
-system/udev/99-workstation-uinput.rules
+keyboard/xremap.nix
+nix/pkgs/xremap.nix
+system/files/udev/99-workstation-uinput.rules
 
-system/udev/90-touchbar-native.rules
-system/modprobe/tb.conf
-system/modprobe/touchbar-native.conf
-system/usr/local/libexec/ws-touchbar-fn
-system/systemd/system/ws-touchbar-fn.service
+system/files/udev/90-touchbar-native.rules
+system/files/modprobe/tb.conf
+system/files/modprobe/touchbar-native.conf
+system/files/usr/local/libexec/ws-touchbar-fn
+system/files/systemd/system/ws-touchbar-fn.service
 
 gnome/extensions/workstation-smart-popup@local/
   extension.js
@@ -550,7 +550,7 @@ Machine-local state — вне checkout, в `~/.local/state/workstation/keyboard
 Command helpers устанавливаются в `~/.local/bin` как symlink на repository
 (ссылки home-manager, `ws switch`).
 
-xremap binary — из Nix: `pkgs/xremap.nix`, upstream
+xremap binary — из Nix: `nix/pkgs/xremap.nix`, upstream
 `xremap-linux-x86_64-gnome.zip` v0.15.13 по hash; бинарник байт в байт тот
 же, что раньше лежал в `runtime/xremap/` (verify сверяет sha256):
 
@@ -558,21 +558,21 @@ xremap binary — из Nix: `pkgs/xremap.nix`, upstream
 ~/.local/bin/xremap -> /nix/store/…-xremap-gnome-0.15.13/bin/xremap
 ```
 
-Обновление xremap: версия и hash в `pkgs/xremap.nix` и sha256 бинарника в
+Обновление xremap: версия и hash в `nix/pkgs/xremap.nix` и sha256 бинарника в
 `ws-workstation-verify`, затем `ws switch` и `ws-keyboard restart`.
 
 xremap service — `systemd.user.services.xremap` home-manager
-(`modules/home/xremap.nix`); unit и ссылку в
+(`keyboard/xremap.nix`); unit и ссылку в
 `graphical-session.target.wants` ставит `ws switch`:
 
 ```text
 ~/.config/systemd/user/xremap.service -> /nix/store/…-xremap.service
 Environment=XREMAP_BIN=/nix/store/…-xremap-gnome-0.15.13/bin/xremap
 Environment=XREMAP_CONFIG=/nix/store/…-xremap.yml
-ExecStart=/usr/bin/bash ~/.local/share/workstation-config/bin/ws-xremap
+ExecStart=/usr/bin/bash ~/wsconfig/bin/ws-xremap
 ```
 
-`XREMAP_CONFIG` — сборка `config/keyboard/xremap.yml` в store: `@repo@` в
+`XREMAP_CONFIG` — сборка `keyboard/xremap.yml` в store: `@repo@` в
 путях `launch` (`@repo@/bin/ws-input-source`) заменяется на checkout этого
 home. Правка `xremap.yml` применяется через `ws switch`: unit меняется, и
 home-manager перезапускает сервис (`--watch=config` store-файл не видит).
@@ -598,7 +598,7 @@ home-manager перезапускает сервис (`--watch=config` store-ф�
 ## Apply
 
 Сочетания GNOME профиля и private chords Tiling Assistant объявлены данными
-в `modules/home/keyboard.nix` (с 2026-09-27; раньше были записаны в самих
+в `keyboard/keyboard.nix` (с 2026-09-27; раньше были записаны в самих
 скриптах). `ws switch` собирает из них
 `~/.config/workstation/keyboard/gnome-shortcuts.tsv` и `tiling-bindings.tsv`;
 по ним работают `ws-keyboard-apply` (preflight, backup, установка),
@@ -609,7 +609,7 @@ home-manager перезапускает сервис (`--watch=config` store-ф�
 Изменить сочетание:
 
 ```console
-$EDITOR ~/.local/share/workstation-config/modules/home/keyboard.nix
+$EDITOR ~/wsconfig/keyboard/keyboard.nix
 ws switch
 ws-keyboard apply      # или ws-tiling-apply для Tiling
 ```
@@ -644,7 +644,7 @@ ws-keyboard-system-apply
 ```
 
 Это обёртка над `ws system apply`: ставит все системные файлы хоста из
-`modules/system` (Nix), только отличающиеся, с бэкапом в
+`system` (Nix), только отличающиеся, с бэкапом в
 `/var/backups/workstation/system-<время>/`; проверка без изменений —
 `ws system diff`.
 

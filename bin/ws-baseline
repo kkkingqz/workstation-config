@@ -5,7 +5,7 @@ set -euo pipefail
 # what is actually installed. Used as the regression gate of the Nix migration
 # (docs/plans/nix-migration.md, "Эталон функционала").
 
-repo="${WORKSTATION_CONFIG:-$HOME/.local/share/workstation-config}"
+repo="${WSCONFIG:-$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)}"
 root="${XDG_STATE_HOME:-$HOME/.local/state}/workstation/baseline"
 
 usage() {

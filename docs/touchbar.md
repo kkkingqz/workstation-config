@@ -220,17 +220,17 @@ ws-workstation-verify --strict
 ## Source of truth
 
 ```text
-system/modprobe/tb.conf
-system/modprobe/touchbar-native.conf
-system/udev/90-touchbar-native.rules
-system/usr/local/libexec/ws-touchbar-fn
-system/systemd/system/ws-touchbar-fn.service
+system/files/modprobe/tb.conf
+system/files/modprobe/touchbar-native.conf
+system/files/udev/90-touchbar-native.rules
+system/files/usr/local/libexec/ws-touchbar-fn
+system/files/systemd/system/ws-touchbar-fn.service
 bin/ws-keyboard-system-apply
 bin/ws-xremap
-config/keyboard/xremap.yml
+keyboard/xremap.yml
 ```
 
-Generated/system runtime state не коммитится в workstation-config.
+Generated/system runtime state не коммитится в wsconfig.
 
 ## Подтверждённый baseline
 

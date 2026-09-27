@@ -46,11 +46,11 @@ Display scale остаётся inventory-only.
 # 2. Appearance/Dock source of truth — DONE
 
 Создан небольшой curated profile. С 2026-09-27 это `dconf.settings` в
-`modules/home/gnome.nix`, его пишет `ws switch` (раньше —
+`gnome/gnome.nix`, его пишет `ws switch` (раньше —
 `config/gnome/settings.conf` и `ws-gnome apply|rollback`):
 
 ```text
-modules/home/gnome.nix
+gnome/gnome.nix
 ```
 
 Управление:
@@ -121,7 +121,7 @@ GNOME сейчас нет. Фактический scale встроенного d
 
 Ubuntu Dock остаётся штатным и расположен снизу.
 
-Текущие Dock values входят в `modules/home/gnome.nix`.
+Текущие Dock values входят в `gnome/gnome.nix`.
 
 Стандартную кнопку `Show Applications` и меню приложений пока не заменяем.
 Установка ArcMenu или другого menu extension отложена.
@@ -224,7 +224,7 @@ Policy:
 - отсутствие любого перечисленного baseline extension -> FAIL;
 - другой неизвестный enabled extension -> WARN;
 - автоматически ничего не отключаем (с 2026-09-27 `enabled-extensions` пишет
-  `ws switch` из `modules/home/gnome-extensions.nix` — единственного списка;
+  `ws switch` из `gnome/gnome-extensions.nix` — единственного списка;
   вручную включённое расширение switch выключит).
 
 ---
@@ -237,7 +237,7 @@ Source of truth:
 
 ```text
 docs/keyboard.md
-config/keyboard/
+keyboard/
 bin/ws-keyboard*
 gnome/extensions/workstation-input-source@local/
 gnome/extensions/workstation-smart-popup@local/
