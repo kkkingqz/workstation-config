@@ -988,13 +988,23 @@ PASS, `ws baseline diff` пуст»:
 - xremap как `systemd.user.services` и `xremap.yml` со store-путями.
 - Расширения с EGO по версии и hash.
 - Скрипты в store (`writeShellApplication`) вместо ссылок на checkout.
-- `man/` собирать при сборке, а не хранить в git.
+- ~~`man/` собирать при сборке, а не хранить в git~~ — **сделано
+  (2026-09-27):** `pkgs/man.nix` запускает `bin/ws-doc-build` с lowdown
+  2.0.4 (`pkgs/lowdown.nix`: версия apt, 16 страниц байт в байт как в
+  прежнем `man/`; тесты 2.0.4 отключены — падают два теста вывода таблиц
+  в терминал); `modules/home/man.nix` ставит страницы ссылками в
+  `~/.local/share/man/man1`; `man/` удалён из git и в `.gitignore`; verify
+  проверяет, что страницы из текущей сборки. lowdown из apt больше не нужен
+  (убран из `hosts/apt.txt`).
 - Фикс t2bce через DKMS — только если сборка в podman станет неудобной;
   `build-essential` на хосте противоречит правилу roadmap про toolchains.
 - ~~Закрепить образ `arch` по digest~~ — **сделано (2026-09-27):**
   `archlinux@sha256:917e543c…` (образ 2026-09-21, на котором работает
   контейнер); `wsbox check` сравнивает по repo digest, чужой digest — FAIL.
-- Удалить `state/` после переноса `gsettings-backup.tsv`.
+- Удалить `state/` после переноса `gsettings-backup.tsv` — после задачи
+  GNOME через `dconf.settings`. Архив откатных копий v15–v26 удалён
+  (2026-09-27, решение пользователя); остались рабочие файлы
+  `state/keyboard/gsettings-backup.tsv` и `state/gnome/last-apply.*`.
 - ~~Убрать `t2bce-build` и `touchbar-build`~~ — **сделано иначе
   (2026-09-27):** по решению пользователя оба оставлены и описаны в
   `containers.ini` (общий HOME хоста, `additional_packages` по фактически

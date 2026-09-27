@@ -464,9 +464,7 @@ workstation-config/
 ├── docs/
 │   ├── terminal.md
 │   └── workstation.md
-└── man/man1/
-    ├── ws-terminal.1
-    └── ws-workstation.1
+└── pkgs/man.nix          man pages из docs/ (собирает Nix)
 ```
 
 Реальные пути в `$HOME` используют symlink'и на repository.
@@ -495,10 +493,12 @@ docs/terminal.md
 docs/workstation.md
 ```
 
-Man pages генерируются:
+Man pages собирает Nix из `docs/` (`pkgs/man.nix`: `ws-doc-build` с
+lowdown 2.0.4) и ставит `ws switch` в `~/.local/share/man/man1`; в git их
+нет. После правки документа:
 
 ```console
-ws-doc-build
+ws switch
 ```
 
 Просмотр:
@@ -538,11 +538,11 @@ man ws-workstation
 ~/.config/fish/completions/helpws.fish
 ```
 
-Все файлы из `config/fish/` (и `config/ghostty/*.ghostty`, команды `bin/`,
-`man/man1/`) подключены ссылками home-manager в checkout
-(`modules/home/links.nix`); новый файл подключается следующим `ws switch`.
-fzf, zoxide, eza, micro — из Nix (`modules/home/cli.nix`), `lowdown` — из
-apt. fzf ≥ 0.70 занимает Shift+Tab; `config.fish` возвращает туда
+Все файлы из `config/fish/` (и `config/ghostty/*.ghostty`, команды `bin/`)
+подключены ссылками home-manager в checkout (`modules/home/links.nix`);
+новый файл подключается следующим `ws switch`. Man pages — из сборки Nix
+(`modules/home/man.nix`). fzf, zoxide, eza, micro — из Nix
+(`modules/home/cli.nix`). fzf ≥ 0.70 занимает Shift+Tab; `config.fish` возвращает туда
 `complete-and-search` fish.
 
 ## Help viewer

@@ -469,7 +469,6 @@ fi
 current_home_prefix="${HOME%/}/"
 other_hardcoded_home="$(git -C "$repo" grep -nF "$current_home_prefix" -- \
     ':!docs/**' \
-    ':!man/**' \
     ':!config/keyboard/xremap.yml' \
     ':!bin/ws-workstation-verify' \
     ':!gnome/extensions/workstation-input-source@local/extension.js' \
@@ -1510,6 +1509,7 @@ section "14.4 Nix layer (docs/plans/nix-migration.md)"
 
 for path in flake.nix hosts/mbp16/facts.nix hosts/mbp16/home.nix \
     modules/home/links.nix modules/home/cli.nix modules/home/xremap.nix pkgs/xremap.nix \
+    modules/home/man.nix pkgs/man.nix pkgs/lowdown.nix \
     modules/system/default.nix modules/system/common.nix \
     modules/system/boot/refind-grub-recovery.nix modules/system/hardware/t2-mbp16.nix \
     config/fish/conf.d/00-nix.fish config/nix/nix.conf .github/workflows/check.yml; do
@@ -1555,7 +1555,7 @@ if [[ -d /nix/var/nix ]]; then
     tracked flake.lock flake.lock
 
     # Phase 1: links into the checkout are owned by home-manager, terminal
-    # CLI come from Nix, lowdown stays from apt (man/ is generated with 2.x).
+    # CLI come from Nix.
     hm_gen="$(readlink -f "${XDG_STATE_HOME:-$HOME/.local/state}/nix/profiles/home-manager" 2>/dev/null || true)"
     [[ -n "$hm_gen" && -e "$hm_gen/activate" ]] \
         && pass "home-manager generation active: ${hm_gen#/nix/store/}" \
@@ -1581,9 +1581,6 @@ if [[ -d /nix/var/nix ]]; then
     for path in bootstrap.sh hosts/apt.txt hosts/mbp16/apt.txt; do
         tracked "$path" "$path"
     done
-    [[ "$(command -v lowdown 2>/dev/null)" == /usr/bin/lowdown ]] \
-        && pass "lowdown from apt (man/ is generated with it)" \
-        || warn "lowdown resolves to $(command -v lowdown 2>/dev/null || echo missing), not /usr/bin/lowdown"
 else
     warn "Nix not installed yet (phase 0 of docs/plans/nix-migration.md)"
 fi
@@ -1703,36 +1700,36 @@ grep -Fqi 'Wine на host не устанавливается' "$repo/docs/gnome
     && pass "docs/gnome.md preserves host-without-Wine architecture" \
     || warn "docs/gnome.md does not explicitly preserve host-without-Wine architecture"
 
-if [[ -x "$repo/bin/ws-doc-build" ]] && have lowdown; then
-    doc_tmp="$(mktemp -d)"
-    mkdir -p "$doc_tmp/docs" "$doc_tmp/bin" "$doc_tmp/man/man1"
-    cp -a "$repo/docs/." "$doc_tmp/docs/"
-    cp -a "$repo/bin/ws-doc-build" "$doc_tmp/bin/ws-doc-build"
-
-    if WORKSTATION_CONFIG="$doc_tmp" "$doc_tmp/bin/ws-doc-build" >"$doc_tmp/build.log" 2>&1; then
-        doc_diff=false
-        shopt -s nullglob
-        for generated in "$doc_tmp"/man/man1/*.1; do
-            name="${generated##*/}"
-            if [[ ! -f "$repo/man/man1/$name" ]]; then
-                doc_diff=true
-                warn "generated man page missing from repo: man/man1/$name"
-            elif ! cmp -s "$generated" "$repo/man/man1/$name"; then
-                doc_diff=true
-                warn "generated man page differs from repo: man/man1/$name"
-            fi
-        done
-        shopt -u nullglob
-        [[ "$doc_diff" == false ]] && pass "documentation/man generation reproducible in temporary copy"
-    else
-        warn "ws-doc-build failed in temporary copy:"
-        sed 's/^/        /' "$doc_tmp/build.log"
-    fi
-    rm -rf -- "$doc_tmp"
-elif [[ ! -x "$repo/bin/ws-doc-build" ]]; then
-    info "ws-doc-build unavailable; doc-generation check skipped"
+# Man pages are built by Nix from docs/ (pkgs/man.nix) and linked by
+# home-manager into ~/.local/share/man/man1; man/ is not kept in git.
+if [[ -n "$(git -C "$repo" ls-files -- man)" ]]; then
+    fail "man/ is tracked in git; pages are built by Nix (pkgs/man.nix)"
 else
-    info "lowdown unavailable; doc-generation check skipped"
+    pass "man/ not tracked (pages built by Nix)"
+fi
+if have nix; then
+    man_built="$(nix eval --raw "$repo#packages.$(uname -m)-linux.man.outPath" 2>/dev/null || true)"
+    man_missing=false
+    man_stale=false
+    for doc in "$repo"/docs/*.md "$repo"/docs/plans/*.md; do
+        page="$(sed -n 's/^title:[[:space:]]*//p' "$doc" | head -n 1)"
+        [[ -n "$page" ]] || continue
+        link="$HOME/.local/share/man/man1/$page.1"
+        if [[ ! -e "$link" ]]; then
+            man_missing=true
+            warn "man page missing: $page (ws switch)"
+        elif [[ -n "$man_built" && "$(readlink -f "$link")" != "$man_built/"* ]]; then
+            man_stale=true
+        fi
+    done
+    [[ "$man_missing" == false ]] && pass "man pages installed for every docs title"
+    if [[ -z "$man_built" ]]; then
+        warn "cannot evaluate the man package of the flake"
+    elif [[ "$man_stale" == true ]]; then
+        warn "man pages are older than docs/ (ws switch)"
+    else
+        pass "man pages match docs/ (${man_built#/nix/store/})"
+    fi
 fi
 
 section "17. Legacy artifacts that should be gone"

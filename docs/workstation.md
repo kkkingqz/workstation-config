@@ -645,15 +645,14 @@ Micro help-viewer использует true-color scheme и Markdown syntax high
 
 ## Man generation
 
+Man pages собирает Nix (`pkgs/man.nix`): `bin/ws-doc-build` —
+`lowdown -s -t man`, по странице на `title:` каждого `docs/**/*.md`, lowdown
+закреплён на 2.0.4 (`pkgs/lowdown.nix`; 3.x меняет отступы списков). `ws
+switch` ставит их ссылками в `~/.local/share/man/man1`; в git `man/` нет,
+verify предупреждает, если страницы старше `docs/`. После правки документа:
+
 ```console
-ws-doc-build
-```
-
-Генерирует:
-
-```text
-man/man1/ws-terminal.1
-man/man1/ws-workstation.1
+ws switch
 ```
 
 Просмотр:
@@ -718,7 +717,7 @@ workstation-config/
 ├── modules/
 │   ├── home/             ссылки на checkout, CLI из Nix, xremap
 │   └── system/           дерево системных файлов (common, boot/, hardware/)
-├── pkgs/xremap.nix
+├── pkgs/                xremap.nix, man.nix (man из docs/), lowdown.nix
 ├── bin/
 │   ├── ws                switch, diff, apply, check, system, baseline
 │   ├── dotgit
@@ -756,12 +755,11 @@ workstation-config/
 │   └── usr/local/libexec/ws-touchbar-fn
 ├── systemd/user/
 │   └── xremap.service
-├── docs/
-└── man/man1/
+└── docs/
 ```
 
 Nix доставляет, владельцы слоёв не меняются (`helpws plan-nix`):
-home-manager ставит ссылки на checkout (`~/.local/bin`, fish, Ghostty, man)
+home-manager ставит ссылки на checkout (`~/.local/bin`, fish, Ghostty), man pages
 и CLI (fzf, zoxide, eza, micro, nvd, xremap); `ws system apply` ставит копии
 системных файлов из сборки `modules/system`; GNOME, Flatpak, Distrobox,
 клавиатура — прежние `bin/`-владельцы, их по порядку вызывает `ws apply`.

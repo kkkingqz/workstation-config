@@ -19,11 +19,16 @@
         in home-manager.lib.homeManagerConfiguration {
           inherit pkgs;
           extraSpecialArgs = {
-            inherit facts;
+            inherit facts man;
             xremap = pkgs.callPackage ./pkgs/xremap.nix { };
           };
           modules = [ ./hosts/${host}/home.nix ];
         };
+
+      # Man pages from docs/ with the pinned lowdown.
+      man = pkgs.callPackage ./pkgs/man.nix {
+        lowdown = pkgs.callPackage ./pkgs/lowdown.nix { };
+      };
 
       # System file tree of the host; `ws system diff|check` compares it.
       mkSystem = host: pkgs.callPackage ./modules/system {
@@ -35,6 +40,7 @@
       checks.${system} = {
         home-mbp16 = (mkHome "mbp16").activationPackage;
         system-mbp16 = mkSystem "mbp16";
+        inherit man;
       };
 
       # Tools `ws` runs, pinned by flake.lock.
@@ -43,6 +49,7 @@
         nvd = pkgs.nvd;
         xremap = pkgs.callPackage ./pkgs/xremap.nix { };
         system-mbp16 = mkSystem "mbp16";
+        man = man;
       };
     };
 }

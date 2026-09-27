@@ -14,6 +14,10 @@ gnome/extensions/*/schemas/gschemas.compiled
 __pycache__/
 *.pyc
 
+# Man pages are built by Nix from docs/ (pkgs/man.nix); a local
+# bin/ws-doc-build run writes here
+man/
+
 # nix build output links (build with --no-link)
 result
 result-*

@@ -40,7 +40,6 @@ in
       to = ".local/bin";
       filter = name: !(builtins.elem name binExcluded);
     })
-    (linkDir { from = "man/man1"; to = ".local/share/man/man1"; })
     {
       ".config/xdg-terminals.list".source = link "config/xdg-terminals/xdg-terminals.list";
       ".config/ubuntu-xdg-terminals.list".source =

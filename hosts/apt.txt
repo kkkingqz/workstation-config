@@ -14,9 +14,6 @@ ghostty
 git
 curl
 
-# man pages from docs/ (bin/ws-doc-build; lowdown 3.x from Nix changes man/)
-lowdown
-
 # Python helpers use the host PyGObject and AT-SPI (ws-nautilus-current)
 python3-gi
 gir1.2-atspi-2.0

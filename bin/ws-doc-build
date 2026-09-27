@@ -1,6 +1,10 @@
 #!/usr/bin/env sh
 set -eu
 
+# Man pages from docs/**/*.md, one per `title:` (lowdown -s -t man).
+# pkgs/man.nix runs this in the Nix build with the pinned lowdown; `ws switch`
+# installs the result. A run by hand writes the untracked man/ for preview.
+
 repo="${WORKSTATION_CONFIG:-$HOME/.local/share/workstation-config}"
 mandir="$repo/man/man1"
 

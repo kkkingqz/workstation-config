@@ -6,6 +6,7 @@
     ../../modules/home/links.nix
     ../../modules/home/cli.nix
     ../../modules/home/xremap.nix
+    ../../modules/home/man.nix
   ];
 
   home.username = facts.user;
