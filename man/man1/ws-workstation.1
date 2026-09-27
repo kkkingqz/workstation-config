@@ -521,10 +521,15 @@ Managed containers:
 ubuntu   Ubuntu 26.04 base / compatibility
 arch     Arch rolling / AUR applications; WinBox 3.x
 wine     Ubuntu 26.04 empty base reserved for plan-windows
+t2bce-build     Ubuntu 26.04, сборка ядра/модулей вручную (kernel headers с хоста)
+touchbar-build  Ubuntu 26.04, порт Touch Bar (\(ti/touchbar): dev-пакеты DRM/Wayland,
+                Rust через rustup в /opt/rust (ставится вручную)
 .EE
 .PP
-Каждый box использует отдельный persistent HOME под
-\f(CR\(ti/.local/share/distrobox-homes/\fR. Rootfs считается disposable.
+\f(CRubuntu\fR, \f(CRarch\fR, \f(CRwine\fR используют отдельный persistent HOME под
+\f(CR\(ti/.local/share/distrobox-homes/\fR; build-контейнеры — общий HOME хоста, в нём
+лежат исходники. Rootfs считается disposable: пакеты — \f(CRadditional_packages\fR
+в \f(CRcontainers.ini\fR.
 .PP
 \f(CRarch\fR использует NTSync из host T2 kernel. Host загружает \f(CRntsync\fR, а
 \f(CRwsbox-host-ntsync\fR внутри Arch только удовлетворяет virtual dependency

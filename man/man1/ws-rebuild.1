@@ -469,9 +469,9 @@ application layer относится к \f(CRplan-windows\fR.
 wsbox check
 .EE
 .PP
-На этой машине два unmanaged build containers (\f(CRt2bce-build\fR,
-\f(CRtouchbar-build\fR) дают ожидаемые WARN, но managed baseline должен иметь
-\f(CRFAIL=0\fR.
+Ожидаемо \f(CRFAIL=0 WARN=0\fR. Build-контейнеры \f(CRt2bce-build\fR и
+\f(CRtouchbar-build\fR тоже в \f(CRcontainers.ini\fR; Rust в \f(CRtouchbar-build\fR ставится
+вручную (\f(CRhelpws workstation\fR, Managed Distrobox layer).
 .PP
 Подробности:
 .LP

@@ -428,9 +428,9 @@ application layer относится к `plan-windows`.
 wsbox check
 ```
 
-На этой машине два unmanaged build containers (`t2bce-build`,
-`touchbar-build`) дают ожидаемые WARN, но managed baseline должен иметь
-`FAIL=0`.
+Ожидаемо `FAIL=0 WARN=0`. Build-контейнеры `t2bce-build` и
+`touchbar-build` тоже в `containers.ini`; Rust в `touchbar-build` ставится
+вручную (`helpws workstation`, Managed Distrobox layer).
 
 Подробности:
 

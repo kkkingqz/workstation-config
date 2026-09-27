@@ -1341,8 +1341,11 @@ xremap как \f(CRsystemd.user.services\fR и \f(CRxremap.yml\fR со store-п�
 .if t \
 .sp -0.25v
 .IP "\(bu" 3
-Убрать \f(CRt2bce-build\fR и \f(CRtouchbar-build\fR: сборку t2bce делает
-\f(CRws-suspend\fR в одноразовом контейнере.
+Убрать \f(CRt2bce-build\fR и \f(CRtouchbar-build\fR — \fBсделано иначе
+(2026-09-27):\fR по решению пользователя оба оставлены и описаны в
+\f(CRcontainers.ini\fR (общий HOME хоста, \f(CRadditional_packages\fR по фактически
+поставленным пакетам; Rust в \f(CRtouchbar-build\fR — вручную, rustup в
+\f(CR/opt/rust\fR). \f(CRwsbox check\fR: FAIL 0, WARN 0.
 .LP
 \l'2i'
 .SH ОБЩИЕ ПРАВИЛА

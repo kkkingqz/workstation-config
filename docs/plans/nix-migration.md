@@ -994,8 +994,11 @@ PASS, `ws baseline diff` пуст»:
 - Закрепить образ `arch` по digest (сейчас `wsbox check` сравнивает с
   `archlinux:latest`).
 - Удалить `state/` после переноса `gsettings-backup.tsv`.
-- Убрать `t2bce-build` и `touchbar-build`: сборку t2bce делает
-  `ws-suspend` в одноразовом контейнере.
+- ~~Убрать `t2bce-build` и `touchbar-build`~~ — **сделано иначе
+  (2026-09-27):** по решению пользователя оба оставлены и описаны в
+  `containers.ini` (общий HOME хоста, `additional_packages` по фактически
+  поставленным пакетам; Rust в `touchbar-build` — вручную, rustup в
+  `/opt/rust`). `wsbox check`: FAIL 0, WARN 0.
 
 ---
 

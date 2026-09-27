@@ -323,7 +323,7 @@ status_one() {
         home_state="absent"
     fi
 
-    printf '%-10s %-12s %-38s %-8s %s\n' \
+    printf '%-15s %-12s %-38s %-8s %s\n' \
         "$name" \
         "$state" \
         "$actual_image" \
@@ -338,7 +338,7 @@ cmd_list() {
 cmd_status() {
     local name="${1:-}"
 
-    printf '%-10s %-12s %-38s %-8s %s\n' \
+    printf '%-15s %-12s %-38s %-8s %s\n' \
         NAME STATE IMAGE HOME PATH
 
     printf '%s\n' \
