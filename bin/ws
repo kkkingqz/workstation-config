@@ -209,7 +209,7 @@ update_nix() {
 }
 
 update_extensions() {
-    local list="$HOME/.config/workstation/gnome/extensions" pinned
+    local list="$HOME/.local/share/workstation/gnome/extensions" pinned
     [[ -r "$list" ]] || die "extension list missing: $list (ws switch)"
     # GNOME Shell updates every extension from EGO, a pinned copy too.
     pinned="$(awk '!/^#/ && $2 == "ego" && NF >= 3 { print $1 }' "$list")"

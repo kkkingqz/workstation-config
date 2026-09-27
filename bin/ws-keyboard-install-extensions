@@ -92,7 +92,7 @@ install_ego() {
 
 # gnome/gnome-extensions.nix; ws switch builds the list, enables the
 # extensions (enabled-extensions) and links the pinned EGO ones.
-list="$HOME/.config/workstation/gnome/extensions"
+list="$HOME/.local/share/workstation/gnome/extensions"
 [[ -r "$list" ]] || die "extension list missing: $list (run ws switch)"
 mapfile -t local_extensions < <(awk '!/^#/ && $2 == "local" { print $1 }' "$list")
 ((${#local_extensions[@]})) || die "no local extensions in $list"

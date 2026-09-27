@@ -178,7 +178,7 @@ gcontains() {
 }
 
 # The extension list is built from gnome/gnome-extensions.nix.
-ext_list_file="$HOME/.config/workstation/gnome/extensions"
+ext_list_file="$HOME/.local/share/workstation/gnome/extensions"
 ext_list() {
     [[ -r "$ext_list_file" ]] || return 0
     awk -v s="${1:-}" '!/^#/ && NF >= 2 && (s == "" || $2 == s) { print $1 }' "$ext_list_file"
@@ -402,7 +402,7 @@ done < <(git -C "$repo" ls-files -z)
 [[ "$junk_found" == false ]] && pass "no obvious tracked editor/backup/one-shot junk"
 
 runtime_tracked=false
-for p in state runtime terminal/micro-help/buffers; do
+for p in state runtime; do
     if git -C "$repo" ls-files -- "$p" | grep -q .; then
         runtime_tracked=true
         fail "generated/runtime path is tracked: $p"
@@ -410,7 +410,7 @@ for p in state runtime terminal/micro-help/buffers; do
 done
 [[ "$runtime_tracked" == false ]] && pass "runtime/generated directories are not tracked"
 
-for ignored in runtime/probe terminal/micro-help/buffers/probe gnome/extensions/workstation-input-source@local/schemas/gschemas.compiled gnome/extensions/workstation-smart-popup@local/schemas/gschemas.compiled; do
+for ignored in runtime/probe gnome/extensions/workstation-input-source@local/schemas/gschemas.compiled gnome/extensions/workstation-smart-popup@local/schemas/gschemas.compiled; do
     if git -C "$repo" check-ignore -q -- "$ignored"; then
         pass ".gitignore covers: $ignored"
     else
@@ -629,11 +629,11 @@ section "5.1 GNOME managed appearance"
 # Declared in gnome/gnome.nix (dconf.settings, written by ws switch);
 # the Nix module asserts that it does not overlap the keyboard, tiling,
 # extension and display owners.
-gnome_profile="$(readlink -f "$HOME/.config/workstation/gnome/settings.conf" 2>/dev/null || true)"
+gnome_profile="$(readlink -f "$HOME/.local/share/workstation/gnome/settings.conf" 2>/dev/null || true)"
 if [[ "$gnome_profile" == /nix/store/*-gnome-settings.conf ]]; then
     pass "GNOME check profile from Nix: ${gnome_profile#/nix/store/}"
 else
-    fail "~/.config/workstation/gnome/settings.conf is not the Nix build (${gnome_profile:-missing}); ws switch"
+    fail "~/.local/share/workstation/gnome/settings.conf is not the Nix build (${gnome_profile:-missing}); ws switch"
 fi
 
 if [[ -x "$repo/bin/ws-gnome-check" ]]; then
@@ -767,7 +767,7 @@ fi
 # are already running; otherwise tell the operator to run wsbox check separately.
 wsbox_all_running=true
 wsbox_box_count=0
-wsbox_manifest="$HOME/.config/workstation/distrobox/containers.ini"
+wsbox_manifest="$HOME/.local/share/workstation/distrobox/containers.ini"
 wsbox_manifest_real="$(readlink -f "$wsbox_manifest" 2>/dev/null || true)"
 if [[ "$wsbox_manifest_real" == /nix/store/*-workstation-distrobox-config/containers.ini ]]; then
     pass "Distrobox manifest from Nix: ${wsbox_manifest_real#/nix/store/}"
@@ -1045,7 +1045,7 @@ contains "$xcfg" 'Alt-Right:[[:space:]]*Alt-F' "terminal Option+Right -> Alt-F"
 section "9. GNOME core bindings"
 
 # The profile of keyboard/keyboard.nix, set by ws-keyboard-apply.
-kb_dir="$HOME/.config/workstation/keyboard"
+kb_dir="$HOME/.local/share/workstation/keyboard"
 kb_real="$(readlink -f "$kb_dir/gnome-shortcuts.tsv" 2>/dev/null || true)"
 if [[ "$kb_real" == /nix/store/* ]]; then
     pass "keyboard shortcut data from Nix: ${kb_real#/nix/store/}"
@@ -1154,7 +1154,7 @@ ext_list_real="$(readlink -f "$ext_list_file" 2>/dev/null || true)"
 if [[ "$ext_list_real" == /nix/store/* ]]; then
     pass "extension list from Nix: ${ext_list_real#/nix/store/}"
 else
-    fail "~/.config/workstation/gnome/extensions is not the Nix build (${ext_list_real:-missing}); ws switch"
+    fail "~/.local/share/workstation/gnome/extensions is not the Nix build (${ext_list_real:-missing}); ws switch"
 fi
 mapfile -t required_gnome_extensions < <(ext_list)
 
@@ -1577,11 +1577,11 @@ check_symlink_target "$HOME/.config/fish/conf.d/00-nix.fish" \
     "$repo/terminal/fish/conf.d/00-nix.fish" "~/.config/fish/conf.d/00-nix.fish points into repo"
 check_symlink_target "$HOME/.config/nix/nix.conf" \
     "$repo/nix/nix.conf" "~/.config/nix/nix.conf points into repo"
-flatpak_cfg="$(readlink -f "$HOME/.config/workstation/flatpak" 2>/dev/null || true)"
+flatpak_cfg="$(readlink -f "$HOME/.local/share/workstation/flatpak" 2>/dev/null || true)"
 if [[ "$flatpak_cfg" == /nix/store/*-workstation-flatpak-config ]]; then
     pass "wsflatpak config from Nix: ${flatpak_cfg#/nix/store/}"
 else
-    fail "~/.config/workstation/flatpak is not the Nix build (${flatpak_cfg:-missing}); ws switch"
+    fail "~/.local/share/workstation/flatpak is not the Nix build (${flatpak_cfg:-missing}); ws switch"
 fi
 if compgen -G "$repo/flatpak/overrides/*.conf" >/dev/null; then
     fail "flatpak/overrides/*.conf is ignored; declare overrides in flatpak/flatpak.nix"
@@ -1801,6 +1801,16 @@ fi
 
 section "17. Legacy artifacts that should be gone"
 
+# Generated files live in ~/.local/share/workstation (before 2026-09-27:
+# ~/.config/workstation and ~/.cache/ws-suspend).
+for old in "$HOME/.config/workstation" "$HOME/.cache/ws-suspend"; do
+    if [[ -e "$old" || -L "$old" ]]; then
+        cleanup "obsolete generated directory: $(q "$old") (now ~/.local/share/workstation)"
+    else
+        pass "obsolete generated directory absent: $old"
+    fi
+done
+
 # Machine-local state lives in ~/.local/state/workstation, not in the checkout.
 if [[ -e "$repo/state" ]]; then
     fail "state/ in the checkout is obsolete: move keyboard/gsettings-backup.tsv to ~/.local/state/workstation/keyboard/"
@@ -1830,6 +1840,8 @@ legacy_repo_paths=(
     system/sleep.conf.d
     system/modules-load.d
     system/files/udev/70-workstation-uinput.rules
+    # micro writes its buffers into ~/.local/share/workstation/micro-help.
+    terminal/micro-help/buffers
 )
 for path in "${legacy_repo_paths[@]}"; do
     if is_tracked "$path"; then
@@ -1860,7 +1872,7 @@ while IFS= read -r -d '' path; do
             ;;
         *)
             case "$path" in
-                runtime/*|terminal/micro-help/buffers/*|*/schemas/gschemas.compiled)
+                runtime/*|*/schemas/gschemas.compiled)
                     info "ignored/generated untracked file: $(q "$path")"
                     ;;
                 fix-keyboard-layer-v*.sh|*/fix-keyboard-layer-v*.sh|rollback-keyboard-layer-v*.sh|*/rollback-keyboard-layer-v*.sh)

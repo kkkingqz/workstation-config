@@ -4,7 +4,7 @@
 # bindings depend on xremap), saves the originals once and `ws-keyboard
 # restore` puts them back; home-manager would write them on every switch.
 #
-# Built for the scripts into ~/.config/workstation/keyboard/:
+# Built for the scripts into ~/.local/share/workstation/keyboard/:
 #   gnome-shortcuts.tsv  SCHEMA<TAB>KEY<TAB>VALUE<TAB>required|optional
 #                        VALUE as `gsettings get` prints it; read by
 #                        ws-keyboard-apply (set, backup, preflight),
@@ -116,9 +116,9 @@ let
     map (b: "${key}\t${b}\n") bindings) tiling));
 in
 {
-  xdg.configFile."workstation/keyboard/gnome-shortcuts.tsv".text =
+  xdg.dataFile."workstation/keyboard/gnome-shortcuts.tsv".text =
     "# Built from keyboard/keyboard.nix: SCHEMA KEY VALUE required|optional\n"
     + shortcutsTsv;
-  xdg.configFile."workstation/keyboard/tiling-bindings.tsv".text =
+  xdg.dataFile."workstation/keyboard/tiling-bindings.tsv".text =
     "# Built from keyboard/keyboard.nix: KEY BINDING\n" + tilingTsv;
 }

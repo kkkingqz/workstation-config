@@ -48,7 +48,7 @@ complete -c wsflatpak -n "__wsflatpak_using_command run" -l direct -d "Use flatp
 
 function __wsflatpak_managed_remotes
     # Built by home-manager from flatpak/flatpak.nix.
-    set -l file ~/.config/workstation/flatpak/remotes.conf
+    set -l file ~/.local/share/workstation/flatpak/remotes.conf
 
     if test -f $file
         while read -l name url

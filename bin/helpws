@@ -2,7 +2,9 @@
 set -eu
 
 repo="${WSCONFIG:-$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)}"
-micro_cfg="$repo/terminal/micro-help"
+# Micro config dir: settings.json and bindings.json are home-manager links
+# into terminal/micro-help; micro writes buffers/ (history) next to them.
+micro_cfg="$HOME/.local/share/workstation/micro-help"
 topic="${1:-terminal}"
 
 open_md() {

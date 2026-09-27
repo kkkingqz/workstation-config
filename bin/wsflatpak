@@ -8,12 +8,12 @@ import subprocess
 import sys
 
 # Declarations live in flatpak/flatpak.nix; home-manager builds them into
-# ~/.config/workstation/flatpak. wsflatpak only reads that directory.
+# ~/.local/share/workstation/flatpak. wsflatpak only reads that directory.
 SOURCE = "flatpak/flatpak.nix"
 CFG = Path(
     os.environ.get(
         "WSFLATPAK_CONFIG",
-        Path.home() / ".config/workstation/flatpak",
+        Path.home() / ".local/share/workstation/flatpak",
     )
 )
 APPS = CFG / "apps.conf"

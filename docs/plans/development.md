@@ -35,7 +35,7 @@ grep "^$USER:" /etc/subuid /etc/subgid
 # 2. Source of truth
 
 С 2026-09-27: `distrobox/distrobox.nix`; `containers.ini` и `exports.ini`
-собирает `ws switch` в `~/.config/workstation/distrobox/`, host
+собирает `ws switch` в `~/.local/share/workstation/distrobox/`, host
 `ntsync.conf` — `system/files/modules-load.d/`. Ниже —
 исходная реализация (пути уже новые).
 

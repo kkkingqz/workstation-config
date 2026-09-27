@@ -1,6 +1,6 @@
 # Distrobox containers and their exported applications. wsbox stays the owner
 # of apply/check and reads what is built here from
-# ~/.config/workstation/distrobox (one link to the store):
+# ~/.local/share/workstation/distrobox (one link to the store):
 #
 #   containers.ini  manifest for `distrobox assemble` (its own format)
 #   exports.ini     [BOX] ALIAS=desktop file inside the container (wsbox)
@@ -115,5 +115,5 @@ in
     message = "distrobox.nix: duplicate container name";
   }];
 
-  xdg.configFile."workstation/distrobox".source = distroboxConfig;
+  xdg.dataFile."workstation/distrobox".source = distroboxConfig;
 }

@@ -12,7 +12,7 @@
 # (ws-tiling-apply), wallpaper. Enabled extensions are declared in
 # gnome-extensions.nix, also as dconf.settings.
 #
-# ws-gnome check compares the session with ~/.config/workstation/gnome/
+# ws-gnome check compares the session with ~/.local/share/workstation/gnome/
 # settings.conf (SCHEMA|KEY|VALUE), built from the same attribute set.
 { config, lib, pkgs, ... }:
 let
@@ -84,5 +84,5 @@ in
 
   dconf.settings = profile;
 
-  xdg.configFile."workstation/gnome/settings.conf".source = checkProfile;
+  xdg.dataFile."workstation/gnome/settings.conf".source = checkProfile;
 }

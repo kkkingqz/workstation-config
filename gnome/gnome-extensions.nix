@@ -1,6 +1,6 @@
 # The one list of GNOME Shell extensions of the workstation. Everything else
 # reads it: enabled-extensions (dconf, written by ws switch), the links of
-# pinned EGO extensions, and ~/.config/workstation/gnome/extensions
+# pinned EGO extensions, and ~/.local/share/workstation/gnome/extensions
 # ("UUID SOURCE [PINNED-VERSION]" per line) for
 # ws-keyboard-install-extensions, ws-workstation-verify, ws-gnome-test and
 # ws-gnome-status.
@@ -82,7 +82,7 @@ in
     disabled-extensions = lib.hm.gvariant.mkEmptyArray lib.hm.gvariant.type.string;
   };
 
-  xdg.configFile."workstation/gnome/extensions".text = ''
+  xdg.dataFile."workstation/gnome/extensions".text = ''
     # Built from gnome/gnome-extensions.nix: UUID SOURCE [PINNED-VERSION]
   '' + lib.concatMapStrings (e:
     "${e.uuid} ${e.source}${lib.optionalString (e ? pin) " ${toString e.pin.version}"}\n")

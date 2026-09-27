@@ -554,5 +554,6 @@ man ws-workstation
 ## Help viewer
 
 ```text
-~/wsconfig/terminal/micro-help/
+~/wsconfig/terminal/micro-help/           settings.json, bindings.json
+~/.local/share/workstation/micro-help/    MICRO_CONFIG_HOME helpws: ссылки на них + buffers/
 ```

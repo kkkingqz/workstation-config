@@ -157,7 +157,7 @@ ws-gnome-status
 ws-gnome check
 ```
 
-Сравнивает сессию (`gsettings get`) с `~/.config/workstation/gnome/
+Сравнивает сессию (`gsettings get`) с `~/.local/share/workstation/gnome/
 settings.conf` — файлом `SCHEMA|KEY|VALUE`, который home-manager собирает из
 того же набора в `gnome.nix`. Ничего не меняет. Прямой вызов —
 `ws-gnome-check`.
@@ -209,14 +209,14 @@ local   gnome/extensions/<uuid>, копирует ws-keyboard-install-extensions
   `disabled-extensions` — пишет `ws switch`. Расширение, включённое или
   выключенное вручную (Extension Manager, `gnome-extensions`), следующий
   switch вернёт к списку; добавлять и убирать — в `gnome-extensions.nix`.
-- `~/.config/workstation/gnome/extensions` (`UUID SOURCE [ВЕРСИЯ-PIN]`) — его читают
+- `~/.local/share/workstation/gnome/extensions` (`UUID SOURCE [ВЕРСИЯ-PIN]`) — его читают
   verify, `ws-gnome-test`, `ws-gnome-status` и
   `ws-keyboard-install-extensions`.
 
 Все расширения списка обязательны. Посмотреть текущий список:
 
 ```console
-cat ~/.config/workstation/gnome/extensions
+cat ~/.local/share/workstation/gnome/extensions
 ```
 
 `window-monitor-pro@muhammed.hussien2030.gmail.com` используется и входит в

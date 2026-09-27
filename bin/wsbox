@@ -2,9 +2,9 @@
 set -euo pipefail
 
 # Declared in distrobox/distrobox.nix; ws switch builds
-# ~/.config/workstation/distrobox. wsbox only reads it; the manifest is
+# ~/.local/share/workstation/distrobox. wsbox only reads it; the manifest is
 # rendered first (@HOST_VERSION_ID@: the host release from /etc/os-release).
-cfg="${WSBOX_CONFIG:-$HOME/.config/workstation/distrobox}"
+cfg="${WSBOX_CONFIG:-$HOME/.local/share/workstation/distrobox}"
 manifest_source="$cfg/containers.ini"
 manifest="${XDG_RUNTIME_DIR:-/tmp}/wsbox-$(id -u)/containers.ini"
 exports_manifest="$cfg/exports.ini"

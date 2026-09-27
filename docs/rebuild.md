@@ -232,7 +232,7 @@ news`; `ws switch` о них не уведомляет (`news.display = "silent"
 
 Flatpak: remotes, приложения и overrides объявлены в
 `flatpak/flatpak.nix`; `ws switch` собирает из них
-`~/.config/workstation/flatpak/` и ставит `.desktop` Claude, шаг `flatpak`
+`~/.local/share/workstation/flatpak/` и ставит `.desktop` Claude, шаг `flatpak`
 в `ws apply` (`wsflatpak apply`) добавляет remotes, ставит приложения и
 применяет overrides (`helpws plan-flatpak`).
 

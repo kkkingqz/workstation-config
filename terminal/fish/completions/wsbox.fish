@@ -28,7 +28,7 @@ end
 
 function __wsbox_managed_boxes
     # Built by home-manager from distrobox/distrobox.nix.
-    set -l manifest ~/.config/workstation/distrobox/containers.ini
+    set -l manifest ~/.local/share/workstation/distrobox/containers.ini
 
     if test -f $manifest
         string match -rg '^\[([^]]+)\]$' < $manifest
@@ -38,7 +38,7 @@ end
 function __wsbox_export_aliases_for_box
     set -l box $argv[1]
     # Built by home-manager from distrobox/distrobox.nix.
-    set -l manifest ~/.config/workstation/distrobox/exports.ini
+    set -l manifest ~/.local/share/workstation/distrobox/exports.ini
 
     if test -f $manifest
         awk -F= -v section="[$box]" '

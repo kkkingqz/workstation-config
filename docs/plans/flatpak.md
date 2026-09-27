@@ -10,7 +10,7 @@ volume: User Commands
 
 **2026-09-27: декларации перенесены в Nix.** Remotes, managed apps, overrides
 и desktop overrides объявляются в `flatpak/flatpak.nix`. home-manager
-собирает из них `~/.config/workstation/flatpak/` (ссылка на store:
+собирает из них `~/.local/share/workstation/flatpak/` (ссылка на store:
 `remotes.conf`, `apps.conf`, `overrides/APP.conf`, `desktop/`) и ставит
 `.desktop`-ссылки в `~/.local/share/applications`. `wsflatpak apply|check|test`
 работают как раньше, но читают этот каталог. Команды, которые раньше писали
@@ -91,7 +91,7 @@ Source of truth:
 bin/wsflatpak
 flatpak/flatpak.nix                  remotes, apps, overrides
 flatpak/desktop/                   полные .desktop-файлы
-~/.config/workstation/flatpak/            сборка из Nix, читает wsflatpak
+~/.local/share/workstation/flatpak/            сборка из Nix, читает wsflatpak
 terminal/fish/completions/wsflatpak.fish
 ```
 
@@ -236,7 +236,7 @@ Tracked environment overrides объявляются в `flatpak/flatpak.nix`:
 "APP".Environment.KEY = "VALUE";
 ```
 
-Сборка кладёт их в `~/.config/workstation/flatpak/overrides/APP.conf`
+Сборка кладёт их в `~/.local/share/workstation/flatpak/overrides/APP.conf`
 
 и восстанавливаются через:
 

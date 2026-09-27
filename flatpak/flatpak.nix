@@ -1,6 +1,6 @@
 # Flatpak declarations: user remotes, managed apps, per-app overrides and
 # desktop overrides. wsflatpak stays the owner of apply/check and reads what is
-# built here from ~/.config/workstation/flatpak (one link to the store):
+# built here from ~/.local/share/workstation/flatpak (one link to the store):
 #
 #   remotes.conf      NAME URL
 #   apps.conf         REMOTE APP
@@ -73,9 +73,9 @@ in
     message = "flatpak.nix: ${app} uses undeclared remote ${remote}";
   }) apps;
 
-  xdg.configFile."workstation/flatpak".source = flatpakConfig;
-
-  xdg.dataFile = lib.listToAttrs (map (f:
+  xdg.dataFile = {
+    "workstation/flatpak".source = flatpakConfig;
+  } // lib.listToAttrs (map (f:
     lib.nameValuePair "applications/${baseNameOf f}" {
       source = "${flatpakConfig}/desktop/${baseNameOf f}";
     }) desktop);

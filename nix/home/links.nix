@@ -26,7 +26,12 @@ let
   binExcluded = [ "ws-caps-led" ];
 in
 {
-  xdg.dataFile."workstation/wsconfig".source = config.lib.file.mkOutOfStoreSymlink repo;
+  xdg.dataFile = {
+    "workstation/wsconfig".source = config.lib.file.mkOutOfStoreSymlink repo;
+    # MICRO_CONFIG_HOME of helpws; micro writes its buffers/ there.
+    "workstation/micro-help/settings.json".source = link "terminal/micro-help/settings.json";
+    "workstation/micro-help/bindings.json".source = link "terminal/micro-help/bindings.json";
+  };
 
   home.file = lib.mkMerge [
     (linkDir { from = "terminal/fish"; to = ".config/fish"; })

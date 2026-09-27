@@ -417,7 +417,7 @@ bin/wsbox
 С 2026-09-27 контейнеры объявлены в `distrobox/distrobox.nix` (общие
 значения по умолчанию, у контейнера — только образ, HOME, пакеты,
 экспорты). `ws switch` собирает из них `containers.ini` (формат
-`distrobox assemble`) и `exports.ini` в `~/.config/workstation/distrobox/`,
+`distrobox assemble`) и `exports.ini` в `~/.local/share/workstation/distrobox/`,
 `wsbox` читает оттуда. Изменение: правка `distrobox.nix`, `ws switch`,
 затем `wsbox apply NAME` или `wsbox recreate NAME`.
 

@@ -5,7 +5,8 @@ set -euo pipefail
 # patched t2bce modules (no-state fallback fix). See docs/suspend.md.
 
 repo="${WSCONFIG:-$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)}"
-cache="${XDG_CACHE_HOME:-$HOME/.cache}/ws-suspend"
+# Build results (sources, modules per kernel): generated, not edited.
+cache="$HOME/.local/share/workstation/t2bce"
 
 # Suspend-layer files compared by status (installed by ws system apply):
 # repo source : runtime destination : mode
@@ -34,7 +35,7 @@ Usage: ws-suspend <command> [KERNEL]
 
   status                 show sleep mode, t2bce state and runtime drift (read-only)
   apply                  install the system files: ws system apply (sudo)
-  t2bce-build [KERNEL]   build patched t2bce modules into ~/.cache/ws-suspend
+  t2bce-build [KERNEL]   build patched t2bce modules into ~/.local/share/workstation/t2bce
   t2bce-install [KERNEL] install built modules into /lib/modules/KERNEL/updates/t2bce (sudo)
   t2bce-rollback [KERNEL] remove them; the in-tree modules take over (sudo)
 
@@ -97,7 +98,7 @@ cmd_t2bce_build() {
     command -v podman >/dev/null 2>&1 || die "podman not found"
     command -v git >/dev/null 2>&1 || die "git not found"
 
-    work="$cache/t2bce/$kver"
+    work="$cache/$kver"
     src="$work/src"
     out="$work/modules"
     rm -rf -- "$work"
@@ -138,7 +139,7 @@ cmd_t2bce_build() {
 
 cmd_t2bce_install() {
     local kver="$1" out dest m vm
-    out="$cache/t2bce/$kver/modules"
+    out="$cache/$kver/modules"
     dest="/lib/modules/$kver/updates/t2bce"
     [[ -d "/lib/modules/$kver" ]] || die "kernel $kver is not installed"
     for m in "${t2bce_modules[@]}"; do

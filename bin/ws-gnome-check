@@ -3,7 +3,7 @@ set -euo pipefail
 
 # The profile is declared in gnome/gnome.nix and written by `ws switch`
 # (home-manager dconf.settings). This only compares the session with it.
-profile="${WS_GNOME_PROFILE:-$HOME/.config/workstation/gnome/settings.conf}"
+profile="${WS_GNOME_PROFILE:-$HOME/.local/share/workstation/gnome/settings.conf}"
 quiet=false
 
 usage() {
@@ -14,7 +14,7 @@ Usage:
 
 The profile (appearance and Ubuntu Dock) is declared in
 gnome/gnome.nix and applied by `ws switch`; home-manager builds
-~/.config/workstation/gnome/settings.conf (SCHEMA|KEY|VALUE) for this check.
+~/.local/share/workstation/gnome/settings.conf (SCHEMA|KEY|VALUE) for this check.
 USAGE
 }
 

@@ -13,7 +13,7 @@ SCHEMA = "org.gnome.shell.extensions.tiling-assistant"
 BINDINGS_FILE = Path(
     os.environ.get(
         "WS_TILING_BINDINGS",
-        Path.home() / ".config/workstation/keyboard/tiling-bindings.tsv",
+        Path.home() / ".local/share/workstation/keyboard/tiling-bindings.tsv",
     )
 )
 

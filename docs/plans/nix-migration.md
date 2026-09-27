@@ -1141,8 +1141,14 @@ PASS, `ws baseline diff` пуст»:
      `facts.nix`, скрипты без жёсткого пути (`WSCONFIG` переопределяет),
      расширение input-source вызывает `ws-caps-led` через ссылку
      `~/.local/share/workstation/wsconfig`, переименование репозитория.
-  2. Сгенерированное из `~/.config/workstation` и `~/.cache/ws-suspend` —
-     в `~/.local/share/workstation`; буферы micro из checkout — туда же.
+  2. **Сделано (2026-09-27).** Сборки из Nix (`flatpak`, `gnome`,
+     `keyboard`, `distrobox`) — `xdg.dataFile` в `~/.local/share/workstation`
+     вместо `~/.config/workstation`; сборка t2bce (`ws-suspend`) — в
+     `~/.local/share/workstation/t2bce` вместо `~/.cache/ws-suspend`;
+     `MICRO_CONFIG_HOME` helpws — `~/.local/share/workstation/micro-help`
+     (ссылки на `terminal/micro-help/*.json`, `buffers/` пишет micro), в
+     checkout ничего не пишется. Существующие сборка t2bce и история micro
+     перенесены. verify: старые каталоги — cleanup.
   3. HOME контейнеров — `~/distrobox/<имя>`, пересоздание (`arch`: AUR
      вручную; `touchbar-build`: Rust заново).
 - ~~Убрать `t2bce-build` и `touchbar-build`~~ — **сделано иначе
