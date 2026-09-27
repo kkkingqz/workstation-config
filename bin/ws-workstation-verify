@@ -572,7 +572,7 @@ for path in \
     system/files/usr/lib/systemd/system-sleep/80-broadcom-aspm \
     system/files/systemd/system/broadcom-aspm-restore.service \
     system/kernel/t2bce/nostate-fix.patch \
-    system/kernel/t2bce/sources.conf \
+    system/kernel/t2bce/t2bce.nix \
     docs/suspend.md \
     gnome/extensions/workstation-smart-popup@local/metadata.json \
     gnome/extensions/workstation-smart-popup@local/extension.js \
@@ -1477,10 +1477,17 @@ else
     warn "linux-t2 is not held: a kernel update would boot the in-tree t2bce (docs/suspend.md)"
 fi
 
-if awk -v k="$(uname -r)" '$1 == k { found = 1 } END { exit !found }' "$repo/system/kernel/t2bce/sources.conf" 2>/dev/null; then
-    pass "system/kernel/t2bce/sources.conf pins sources for $(uname -r)"
+t2bce_sources="$HOME/.local/share/workstation/t2bce/sources"
+t2bce_sources_real="$(readlink -f "$t2bce_sources" 2>/dev/null || true)"
+if [[ "$t2bce_sources_real" == /nix/store/* ]]; then
+    pass "t2bce sources from Nix: ${t2bce_sources_real#/nix/store/}"
 else
-    warn "system/kernel/t2bce/sources.conf has no entry for $(uname -r)"
+    fail "~/.local/share/workstation/t2bce/sources is not the Nix build (${t2bce_sources_real:-missing}); ws switch"
+fi
+if awk -v k="$(uname -r)" '!/^#/ && $1 == k { found = 1 } END { exit !found }' "$t2bce_sources" 2>/dev/null; then
+    pass "system/kernel/t2bce/t2bce.nix pins sources for $(uname -r)"
+else
+    warn "system/kernel/t2bce/t2bce.nix has no entry for $(uname -r)"
 fi
 
 if [[ -e /etc/systemd/system/tiny-dfr-sleep.service ]]; then
@@ -1853,6 +1860,7 @@ legacy_repo_paths=(
     system/sleep.conf.d
     system/modules-load.d
     system/files/udev/70-workstation-uinput.rules
+    system/kernel/t2bce/sources.conf
     # micro writes its buffers into ~/.local/share/workstation/micro-help.
     terminal/micro-help/buffers
 )

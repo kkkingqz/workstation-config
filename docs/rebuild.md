@@ -224,7 +224,7 @@ ws check            # verify, wsflatpak, wsbox, ws-gnome, ws-suspend, ws system,
 пакеты внутри контейнеров (`wsbox update`) и расширения с
 extensions.gnome.org (GNOME Shell скачивает обновления, как Extension
 Manager; ставятся после logout/login). Отдельный шаг — `ws update nix`.
-Закреплены намеренно: ядро (`linux-t2`, `system/kernel/t2bce/sources.conf`),
+Закреплены намеренно: ядро (`linux-t2`, `system/kernel/t2bce/t2bce.nix`),
 xremap (`nix/pkgs/xremap.nix`), расширения с `pin`, образы по digest.
 Новости home-manager (изменения опций после обновления `flake.lock`) — `ws
 news`; `ws switch` о них не уведомляет (`news.display = "silent"`), а
@@ -559,7 +559,7 @@ sudo reboot
 ```
 
 `t2bce-build` требует `podman` и `linux-headers` текущего ядра. Если для
-установленного ядра нет строки в `system/kernel/t2bce/sources.conf`, сначала
+установленного ядра нет записи в `system/kernel/t2bce/t2bce.nix`, сначала
 проверить upstream (`helpws suspend`, раздел «Обновление ядра»).
 
 Проверить:

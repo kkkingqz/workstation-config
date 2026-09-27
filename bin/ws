@@ -44,7 +44,7 @@ update    bring everything that is not pinned to the latest version, in order:
                         of the unpinned EGO extensions, as Extension Manager
                         does; they are installed at the next log out and in
           pinned on purpose and not touched: the kernel (linux-t2 held,
-          system/kernel/t2bce/sources.conf), xremap (nix/pkgs/xremap.nix), extensions
+          system/kernel/t2bce/t2bce.nix), xremap (nix/pkgs/xremap.nix), extensions
           with pin, container images by digest
 check     run the owners' checks (ws-workstation-verify, wsflatpak check,
           wsbox check, ws-gnome check, ws-suspend status, ws system check,

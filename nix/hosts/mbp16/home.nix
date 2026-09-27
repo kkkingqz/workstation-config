@@ -12,6 +12,7 @@
     ../../../gnome/gnome.nix
     ../../../keyboard/keyboard.nix
     ../../../distrobox/distrobox.nix
+    ../../../system/kernel/t2bce/t2bce.nix
   ];
 
   home.username = facts.user;

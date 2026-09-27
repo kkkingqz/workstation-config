@@ -732,7 +732,7 @@ wsconfig/
 │   └── nix.conf
 ├── system/               default.nix, common.nix, boot/, hardware/ (Nix),
 │   ├── files/            файлы для / (udev, modprobe, systemd, usr, esp, …)
-│   └── kernel/t2bce/     патч t2bce и привязка ядра к linux-t2-patches
+│   └── kernel/t2bce/     nostate-fix.patch, t2bce.nix (ядро -> коммит linux-t2-patches)
 ├── gnome/                gnome.nix, gnome-extensions.nix, extensions/<uuid>/
 ├── keyboard/             keyboard.nix, xremap.nix, xremap.yml
 ├── terminal/             fish/, ghostty/, micro-help/, xdg-terminals/

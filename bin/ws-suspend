@@ -20,7 +20,8 @@ files=(
 
 t2bce_modules=(t2bce_dma t2bce_core t2bce_vhci t2bce_audio t2bce_ave)
 t2bce_patch="$repo/system/kernel/t2bce/nostate-fix.patch"
-t2bce_sources="$repo/system/kernel/t2bce/sources.conf"
+# Kernel release -> linux-t2-patches commit, from system/kernel/t2bce/t2bce.nix.
+t2bce_sources="$HOME/.local/share/workstation/t2bce/sources"
 # The host release: the modules are built with the compiler of the kernel.
 build_image="docker.io/library/ubuntu:$(. /etc/os-release && echo "$VERSION_ID")"
 
@@ -45,7 +46,8 @@ USAGE
 
 t2bce_commit() {
     local kver="$1"
-    awk -v k="$kver" '$1 == k { print $2 }' "$t2bce_sources"
+    [[ -r "$t2bce_sources" ]] || die "missing $t2bce_sources (ws switch)"
+    awk -v k="$kver" '!/^#/ && $1 == k { print $2 }' "$t2bce_sources"
 }
 
 cmd_status() {
@@ -92,7 +94,7 @@ cmd_apply() {
 cmd_t2bce_build() {
     local kver="$1" commit headers work src out m
     commit="$(t2bce_commit "$kver")"
-    [[ -n "$commit" ]] || die "no pinned linux-t2-patches commit for $kver in system/kernel/t2bce/sources.conf"
+    [[ -n "$commit" ]] || die "no pinned linux-t2-patches commit for $kver in system/kernel/t2bce/t2bce.nix (ws switch after adding it)"
     headers="/usr/src/linux-headers-$kver"
     [[ -d "$headers" ]] || die "kernel headers missing: $headers"
     command -v podman >/dev/null 2>&1 || die "podman not found"

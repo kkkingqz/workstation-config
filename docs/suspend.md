@@ -109,7 +109,8 @@ deqrocks/t2bce#9                          черновик исправлени�
 
 ```text
 system/kernel/t2bce/nostate-fix.patch   патч к drivers/staging/t2bce из linux-t2-patches 1001
-system/kernel/t2bce/sources.conf        версия ядра -> коммит linux-t2-patches
+system/kernel/t2bce/t2bce.nix           версия ядра -> коммит linux-t2-patches
+                                        (ws switch собирает ~/.local/share/workstation/t2bce/sources)
 ```
 
 Патч:
@@ -158,7 +159,8 @@ echo Y | sudo tee /sys/module/t2bce_core/parameters/stateful_sleep
 1. Проверить, вошло ли исправление в upstream (#215, deqrocks/t2bce#9,
    `linux-t2-patches`). Если да — локальный патч больше не нужен.
 2. Если нет — найти коммит `linux-t2-patches`, из которого собрано новое
-   ядро, и добавить строку в `system/kernel/t2bce/sources.conf`.
+   ядро, добавить его в `sources` в `system/kernel/t2bce/t2bce.nix` и
+   выполнить `ws switch`.
 3. Снять hold, обновить ядро, собрать и поставить модули, вернуть hold:
 
 ```console
@@ -214,7 +216,7 @@ Touch Bar native mode S3 cycles            OK
 ```text
 bin/ws-suspend
 system/kernel/t2bce/nostate-fix.patch
-system/kernel/t2bce/sources.conf
+system/kernel/t2bce/t2bce.nix
 system/files/sleep.conf.d/80-deep-only.conf
 system/files/udev/70-bcm4364-no-d3cold.rules
 system/files/usr/local/sbin/broadcom-aspm-suspend-guard

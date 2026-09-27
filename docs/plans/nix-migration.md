@@ -1165,6 +1165,12 @@ PASS, `ws baseline diff` пуст»:
      (root, в конце настройки контейнера; собирает от имени владельца
      checkout, ставит pacman, при повторных стартах ничего не делает).
      Проверено на временном контейнере из того же манифеста.
+- **Привязка ядра к linux-t2-patches в Nix** (2026-09-27, решение
+  пользователя). `system/kernel/t2bce/sources.conf` (свой формат) заменён на
+  `system/kernel/t2bce/t2bce.nix`: `sources` (ядро -> коммит, assertion на
+  полный hash), `ws switch` собирает `~/.local/share/workstation/t2bce/sources`,
+  его читают `ws-suspend` и verify. Своих форматов, кроме `nix/hosts/*apt.txt`,
+  не осталось.
 - ~~Убрать `t2bce-build` и `touchbar-build`~~ — **сделано иначе
   (2026-09-27):** по решению пользователя оба оставлены и описаны в
   `containers.ini` (общий HOME хоста, `additional_packages` по фактически

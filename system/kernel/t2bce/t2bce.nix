@@ -1,0 +1,26 @@
+# Patched t2bce modules (docs/suspend.md): for every kernel release the
+# linux-t2-patches commit whose 1001-Add-t2bce-driver-stack.patch produced
+# its in-tree t2bce. `ws-suspend t2bce-build` fetches that patch, applies
+# nostate-fix.patch and builds the modules for the kernel.
+#
+# New kernel: add its release and commit here, `ws switch`, then
+# `ws-suspend t2bce-build KERNEL` (docs/suspend.md).
+#
+# Built into ~/.local/share/workstation/t2bce/sources (KERNEL COMMIT per
+# line), read by ws-suspend and ws-workstation-verify.
+{ lib, ... }:
+let
+  sources = {
+    "7.2.7-1-t2-resolute" = "9e773c8876708924dd5e0e5d3093068a0f806ea1";
+  };
+in
+{
+  assertions = [{
+    assertion = lib.all (c: builtins.match "[0-9a-f]{40}" c != null) (lib.attrValues sources);
+    message = "t2bce.nix: a linux-t2-patches commit is not a full 40-character hash";
+  }];
+
+  xdg.dataFile."workstation/t2bce/sources".text =
+    "# Built from system/kernel/t2bce/t2bce.nix: KERNEL COMMIT\n"
+    + lib.concatStrings (lib.mapAttrsToList (k: c: "${k} ${c}\n") sources);
+}
