@@ -1,21 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-repo="${WORKSTATION_CONFIG:-$HOME/.local/share/workstation-config}"
-settings="$repo/config/keyboard/settings.conf"
 # xremap.service (modules/home/xremap.nix) passes the store build of
-# config/keyboard/xremap.yml (@repo@ substituted) and the pinned binary.
+# config/keyboard/xremap.yml (@repo@ substituted), the pinned binary and the
+# --desktop / --watch values.
 config="${XREMAP_CONFIG:-}"
+desktop="${XREMAP_DESKTOP:-}"
+watch="${XREMAP_WATCH:-}"
 
-if [[ -r "$settings" ]]; then
-    # shellcheck disable=SC1090
-    source "$settings"
-fi
-
-desktop="${XREMAP_DESKTOP:-gnome}"
-watch="${XREMAP_WATCH:-config,device}"
-
-[[ -n "$config" ]] || { echo "ws-xremap: XREMAP_CONFIG unset; start it as xremap.service (ws-keyboard start)" >&2; exit 64; }
+[[ -n "$config" && -n "$desktop" && -n "$watch" ]] || { echo "ws-xremap: XREMAP_CONFIG/DESKTOP/WATCH unset; start it as xremap.service (ws-keyboard start)" >&2; exit 64; }
 [[ -r "$config" ]] || { echo "ws-xremap: missing config: $config" >&2; exit 66; }
 
 xremap_bin="${XREMAP_BIN:-$(command -v xremap || true)}"

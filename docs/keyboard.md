@@ -20,14 +20,12 @@ Apple Control   = PC Ctrl  = Linux Ctrl
 
 `Ctrl` остаётся настоящим `Ctrl`, поэтому terminal/TUI shortcuts не ломаются.
 
-Текущие параметры профиля:
-
-```text
-PROFILE=macos
-PC_MODIFIER_LAYOUT=semantic
-XREMAP_DESKTOP=gnome
-XREMAP_WATCH=config,device
-```
+Профиль один: macOS-style с одинаковой семантикой модификаторов на Apple и
+PC keyboard. Параметры запуска xremap (`--desktop gnome`,
+`--watch=config,device`) заданы в unit `xremap.service`
+(`modules/home/xremap.nix`, переменные `XREMAP_DESKTOP`, `XREMAP_WATCH`);
+до 2026-09-27 они и проверки `PROFILE=macos`,
+`PC_MODIFIER_LAYOUT=semantic` лежали в `config/keyboard/settings.conf`.
 
 ## Архитектура
 
@@ -499,7 +497,6 @@ helpws touchbar
 Repository:
 
 ```text
-config/keyboard/settings.conf
 config/keyboard/xremap.yml
 modules/home/keyboard.nix          сочетания GNOME и private chords Tiling
 

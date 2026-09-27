@@ -35,6 +35,9 @@ in
         "PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin"
         "XREMAP_BIN=${xremap}/bin/xremap"
         "XREMAP_CONFIG=${xremapYml}"
+        # xremap --desktop and --watch (formerly config/keyboard/settings.conf).
+        "XREMAP_DESKTOP=gnome"
+        "XREMAP_WATCH=config,device"
       ];
       ExecStart = "/usr/bin/bash ${repo}/bin/ws-xremap";
       Restart = "on-failure";

@@ -1078,7 +1078,14 @@ PASS, `ws baseline diff` пуст»:
      значений точно (раньше проверял часть «содержит»), `ws-keyboard-status`
      показывает их; привязки Tiling verify проверяет все 16. Значения не
      изменились: dconf до и после `ws apply tiling keyboard` одинаков.
-  3. `config/keyboard/settings.conf` — факты в `hosts/<name>/facts.nix`.
+  3. **Сделано (2026-09-27), иначе чем планировалось.**
+     `config/keyboard/settings.conf` удалён, но в `facts.nix` ничего не
+     перенесено: ни одна из пяти переменных не была фактом машины.
+     `XREMAP_DESKTOP=gnome` и `XREMAP_WATCH=config,device` — в
+     `Environment` unit (`modules/home/xremap.nix`), `ws-xremap` без них не
+     стартует; `PROFILE` и `PC_MODIFIER_LAYOUT` проверяли единственное
+     значение и убраны; `GNOME_XREMAP_EXTENSION_UUID` никто не читал.
+     Факт `keyboard.physical` (фаза 6) появится, когда понадобится.
 - ~~Убрать `t2bce-build` и `touchbar-build`~~ — **сделано иначе
   (2026-09-27):** по решению пользователя оба оставлены и описаны в
   `containers.ini` (общий HOME хоста, `additional_packages` по фактически

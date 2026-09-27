@@ -1,17 +1,13 @@
 #!/usr/bin/env bash
 set -u
 
-repo="${WORKSTATION_CONFIG:-$HOME/.local/share/workstation-config}"
-settings="$repo/config/keyboard/settings.conf"
-[[ -r "$settings" ]] && source "$settings"
 
 ok()   { printf '  %-24s %s\n' "$1" "OK"; }
 warn() { printf '  %-24s %s\n' "$1" "$2"; }
 
 echo "Workstation keyboard"
 echo "────────────────────────────────────────"
-printf '  %-24s %s\n' "Profile" "${PROFILE:-unknown}"
-printf '  %-24s %s\n' "PC modifier layout" "${PC_MODIFIER_LAYOUT:-unknown}"
+printf '  %-24s %s\n' "Profile" "macOS-style, same modifiers on Apple and PC keyboards"
 printf '  %-24s %s\n' "Desktop" "${XDG_CURRENT_DESKTOP:-unknown}"
 printf '  %-24s %s\n' "Session" "${XDG_SESSION_TYPE:-unknown}"
 echo

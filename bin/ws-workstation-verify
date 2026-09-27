@@ -519,7 +519,6 @@ section "4. Required source-of-truth / reproducibility"
 
 for path in \
     .gitignore \
-    config/keyboard/settings.conf \
     config/keyboard/xremap.yml \
     config/ghostty/config.ghostty \
     config/ghostty/keybinds.ghostty \
@@ -1785,6 +1784,7 @@ legacy_repo_paths=(
     config/flatpak/overrides/README.md
     config/gnome/settings.conf
     bin/ws-gnome-apply
+    config/keyboard/settings.conf
     system/udev/70-workstation-uinput.rules
     config/tiny-dfr/config.toml
 )
