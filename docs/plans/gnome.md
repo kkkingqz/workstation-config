@@ -216,7 +216,8 @@ web-search-provider@ubuntu.com
 
 `window-monitor-pro@muhammed.hussien2030.gmail.com` здесь раньше числился
 legacy; с 2026-09-27 (решение пользователя) он используется, обязателен и
-ставится `ws switch` (`pkgs/gnome-extensions.nix`).
+ставится `ws apply extensions` с extensions.gnome.org (обновляет Extension
+Manager).
 
 Policy:
 

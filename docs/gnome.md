@@ -198,7 +198,8 @@ keyboard, Tiling Assistant или extension baseline.
 
 ```text
 ubuntu  gnome-shell-ubuntu-extensions (apt), включает режим сессии Ubuntu
-ego     extensions.gnome.org, закреплён в pkgs/gnome-extensions.nix
+ego     extensions.gnome.org: ставит ws apply extensions, обновляет
+        Extension Manager; с pin — версия через Nix (pkgs/gnome-extensions.nix)
 local   gnome/extensions/<uuid>, копирует ws-keyboard-install-extensions
 ```
 
@@ -208,7 +209,7 @@ local   gnome/extensions/<uuid>, копирует ws-keyboard-install-extensions
   `disabled-extensions` — пишет `ws switch`. Расширение, включённое или
   выключенное вручную (Extension Manager, `gnome-extensions`), следующий
   switch вернёт к списку; добавлять и убирать — в `gnome-extensions.nix`.
-- `~/.config/workstation/gnome/extensions` (`UUID SOURCE`) — его читают
+- `~/.config/workstation/gnome/extensions` (`UUID SOURCE [ВЕРСИЯ-PIN]`) — его читают
   verify, `ws-gnome-test`, `ws-gnome-status` и
   `ws-keyboard-install-extensions`.
 
@@ -220,8 +221,8 @@ cat ~/.config/workstation/gnome/extensions
 
 `window-monitor-pro@muhammed.hussien2030.gmail.com` используется и входит в
 baseline (2026-09-27, решение пользователя; раньше ошибочно числился legacy).
-Его, как `window-control` и `xremap`, ставит `ws switch` из
-`pkgs/gnome-extensions.nix`.
+Его, как `window-control` и `xremap`, ставит `ws apply extensions` с
+extensions.gnome.org, обновляет Extension Manager.
 
 Неизвестные дополнительные extensions автоматически не отключаются; verifier
 только выдаёт WARN.

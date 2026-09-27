@@ -1098,6 +1098,35 @@ PASS, `ws baseline diff` пуст»:
      `exports.ini` совпали с прежними (без комментариев, они — в
      `distrobox.nix`); `wsbox check` FAIL 0 WARN 0, `ws system diff` пуст.
      `wsbox check` проверяет только наличие команд, пакеты — `ws check apt`.
+- **Последние версии вместо закреплённых** (2026-09-27, решение
+  пользователя). Конкретная версия нужна только ядру: на него сделан патч
+  t2bce. Всё остальное берёт штатную последнюю версию своего источника;
+  изменившееся поведение само по себе не повод закреплять, закрепляем, когда
+  понадобится. Возможность закрепить остаётся в каждой области.
+  **Сделано (2026-09-27):**
+  - `ws update [apt nix flatpak distrobox extensions]`: `sudo apt update` +
+    `full-upgrade` (held `linux-t2` остаётся), `nix flake update` + nvd +
+    switch (`flake.lock` коммитить), `wsflatpak update`, `wsbox update`,
+    `CheckForUpdates` GNOME Shell для расширений EGO.
+  - Nix остаётся на nixos-26.05 / release-26.05 (не unstable); пакеты
+    обновляются вместе с `flake.lock`. Исключение — xremap
+    (`pkgs/xremap.nix`, 0.15.13 по hash; в 26.05 — 0.15.7). lowdown — из
+    nixpkgs (3.x): `pkgs/lowdown.nix` удалён, man pages меняют отступы
+    списков.
+  - Расширения EGO без `pin` ставит `ws apply extensions` (последняя версия
+    для текущего GNOME Shell с extensions.gnome.org, `gnome-extensions
+    install`), обновляет Extension Manager. `pin = { version; hash; }` в
+    `modules/home/gnome-extensions.nix` — прежний путь через Nix
+    (`pkgs/gnome-extensions.nix` стал функцией на одно расширение).
+    Переустановленные window-control 1, window-monitor-pro 3, xremap 15
+    совпали с прежними файлами из Nix, все ACTIVE.
+  - Distrobox: `arch` — `archlinux:latest` (обновление — pacman внутри,
+    `wsbox update`); `ubuntu`, `wine` — `ubuntu:26.04`; `t2bce-build`,
+    `touchbar-build` и одноразовый контейнер сборки `ws-suspend` — релиз
+    хоста из `/etc/os-release` (`@HOST_VERSION_ID@`, подставляет `wsbox`),
+    после обновления Ubuntu `wsbox check` покажет drift → `wsbox recreate`.
+    Digest-образы по-прежнему поддерживаются.
+  - apt и Flatpak не закреплялись и не менялись.
 - ~~Убрать `t2bce-build` и `touchbar-build`~~ — **сделано иначе
   (2026-09-27):** по решению пользователя оба оставлены и описаны в
   `containers.ini` (общий HOME хоста, `additional_packages` по фактически
@@ -1116,7 +1145,8 @@ PASS, `ws baseline diff` пуст»:
 - `git add` перед сборкой; сборки с `--no-link`.
 - sudo-шаги выполняются в своём терминале.
 - Во время фазы репозиторий не правится в других сессиях.
-- `nix flake update` — раз в месяц отдельным коммитом, после зелёного CI.
+- `ws update nix` (`nix flake update`) — регулярно, `flake.lock` отдельным
+  коммитом.
 - Сборка мусора Nix — по таймеру (`nix.gc` в home-manager), поколения
   хранить 30 дней.
 - Секреты в репозиторий не класть.

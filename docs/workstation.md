@@ -425,10 +425,10 @@ Managed containers:
 
 ```text
 ubuntu   Ubuntu 26.04 base / compatibility
-arch     Arch rolling / AUR applications; WinBox 3.x
+arch     Arch rolling (archlinux:latest) / AUR applications; WinBox 3.x
 wine     Ubuntu 26.04 empty base reserved for plan-windows
-t2bce-build     Ubuntu 26.04, сборка ядра/модулей вручную (kernel headers с хоста)
-touchbar-build  Ubuntu 26.04, порт Touch Bar (~/touchbar): dev-пакеты DRM/Wayland,
+t2bce-build     Ubuntu релиза хоста, сборка ядра/модулей вручную (kernel headers с хоста)
+touchbar-build  Ubuntu релиза хоста, порт Touch Bar (~/touchbar): dev-пакеты DRM/Wayland,
                 Rust через rustup в /opt/rust (ставится вручную)
 ```
 
@@ -437,13 +437,15 @@ touchbar-build  Ubuntu 26.04, порт Touch Bar (~/touchbar): dev-пакеты 
 лежат исходники. Rootfs считается disposable: пакеты — `packages` контейнера
 в `distrobox.nix` (`additional_packages` в собранном `containers.ini`).
 
-Образ `arch` (rolling) закреплён по digest в `distrobox.nix`; `wsbox check`
-сравнивает контейнер с ним по repo digest. Обновление Arch: взять новый digest
-(`podman pull docker.io/library/archlinux:latest`, затем
-`podman image inspect --format '{{.Digest}}' docker.io/library/archlinux:latest`),
-записать его в `distrobox.nix`, `ws switch` и `wsbox recreate arch`: rootfs
-пересоздаётся, HOME `arch` остаётся, пакеты из AUR ставятся заново
-(`helpws rebuild`, раздел 6.3).
+Образы — теги, не digest. Пакеты внутри обновляет `wsbox update [NAME...]`
+(`distrobox upgrade`: apt в Ubuntu, pacman в Arch; AUR — вручную `paru`);
+новый образ берётся только при `wsbox recreate NAME`: rootfs пересоздаётся,
+HOME остаётся, пакеты из AUR в `arch` ставятся заново (`helpws rebuild`,
+раздел 6.3). Build-контейнеры берут релиз Ubuntu хоста (`@HOST_VERSION_ID@`
+в `distrobox.nix`, `wsbox` подставляет `VERSION_ID` из `/etc/os-release`):
+то, что в них собирается, должно совпадать с хостом. После обновления
+Ubuntu `wsbox check` покажет image drift — `wsbox recreate NAME`. Закрепить
+образ: `repo@sha256:…` в `distrobox.nix`, `wsbox check` сверит repo digest.
 
 `arch` использует NTSync из host T2 kernel. Host загружает `ntsync`, а
 `wsbox-host-ntsync` внутри Arch только удовлетворяет virtual dependency
@@ -652,9 +654,8 @@ Micro help-viewer использует true-color scheme и Markdown syntax high
 ## Man generation
 
 Man pages собирает Nix (`pkgs/man.nix`): `bin/ws-doc-build` —
-`lowdown -s -t man`, по странице на `title:` каждого `docs/**/*.md`, lowdown
-закреплён на 2.0.4 (`pkgs/lowdown.nix`; 3.x меняет отступы списков). `ws
-switch` ставит их ссылками в `~/.local/share/man/man1`; в git `man/` нет,
+`lowdown -s -t man` (lowdown из nixpkgs), по странице на `title:` каждого
+`docs/**/*.md`. `ws switch` ставит их ссылками в `~/.local/share/man/man1`; в git `man/` нет,
 verify предупреждает, если страницы старше `docs/`. После правки документа:
 
 ```console
@@ -716,16 +717,17 @@ Shebang:
 ```text
 workstation-config/
 ├── bootstrap.sh          новая машина: @nix → apt → nix-users → fish → ws switch
-├── flake.nix, flake.lock nixpkgs 26.05 + home-manager, версии закреплены
+├── flake.nix, flake.lock nixpkgs 26.05 + home-manager, обновляет ws update nix
 ├── hosts/
 │   ├── apt.txt           apt-пакеты всех хостов
 │   └── mbp16/            facts.nix, home.nix, apt.txt
 ├── modules/
 │   ├── home/             ссылки на checkout, CLI из Nix, xremap
 │   └── system/           дерево системных файлов (common, boot/, hardware/)
-├── pkgs/                xremap.nix, man.nix (man из docs/), lowdown.nix
+├── pkgs/                xremap.nix (закреплён), man.nix (man из docs/),
+│                         gnome-extensions.nix (расширение EGO с pin)
 ├── bin/
-│   ├── ws                switch, diff, apply, check, system, baseline
+│   ├── ws                switch, diff, apply, update, check, system, baseline
 │   ├── dotgit
 │   ├── helpws
 │   ├── ws-doc-build
@@ -765,8 +767,8 @@ workstation-config/
 Nix доставляет, владельцы слоёв не меняются (`helpws plan-nix`):
 home-manager ставит ссылки на checkout (`~/.local/bin`, fish, Ghostty), man pages
 и CLI (fzf, zoxide, eza, micro, nvd, xremap), unit `xremap.service` с
-`xremap.yml` из store, расширения GNOME с EGO по версии и hash
-(`pkgs/gnome-extensions.nix`), конфиг `wsflatpak` из
+`xremap.yml` из store, `enabled-extensions` и закреплённые расширения
+GNOME (`pkgs/gnome-extensions.nix`), конфиг `wsflatpak` из
 `modules/home/flatpak.nix`, профиль внешнего вида GNOME
 (`modules/home/gnome.nix`, `dconf.settings`); `ws system apply` ставит копии
 системных файлов из сборки `modules/system`; GNOME, Flatpak, Distrobox,

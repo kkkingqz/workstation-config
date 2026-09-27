@@ -122,7 +122,8 @@ kernel/t2bce/sources.conf        версия ядра -> коммит linux-t2-
 4. помечает версии `0.07-nostatefix1` / `0.02-nostatefix1`.
 
 Пересобираются все пять модулей `t2bce_*`, чтобы совпадали версии символов.
-Сборка идёт в одноразовом контейнере podman (`ubuntu:26.04`) с заголовками
+Сборка идёт в одноразовом контейнере podman (`ubuntu:` релиза хоста из
+`/etc/os-release`) с заголовками
 `/usr/src/linux-headers-KERNEL`; результат — `~/.cache/ws-suspend/t2bce/KERNEL/`.
 Модули ставятся в `/lib/modules/KERNEL/updates/t2bce`: depmod ищет в
 `updates` раньше, чем в `kernel`. Пакеты ядра не меняются.

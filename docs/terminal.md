@@ -494,7 +494,7 @@ docs/workstation.md
 ```
 
 Man pages собирает Nix из `docs/` (`pkgs/man.nix`: `ws-doc-build` с
-lowdown 2.0.4) и ставит `ws switch` в `~/.local/share/man/man1`; в git их
+lowdown из nixpkgs) и ставит `ws switch` в `~/.local/share/man/man1`; в git их
 нет. После правки документа:
 
 ```console

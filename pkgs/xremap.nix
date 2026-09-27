@@ -2,6 +2,12 @@
 # xremap-linux-x86_64-gnome.zip, pinned by hash. The binary is static-pie,
 # so it is installed as is (no patchelf). Replacement criterion: the binary
 # equals runtime/xremap/v0.15.13/xremap (sha256 3da5ec8a…227e).
+#
+# The one Nix package pinned on purpose; everything else follows nixpkgs
+# (flake.lock, `ws update nix`). nixpkgs builds xremap from source without
+# the gnome feature by default and lags behind (nixos-26.05: 0.15.7).
+# Update: version and hash here, the sha256 in ws-workstation-verify
+# (section 7), ws switch.
 { stdenvNoCC, fetchurl, unzip }:
 
 stdenvNoCC.mkDerivation rec {

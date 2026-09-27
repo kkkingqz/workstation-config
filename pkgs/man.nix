@@ -1,5 +1,5 @@
 # Man pages from docs/*.md, one per `title:`, built by bin/ws-doc-build
-# (lowdown -s -t man) with the pinned lowdown.
+# (lowdown -s -t man) with lowdown from nixpkgs.
 { runCommand, lowdown }:
 runCommand "workstation-man" { nativeBuildInputs = [ lowdown ]; } ''
   mkdir -p work/man/man1

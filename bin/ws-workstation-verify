@@ -181,7 +181,7 @@ gcontains() {
 ext_list_file="$HOME/.config/workstation/gnome/extensions"
 ext_list() {
     [[ -r "$ext_list_file" ]] || return 0
-    awk -v s="${1:-}" '!/^#/ && NF == 2 && (s == "" || $2 == s) { print $1 }' "$ext_list_file"
+    awk -v s="${1:-}" '!/^#/ && NF >= 2 && (s == "" || $2 == s) { print $1 }' "$ext_list_file"
 }
 
 extension_active() {
@@ -1197,19 +1197,41 @@ else
     fail "gnome-extensions binary missing; extension policy cannot be checked"
 fi
 
-# pkgs/gnome-extensions.nix: EGO extensions pinned by version and hash, linked
-# file by file by home-manager. A real file here means GNOME (update) or a
-# manual install replaced the pinned copy.
+# EGO extensions. With pin (third column of the list): built by
+# pkgs/gnome-extensions.nix and linked file by file by home-manager; a real
+# file there means an update (Extension Manager) or a manual install replaced
+# the pinned copy. Without pin: an ordinary user installation (ws apply
+# extensions), updated by Extension Manager, so no links into the store.
+ego_pinned() {
+    awk -v u="$1" '!/^#/ && $1 == u && $2 == "ego" && NF >= 3 { print $3 }' "$ext_list_file"
+}
+shell_major="$(gnome-shell --version 2>/dev/null | awk '{ print $3 }' | cut -d. -f1)"
 for uuid in $(ext_list ego); do
     ext_dir="$HOME/.local/share/gnome-shell/extensions/$uuid"
-    ext_foreign="$(find "$ext_dir" -type f 2>/dev/null | head -n1)"
     ext_meta="$(readlink -f "$ext_dir/metadata.json" 2>/dev/null || true)"
-    if [[ -n "$ext_foreign" ]]; then
-        fail "$uuid has files not from Nix ($(q "$ext_foreign")); move the directory away and ws switch"
-    elif [[ "$ext_meta" == /nix/store/*-gnome-shell-extension-*/share/gnome-shell/extensions/"$uuid"/metadata.json ]]; then
-        pass "$uuid from Nix: ${ext_meta#/nix/store/}"
+    ext_pin="$(ego_pinned "$uuid")"
+    if [[ -n "$ext_pin" ]]; then
+        ext_foreign="$(find "$ext_dir" -type f 2>/dev/null | head -n1)"
+        if [[ -n "$ext_foreign" ]]; then
+            fail "$uuid pinned, but has files not from Nix ($(q "$ext_foreign")); move the directory away and ws switch"
+        elif [[ "$ext_meta" == /nix/store/*-gnome-shell-extension-*-"$ext_pin"/share/gnome-shell/extensions/"$uuid"/metadata.json ]]; then
+            pass "$uuid pinned to EGO version $ext_pin: ${ext_meta#/nix/store/}"
+        else
+            fail "$uuid pinned to EGO version $ext_pin, not installed from Nix (${ext_meta:-missing}); ws switch"
+        fi
+        continue
+    fi
+    if [[ ! -f "$ext_dir/metadata.json" ]]; then
+        fail "$uuid not installed; ws apply extensions"
+    elif [[ -n "$(find "$ext_dir" -type l -lname '/nix/store/*' 2>/dev/null | head -n1)" ]]; then
+        fail "$uuid still has links into the Nix store (no pin any more); ws switch, then ws apply extensions"
     else
-        fail "$uuid not installed from Nix (${ext_meta:-missing}); ws switch"
+        ext_ver="$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print(d.get("version", "?"), " ".join(map(str, d.get("shell-version", []))))' "$ext_dir/metadata.json" 2>/dev/null || echo '? ?')"
+        if [[ -n "$shell_major" && " ${ext_ver#* } " != *" $shell_major "* ]]; then
+            warn "$uuid EGO version ${ext_ver%% *} does not list GNOME Shell $shell_major (shell-version: ${ext_ver#* }); update it in Extension Manager"
+        else
+            pass "$uuid from extensions.gnome.org, EGO version ${ext_ver%% *} (updated by Extension Manager)"
+        fi
     fi
 done
 
@@ -1537,7 +1559,7 @@ section "14.4 Nix layer (docs/plans/nix-migration.md)"
 
 for path in flake.nix hosts/mbp16/facts.nix hosts/mbp16/home.nix \
     modules/home/links.nix modules/home/cli.nix modules/home/xremap.nix pkgs/xremap.nix \
-    modules/home/man.nix pkgs/man.nix pkgs/lowdown.nix \
+    modules/home/man.nix pkgs/man.nix \
     modules/home/gnome-extensions.nix pkgs/gnome-extensions.nix \
     modules/home/flatpak.nix modules/home/gnome.nix \
     modules/home/keyboard.nix modules/home/distrobox.nix \
@@ -1796,6 +1818,7 @@ legacy_repo_paths=(
     config/distrobox/host/modules-load.d/ntsync.conf
     system/udev/70-workstation-uinput.rules
     config/tiny-dfr/config.toml
+    pkgs/lowdown.nix
 )
 for path in "${legacy_repo_paths[@]}"; do
     if is_tracked "$path"; then

@@ -2,9 +2,11 @@
 set -euo pipefail
 
 # Declared in modules/home/distrobox.nix; ws switch builds
-# ~/.config/workstation/distrobox. wsbox only reads it.
+# ~/.config/workstation/distrobox. wsbox only reads it; the manifest is
+# rendered first (@HOST_VERSION_ID@: the host release from /etc/os-release).
 cfg="${WSBOX_CONFIG:-$HOME/.config/workstation/distrobox}"
-manifest="$cfg/containers.ini"
+manifest_source="$cfg/containers.ini"
+manifest="${XDG_RUNTIME_DIR:-/tmp}/wsbox-$(id -u)/containers.ini"
 exports_manifest="$cfg/exports.ini"
 
 usage() {
@@ -15,6 +17,7 @@ Usage:
   wsbox check
   wsbox dry-run [NAME]
   wsbox apply [NAME]
+  wsbox update [NAME...]
   wsbox create NAME
   wsbox enter NAME
   wsbox run NAME COMMAND [ARG...]
@@ -40,8 +43,30 @@ ensure_base() {
     need podman
     need distrobox
     need distrobox-assemble
-    [[ -r "$manifest" ]] || die "manifest not found: $manifest (run ws switch)"
+    [[ -r "$manifest_source" ]] || die "manifest not found: $manifest_source (run ws switch)"
     [[ -r "$exports_manifest" ]] || die "exports manifest not found: $exports_manifest (run ws switch)"
+    render_manifest
+}
+
+host_version_id() {
+    (
+        . /etc/os-release
+        [[ "${ID:-}" == ubuntu && -n "${VERSION_ID:-}" ]] || exit 1
+        printf '%s\n' "$VERSION_ID"
+    )
+}
+
+render_manifest() {
+    local version=""
+
+    if grep -Fq '@HOST_VERSION_ID@' "$manifest_source"; then
+        version="$(host_version_id)" \
+            || die "the manifest uses the host Ubuntu release, but /etc/os-release is not Ubuntu"
+    fi
+
+    mkdir -p "${manifest%/*}"
+    sed "s/@HOST_VERSION_ID@/$version/g" "$manifest_source" > "$manifest.tmp"
+    mv -f "$manifest.tmp" "$manifest"
 }
 
 managed_boxes() {
@@ -497,7 +522,7 @@ cmd_check() {
         if image_matches "$name" "$expected_image"; then
             pass "$name image matches manifest"
         else
-            fail "$name image drift: got $actual_image, expected $expected_image"
+            fail "$name image drift: got $actual_image, expected $expected_image (wsbox recreate $name)"
         fi
 
         if [[ -d "$expected_home" ]]; then
@@ -568,6 +593,37 @@ cmd_apply() {
         while IFS= read -r box; do
             [[ -n "$box" ]] && apply_exports_for "$box"
         done < <(managed_boxes)
+    fi
+}
+
+# Packages inside the containers, with their own package manager
+# (distrobox upgrade). The image itself changes only on recreate.
+cmd_update() {
+    local name
+    local -a names=() failed=()
+
+    if (($#)); then
+        for name in "$@"; do
+            require_managed "$name"
+            container_exists "$name" || die "container does not exist: $name"
+            names+=("$name")
+        done
+    else
+        while IFS= read -r name; do
+            [[ -n "$name" ]] && container_exists "$name" && names+=("$name")
+        done < <(managed_boxes)
+    fi
+
+    ((${#names[@]})) || die "no managed container exists (wsbox apply)"
+
+    for name in "${names[@]}"; do
+        printf '\n== %s\n' "$name"
+        distrobox upgrade "$name" || failed+=("$name")
+    done
+
+    if ((${#failed[@]})); then
+        printf '\nwsbox update failed: %s\n' "${failed[*]}" >&2
+        return 1
     fi
 }
 
@@ -787,6 +843,10 @@ main() {
 
         apply)
             cmd_apply "$@"
+            ;;
+
+        update)
+            cmd_update "$@"
             ;;
 
         create)

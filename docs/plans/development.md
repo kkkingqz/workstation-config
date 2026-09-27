@@ -80,6 +80,7 @@ wsbox status [NAME]
 wsbox check
 wsbox dry-run [NAME]
 wsbox apply [NAME]
+wsbox update [NAME...]
 wsbox create NAME
 wsbox enter NAME
 wsbox run NAME COMMAND [ARG...]

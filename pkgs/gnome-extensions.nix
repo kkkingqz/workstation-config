@@ -1,45 +1,25 @@
-# GNOME Shell extensions from extensions.gnome.org, pinned by EGO version
-# (the number in the download URL, not version-name) and hash. The zips are
-# unpacked as is; when they were pinned the files equalled the installed
-# copies. Update: version and hash here, `ws switch`, logout/login.
+# One GNOME Shell extension from extensions.gnome.org, pinned by EGO version
+# (the number in the download URL, not version-name) and hash; the zip is
+# unpacked as is. Used only for extensions with `pin` in
+# modules/home/gnome-extensions.nix; without a pin an EGO extension is
+# installed by `ws apply extensions` and updated by Extension Manager.
 { lib, stdenvNoCC, fetchurl, unzip }:
-let
-  ego = { uuid, version, hash }:
-    stdenvNoCC.mkDerivation {
-      pname = "gnome-shell-extension-${lib.head (lib.splitString "@" uuid)}";
-      version = toString version;
-      src = fetchurl {
-        url = "https://extensions.gnome.org/extension-data/"
-          + "${lib.replaceStrings [ "@" ] [ "" ] uuid}.v${toString version}.shell-extension.zip";
-        inherit hash;
-      };
-      nativeBuildInputs = [ unzip ];
-      dontUnpack = true;
-      installPhase = ''
-        dir=$out/share/gnome-shell/extensions/${uuid}
-        mkdir -p $dir
-        unzip -q $src -d $dir
-        grep -q '"uuid": "${uuid}"' $dir/metadata.json
-      '';
-      passthru = { inherit uuid; };
-    };
-in
-{
-  # What each one is for and whether it is enabled:
-  # modules/home/gnome-extensions.nix.
-  window-control = ego {
-    uuid = "window-control@carlo9890.github.io";
-    version = 1; # version-name 11
-    hash = "sha256-CzggB2Ei0IkE2a/76lyyYmnmQBe5mVcpFI4W6aXMKEo=";
+{ uuid, version, hash }:
+stdenvNoCC.mkDerivation {
+  pname = "gnome-shell-extension-${lib.head (lib.splitString "@" uuid)}";
+  version = toString version;
+  src = fetchurl {
+    url = "https://extensions.gnome.org/extension-data/"
+      + "${lib.replaceStrings [ "@" ] [ "" ] uuid}.v${toString version}.shell-extension.zip";
+    inherit hash;
   };
-  window-monitor-pro = ego {
-    uuid = "window-monitor-pro@muhammed.hussien2030.gmail.com";
-    version = 3;
-    hash = "sha256-aMEMTzT7qahGr2XF4gD/1HHgkZgFEcNONkx3j7Nq1Fs=";
-  };
-  xremap = ego {
-    uuid = "xremap@k0kubun.com";
-    version = 15;
-    hash = "sha256-n4HUDswjgQxwTw5ubZzGnCXnxVKMJFdqSXIFa1t9bVo=";
-  };
+  nativeBuildInputs = [ unzip ];
+  dontUnpack = true;
+  installPhase = ''
+    dir=$out/share/gnome-shell/extensions/${uuid}
+    mkdir -p $dir
+    unzip -q $src -d $dir
+    grep -q '"uuid": "${uuid}"' $dir/metadata.json
+  '';
+  passthru = { inherit uuid; };
 }

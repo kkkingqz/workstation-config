@@ -8,7 +8,7 @@ die() {
     exit 1
 }
 
-for cmd in python3 glib-compile-schemas; do
+for cmd in python3 glib-compile-schemas curl gnome-extensions gnome-shell; do
     command -v "$cmd" >/dev/null 2>&1 || die "$cmd not found"
 done
 
@@ -68,17 +68,44 @@ PY
     echo "installed: $uuid"
 }
 
-# The local extensions of modules/home/gnome-extensions.nix; ws switch builds
-# the list and enables them (enabled-extensions).
+# An EGO extension without pin: installed once, the latest version for the
+# running GNOME Shell (the download EGO and GNOME Shell use); later versions
+# come from Extension Manager, not from here.
+install_ego() {
+    local uuid="$1" dst="$HOME/.local/share/gnome-shell/extensions/$1"
+    local shell_major zip
+
+    if [[ -e "$dst/metadata.json" ]]; then
+        echo "present: $uuid (updated by Extension Manager)"
+        return
+    fi
+
+    shell_major="$(gnome-shell --version | awk '{ print $3 }' | cut -d. -f1)"
+    zip="$(mktemp --suffix=.shell-extension.zip)"
+    curl -fsSL -o "$zip" \
+        "https://extensions.gnome.org/download-extension/$uuid.shell-extension.zip?shell_version=$shell_major" \
+        || { rm -f "$zip"; die "download from extensions.gnome.org failed: $uuid (GNOME Shell $shell_major)"; }
+    gnome-extensions install --force "$zip" || { rm -f "$zip"; die "gnome-extensions install failed: $uuid"; }
+    rm -f "$zip"
+    echo "installed from extensions.gnome.org: $uuid"
+}
+
+# modules/home/gnome-extensions.nix; ws switch builds the list, enables the
+# extensions (enabled-extensions) and links the pinned EGO ones.
 list="$HOME/.config/workstation/gnome/extensions"
 [[ -r "$list" ]] || die "extension list missing: $list (run ws switch)"
 mapfile -t local_extensions < <(awk '!/^#/ && $2 == "local" { print $1 }' "$list")
 ((${#local_extensions[@]})) || die "no local extensions in $list"
+mapfile -t ego_extensions < <(awk '!/^#/ && $2 == "ego" && NF == 2 { print $1 }' "$list")
+
+for uuid in "${ego_extensions[@]}"; do
+    install_ego "$uuid"
+done
 
 for uuid in "${local_extensions[@]}"; do
     install_extension "$uuid"
 done
 
 echo
-echo "GNOME workstation extension sources installed (enabled by ws switch)."
-echo "If extension.js changed, log out and log back in on Wayland before relying on it."
+echo "GNOME workstation extensions installed (enabled by ws switch)."
+echo "A new or changed extension loads after log out and log in on Wayland."

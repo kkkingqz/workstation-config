@@ -13,6 +13,7 @@ Usage:
   ws switch [HOME-MANAGER-ARG...]
   ws diff
   ws apply [STEP...]
+  ws update [STEP...]
   ws check [-v] | ws check apt
   ws system diff|check|apply
   ws baseline capture|diff|list ...
@@ -32,6 +33,19 @@ apply     run the layer owners in order, as by hand (no sudo steps):
           a step whose preflight fails (exit 69: e.g. new extensions need a
           logout/login) is reported at the end; on a new machine:
           ws apply, log out and in, ws apply
+update    bring everything that is not pinned to the latest version, in order:
+            apt         sudo apt update, sudo apt full-upgrade (held
+                        packages such as linux-t2 stay)
+            nix         nix flake update (nixpkgs, home-manager), the
+                        package difference (nvd), switch; commit flake.lock
+            flatpak     wsflatpak update
+            distrobox   wsbox update (packages inside the containers)
+            extensions  GNOME Shell checks extensions.gnome.org for updates
+                        of the unpinned EGO extensions, as Extension Manager
+                        does; they are installed at the next log out and in
+          pinned on purpose and not touched: the kernel (linux-t2 held,
+          kernel/t2bce/sources.conf), xremap (pkgs/xremap.nix), extensions
+          with pin, container images by digest
 check     run the owners' checks (ws-workstation-verify, wsflatpak check,
           wsbox check, ws-gnome check, ws-suspend status, ws system check,
           ws check apt) and summarize;
@@ -169,6 +183,88 @@ cmd_apply() {
     done
 
     printf '\n=== ws apply\n'
+    printf '  %s\n' "${results[@]}"
+    [[ "$failed" == false ]]
+}
+
+# The update_* steps run where set -e is off (cmd_update): check each command.
+update_apt() {
+    sudo apt update || return
+    sudo apt full-upgrade || return
+    if apt-mark showhold | grep -qx linux-t2; then
+        echo "linux-t2 held: a new kernel needs new t2bce modules (docs/suspend.md)"
+    fi
+}
+
+update_nix() {
+    local nix
+    nix="$(nix_bin)" || return
+    check_untracked || return
+    "$nix" flake update --flake "$repo" || return
+    cmd_diff || return
+    cmd_switch || return
+    if ! git -C "$repo" diff --quiet -- flake.lock; then
+        echo "flake.lock changed: commit it (git -C $repo commit flake.lock)"
+    fi
+}
+
+update_extensions() {
+    local list="$HOME/.config/workstation/gnome/extensions" pinned
+    [[ -r "$list" ]] || die "extension list missing: $list (ws switch)"
+    # GNOME Shell updates every extension from EGO, a pinned copy too.
+    pinned="$(awk '!/^#/ && $2 == "ego" && NF >= 3 { print $1 }' "$list")"
+    if [[ -n "$pinned" ]]; then
+        echo "pinned EGO extensions would be replaced as well:" $pinned
+        echo "update the others one by one in Extension Manager"
+        return 1
+    fi
+    gdbus call --session --dest org.gnome.Shell.Extensions \
+        --object-path /org/gnome/Shell/Extensions \
+        --method org.gnome.Shell.Extensions.CheckForUpdates > /dev/null
+    echo "GNOME Shell checks for extension updates; downloaded updates are"
+    echo "installed at the next log out and in (Extension Manager shows them)"
+}
+
+update_steps=(
+    "apt update_apt"
+    "nix update_nix"
+    "flatpak $repo/bin/wsflatpak update -y"
+    "distrobox $repo/bin/wsbox update"
+    "extensions update_extensions"
+)
+
+cmd_update() {
+    local wanted=("$@") step name cmd rc known
+    local -a results=()
+    local failed=false
+
+    for name in "${wanted[@]}"; do
+        known=false
+        for step in "${update_steps[@]}"; do
+            [[ "${step%% *}" == "$name" ]] && known=true
+        done
+        [[ "$known" == true ]] || die "unknown update step: $name"
+    done
+
+    for step in "${update_steps[@]}"; do
+        name="${step%% *}"
+        cmd="${step#* }"
+        if ((${#wanted[@]})) && [[ " ${wanted[*]} " != *" $name "* ]]; then
+            continue
+        fi
+        printf '\n=== %s\n' "$name"
+        rc=0
+        # shellcheck disable=SC2086 # cmd is a fixed command line
+        ( $cmd ) || rc=$?
+        if ((rc == 0)); then
+            results+=("OK    $name")
+        else
+            results+=("FAIL  $name (exit $rc)")
+            failed=true
+        fi
+    done
+
+    printf '\n=== ws update\n'
     printf '  %s\n' "${results[@]}"
     [[ "$failed" == false ]]
 }
@@ -592,6 +688,7 @@ case "${1:-}" in
     switch) shift; cmd_switch "$@" ;;
     diff) shift; cmd_diff "$@" ;;
     news) shift; cmd_news "$@" ;;
+    update) shift; cmd_update "$@" ;;
     system) shift; cmd_system "$@" ;;
     baseline) shift; exec "$repo/bin/ws-baseline" "$@" ;;
     host) host ;;

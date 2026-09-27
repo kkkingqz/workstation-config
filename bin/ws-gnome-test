@@ -164,7 +164,7 @@ section "4. GNOME extension policy"
 ext_list_file="$HOME/.config/workstation/gnome/extensions"
 required_extensions=()
 if [[ -r "$ext_list_file" ]]; then
-    mapfile -t required_extensions < <(awk '!/^#/ && NF == 2 { print $1 }' "$ext_list_file")
+    mapfile -t required_extensions < <(awk '!/^#/ && NF >= 2 { print $1 }' "$ext_list_file")
 fi
 ((${#required_extensions[@]})) || fail "extension list missing: $ext_list_file (ws switch)"
 

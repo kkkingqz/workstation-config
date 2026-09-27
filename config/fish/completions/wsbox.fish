@@ -98,6 +98,11 @@ complete -c wsbox \
 
 complete -c wsbox \
     -n '__wsbox_needs_command' \
+    -a update \
+    -d 'Upgrade packages inside managed containers'
+
+complete -c wsbox \
+    -n '__wsbox_needs_command' \
     -a create \
     -d 'Create one managed container'
 
@@ -141,7 +146,7 @@ complete -c wsbox \
     -a unexport \
     -d 'Remove one managed desktop export'
 
-for cmd in status dry-run apply create enter run stop remove recreate apps export unexport
+for cmd in status dry-run apply update create enter run stop remove recreate apps export unexport
     complete -c wsbox \
         -n "__wsbox_needs_box $cmd" \
         -a '(__wsbox_managed_boxes)'

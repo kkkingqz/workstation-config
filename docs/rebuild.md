@@ -218,6 +218,14 @@ ws check            # verify, wsflatpak, wsbox, ws-gnome, ws-suspend, ws system,
 установленными; ничего не меняет. Пустой вывод — система совпадает с repo.
 `ws check apt` сравнивает списки apt с установленными пакетами и только
 сообщает о различиях.
+`ws update` обновляет всё, что не закреплено, до последних версий: apt
+(`sudo apt full-upgrade`, `linux-t2` остаётся held), Nix (`nix flake update`,
+разница пакетов, switch; изменившийся `flake.lock` закоммитить), Flatpak,
+пакеты внутри контейнеров (`wsbox update`) и расширения с
+extensions.gnome.org (GNOME Shell скачивает обновления, как Extension
+Manager; ставятся после logout/login). Отдельный шаг — `ws update nix`.
+Закреплены намеренно: ядро (`linux-t2`, `kernel/t2bce/sources.conf`),
+xremap (`pkgs/xremap.nix`), расширения с `pin`, образы по digest.
 Новости home-manager (изменения опций после обновления `flake.lock`) — `ws
 news`; `ws switch` о них не уведомляет (`news.display = "silent"`), а
 `home-manager news` без `--flake` конфигурацию не находит.
@@ -638,15 +646,17 @@ ws-keyboard-install-extensions
 
 Расширения с extensions.gnome.org (`xremap@k0kubun.com`,
 `window-control@carlo9890.github.io`,
-`window-monitor-pro@muhammed.hussien2030.gmail.com`) ставит `ws switch`:
-`pkgs/gnome-extensions.nix` закрепляет zip по версии EGO и hash,
-`modules/home/gnome-extensions.nix` раскладывает файлы ссылками в
-`~/.local/share/gnome-shell/extensions/<uuid>`. Вручную с EGO их не ставить.
-Включает их `ws switch` (`enabled-extensions`); на новой машине — logout/login
-после первого `ws switch` и `ws apply`. Обновление: версия и hash в `pkgs/gnome-extensions.nix`,
-`ws switch`, logout/login. Если GNOME или Extension Manager обновил
-расширение сам, verify покажет FAIL «files not from Nix»: убрать каталог и
-`ws switch`.
+`window-monitor-pro@muhammed.hussien2030.gmail.com`) ставит тот же шаг
+`extensions`, если их нет: последнюю версию для текущего GNOME Shell
+(`gnome-extensions install`). Дальше их обновляет Extension Manager (или
+`ws update extensions`). Включает их `ws switch` (`enabled-extensions`); на
+новой машине — logout/login после первого `ws switch` и `ws apply`.
+
+Закрепить версию: `pin = { version = N; hash = "sha256-…"; }` у расширения
+в `modules/home/gnome-extensions.nix` (N — номер из ссылки на zip EGO), `ws
+switch`. Такое расширение ставит Nix ссылками, и обновлять его в Extension
+Manager нельзя: verify покажет FAIL «files not from Nix», `ws update
+extensions` при закреплённых расширениях отказывается.
 
 `Window Monitor Pro` используется и входит в baseline расширений; keyboard
 baseline от него не зависит.

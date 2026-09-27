@@ -25,10 +25,8 @@
           modules = [ ./hosts/${host}/home.nix ];
         };
 
-      # Man pages from docs/ with the pinned lowdown.
-      man = pkgs.callPackage ./pkgs/man.nix {
-        lowdown = pkgs.callPackage ./pkgs/lowdown.nix { };
-      };
+      # Man pages from docs/ with lowdown from nixpkgs.
+      man = pkgs.callPackage ./pkgs/man.nix { };
 
       # System file tree of the host; `ws system diff|check` compares it.
       mkSystem = host: pkgs.callPackage ./modules/system {

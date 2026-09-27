@@ -8,6 +8,11 @@
 # Change: edit this file, `ws switch`, then `wsbox apply NAME` (new container)
 # or `wsbox recreate NAME` (changed image or packages; rootfs is replaced,
 # the custom HOME stays).
+#
+# Images are tags, not digests: packages inside are updated in place by
+# `wsbox update` (distrobox upgrade), a new image is used on recreate. A
+# digest (repo@sha256:...) still works where a fixed image is needed; wsbox
+# check then compares the repo digest.
 { lib, pkgs, ... }:
 let
   # The same for every container unless a container sets it.
@@ -22,6 +27,12 @@ let
 
   keyOrder = [ "init" "nvidia" "pull" "root" "start_now" "entry" ];
 
+  # The Ubuntu release of the host, substituted by wsbox from
+  # /etc/os-release (VERSION_ID). For build containers: what they build must
+  # match the host (kernel modules, binaries against the host glibc). After a
+  # host release upgrade wsbox check reports image drift: wsbox recreate NAME.
+  hostUbuntu = "docker.io/library/ubuntu:@HOST_VERSION_ID@";
+
   # In manifest order. home: own directory under
   # ~/.local/share/distrobox-homes/NAME unless sharedHome.
   containers = [
@@ -31,10 +42,10 @@ let
     }
     {
       name = "arch";
-      # Arch is rolling: pinned by digest (archlinux:latest of 2026-09-21).
-      # Update: new digest here, ws switch, `wsbox recreate arch`
-      # (docs/workstation.md).
-      image = "docker.io/library/archlinux@sha256:917e543c9d0f1f495d70907bdf05bf53607e791b351e1b01ccd3aec2442303ed";
+      # Arch is rolling: pacman -Syu inside (wsbox update). Recreate only
+      # when needed; AUR packages are installed again by hand
+      # (docs/rebuild.md).
+      image = "docker.io/library/archlinux:latest";
       exports.winbox3 = "/usr/share/applications/winbox3.desktop";
     }
     {
@@ -46,7 +57,7 @@ let
       # ~/touchbar). t2bce modules themselves are built by ws-suspend in a
       # one-off container.
       name = "t2bce-build";
-      image = "docker.io/library/ubuntu:26.04";
+      image = hostUbuntu;
       sharedHome = true;
       packages = [ "build-essential" "bison" "flex" "kmod" "libelf-dev" "libssl-dev" ];
     }
@@ -55,7 +66,7 @@ let
       # into /opt/rust (owned by the user), used with
       # RUSTUP_HOME=/opt/rust/rustup CARGO_HOME=/opt/rust/cargo.
       name = "touchbar-build";
-      image = "docker.io/library/ubuntu:26.04";
+      image = hostUbuntu;
       sharedHome = true;
       packages = [
         "build-essential" "git" "pkg-config" "libdrm-dev" "libegl-dev" "libgles-dev"

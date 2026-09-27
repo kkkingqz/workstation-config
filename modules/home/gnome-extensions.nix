@@ -1,14 +1,20 @@
 # The one list of GNOME Shell extensions of the workstation. Everything else
-# reads it: enabled-extensions (dconf, written by ws switch), the EGO links,
-# and ~/.config/workstation/gnome/extensions ("UUID SOURCE" per line) for
+# reads it: enabled-extensions (dconf, written by ws switch), the links of
+# pinned EGO extensions, and ~/.config/workstation/gnome/extensions
+# ("UUID SOURCE [PINNED-VERSION]" per line) for
 # ws-keyboard-install-extensions, ws-workstation-verify, ws-gnome-test and
 # ws-gnome-status.
 #
 # source:
 #   ubuntu  gnome-shell-ubuntu-extensions (apt); enabled by the Ubuntu session
 #           mode (/usr/share/gnome-shell/modes/ubuntu.json), not written here
-#   ego     extensions.gnome.org, pinned in pkgs/gnome-extensions.nix, linked
-#           file by file into ~/.local/share/gnome-shell/extensions/<uuid>
+#   ego     extensions.gnome.org. Without pin: `ws apply extensions` installs
+#           the latest version for the running GNOME Shell if it is missing,
+#           Extension Manager updates it (`ws update extensions` asks GNOME
+#           Shell for updates the same way). With
+#           pin = { version = N; hash = "sha256-..."; } (N: the number in the
+#           EGO download URL): built by pkgs/gnome-extensions.nix and linked
+#           file by file by ws switch; not updated
 #   local   gnome/extensions/<uuid> in this repository, copied (schemas
 #           compiled) by ws-keyboard-install-extensions (ws apply extensions)
 #
@@ -41,19 +47,18 @@ let
 
   bySource = source: map (e: e.uuid) (lib.filter (e: e.source == source) extensions);
 
-  # callPackage adds override attributes; keep the packages only.
-  ego = lib.filter lib.isDerivation (lib.attrValues
-    (pkgs.callPackage ../../pkgs/gnome-extensions.nix { }));
-  egoPinned = map (p: p.uuid) ego;
-
-  sorted = l: lib.sort lib.lessThan l;
+  egoExtension = import ../../pkgs/gnome-extensions.nix {
+    inherit lib;
+    inherit (pkgs) stdenvNoCC fetchurl unzip;
+  };
+  pinned = map (e: egoExtension ({ inherit (e) uuid; } // e.pin))
+    (lib.filter (e: e ? pin) extensions);
 in
 {
   assertions = [
     {
-      assertion = sorted (bySource "ego") == sorted egoPinned;
-      message = "gnome-extensions.nix: ego extensions (${toString (bySource "ego")}) "
-        + "differ from pkgs/gnome-extensions.nix (${toString egoPinned})";
+      assertion = lib.all (e: e.source == "ego") (lib.filter (e: e ? pin) extensions);
+      message = "gnome-extensions.nix: pin is only for ego extensions";
     }
     {
       assertion = lib.all (e: lib.elem e.source [ "ubuntu" "ego" "local" ]) extensions;
@@ -70,7 +75,7 @@ in
     lib.nameValuePair ".local/share/gnome-shell/extensions/${ext.uuid}" {
       source = "${ext}/share/gnome-shell/extensions/${ext.uuid}";
       recursive = true;
-    }) ego);
+    }) pinned);
 
   dconf.settings."org/gnome/shell" = {
     enabled-extensions = bySource "ego" ++ bySource "local";
@@ -78,6 +83,8 @@ in
   };
 
   xdg.configFile."workstation/gnome/extensions".text = ''
-    # Built from modules/home/gnome-extensions.nix: UUID SOURCE
-  '' + lib.concatMapStrings (e: "${e.uuid} ${e.source}\n") extensions;
+    # Built from modules/home/gnome-extensions.nix: UUID SOURCE [PINNED-VERSION]
+  '' + lib.concatMapStrings (e:
+    "${e.uuid} ${e.source}${lib.optionalString (e ? pin) " ${toString e.pin.version}"}\n")
+    extensions;
 }
