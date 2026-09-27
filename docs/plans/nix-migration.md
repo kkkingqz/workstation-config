@@ -948,7 +948,8 @@ home-manager, fzf 0.72 и zoxide 0.9.9 из Nix, xremap из store с тем ж�
 sha256). Эталон `nix-v1` (`--with-sudo`, 2026-09-27): dpkg verify, initrd и
 `refind.conf` на ESP совпадают с `pre-nix`; остальное — те же ожидаемые
 различия. `get-default` в `pre-nix` записан вручную; теперь его снимает
-`ws baseline capture --with-sudo` (без счётчика `gen` при сравнении). Критерий «recovery
+`ws baseline capture --with-sudo` (без счётчика `gen` при сравнении);
+проверен вручную: `ID 256 … path @`, как в `pre-nix`. Критерий «recovery
 проверен» не выполнен по решению пользователя. Тег `nix-v1`.
 
 ---
