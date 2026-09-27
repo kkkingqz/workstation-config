@@ -214,13 +214,13 @@ ubuntu-dock@ubuntu.com
 web-search-provider@ubuntu.com
 ```
 
-Legacy `window-monitor-pro@muhammed.hussien2030.gmail.com` удалён и не входит в
-baseline.
+`window-monitor-pro@muhammed.hussien2030.gmail.com` здесь раньше числился
+legacy; с 2026-09-27 (решение пользователя) он используется, обязателен и
+ставится `ws switch` (`pkgs/gnome-extensions.nix`).
 
 Policy:
 
 - отсутствие любого перечисленного baseline extension -> FAIL;
-- повторное появление Window Monitor Pro -> FAIL;
 - другой неизвестный enabled extension -> WARN;
 - автоматически ничего не отключаем.
 
@@ -368,7 +368,6 @@ Yaru appearance + managed Dock profile       PASS
 Qt5/Qt6 QGnomePlatform + native Wayland      PASS
 portals / PipeWire / WirePlumber             PASS
 extension policy                             PASS
-Window Monitor Pro removed                   PASS
 Dock Spring 1300 ms / running-only           PASS
 Nautilus -> application window DnD            PASS
 clipboard / file chooser / ScreenCast         PASS

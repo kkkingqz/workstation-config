@@ -203,13 +203,17 @@ ubuntu-appindicators@ubuntu.com
 ubuntu-dock@ubuntu.com
 web-search-provider@ubuntu.com
 window-control@carlo9890.github.io
+window-monitor-pro@muhammed.hussien2030.gmail.com
+workstation-dock-spring@local
 workstation-input-source@local
 workstation-smart-popup@local
 xremap@k0kubun.com
 ```
 
-`window-monitor-pro@muhammed.hussien2030.gmail.com` удалён как legacy и в
-baseline не входит.
+`window-monitor-pro@muhammed.hussien2030.gmail.com` используется и входит в
+baseline (2026-09-27, решение пользователя; раньше ошибочно числился legacy).
+Его, как `window-control` и `xremap`, ставит `ws switch` из
+`pkgs/gnome-extensions.nix`.
 
 Неизвестные дополнительные extensions автоматически не отключаются; verifier
 только выдаёт WARN.

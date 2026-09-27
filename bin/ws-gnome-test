@@ -169,29 +169,21 @@ required_extensions=(
     ubuntu-dock@ubuntu.com
     web-search-provider@ubuntu.com
     window-control@carlo9890.github.io
+    window-monitor-pro@muhammed.hussien2030.gmail.com
     workstation-input-source@local
     workstation-smart-popup@local
     workstation-dock-spring@local
     xremap@k0kubun.com
 )
 
-legacy_extension="window-monitor-pro@muhammed.hussien2030.gmail.com"
-
 if have gnome-extensions; then
     enabled="$(gnome-extensions list --enabled 2>/dev/null || true)"
-    installed="$(gnome-extensions list 2>/dev/null || true)"
 
     for uuid in "${required_extensions[@]}"; do
         grep -Fxq "$uuid" <<<"$enabled" \
             && pass "required extension enabled: $uuid" \
             || fail "required extension not enabled: $uuid"
     done
-
-    if grep -Fxq "$legacy_extension" <<<"$installed"; then
-        fail "legacy extension still installed: $legacy_extension"
-    else
-        pass "legacy Window Monitor Pro absent"
-    fi
 
     unknown=()
     while IFS= read -r uuid; do

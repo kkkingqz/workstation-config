@@ -90,7 +90,8 @@ workstation-dock-spring@local
 workstation-input-source@local
 ```
 
-`Window Monitor Pro` не является зависимостью текущего keyboard/Touch Bar baseline.
+`Window Monitor Pro` используется и входит в baseline расширений; keyboard/Touch Bar
+baseline от него не зависит.
 
 ---
 

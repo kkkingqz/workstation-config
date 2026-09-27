@@ -1025,8 +1025,10 @@ PASS, `ws baseline diff` пуст»:
   `~/.local/state/workstation/extensions-before-nix`. Включение
   (`enabled-extensions`) не менялось — задача GNOME/dconf. verify: FAIL, если
   в каталоге расширения появился обычный файл (обновление GNOME или ручная
-  установка). Противоречие прежнее: `window-monitor-pro` verify требует,
-  `ws-gnome-test` и `gnome.md` считают legacy.
+  установка). Противоречие с `window-monitor-pro` снято (2026-09-27,
+  пользователь): расширение используется, обязательно и в `ws-gnome-test`,
+  и в `gnome.md`. Старые копии `extensions-before-nix` и `state-before-nix`
+  удалены.
 - Скрипты в store (`writeShellApplication`) вместо ссылок на checkout.
 - ~~`man/` собирать при сборке, а не хранить в git~~ — **сделано
   (2026-09-27):** `pkgs/man.nix` запускает `bin/ws-doc-build` с lowdown

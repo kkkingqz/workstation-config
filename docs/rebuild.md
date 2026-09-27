@@ -641,7 +641,8 @@ logout/login. Обновление: версия и hash в `pkgs/gnome-extensio
 расширение сам, verify покажет FAIL «files not from Nix»: убрать каталог и
 `ws switch`.
 
-`Window Monitor Pro` не является зависимостью текущего keyboard baseline.
+`Window Monitor Pro` используется и входит в baseline расширений; keyboard
+baseline от него не зависит.
 
 `workstation-dock-spring@local` schema не использует. Общий installer должен
 установить его runtime copy так же, как остальные local extensions.
