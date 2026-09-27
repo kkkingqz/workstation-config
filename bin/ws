@@ -17,8 +17,10 @@ Usage:
   ws system diff|check|apply
   ws baseline capture|diff|list ...
   ws host
+  ws news
 
 switch    home-manager switch for this user and host (pinned by flake.lock)
+news      home-manager news of this flake (switch does not notify about them)
 diff      build the home generation without activating it and show the
           package difference against the current one (nvd)
 apply     run the layer owners in order, as by hand (no sudo steps):
@@ -104,6 +106,13 @@ cmd_switch() {
     nix="$(nix_bin)"
     check_untracked
     "$nix" run "$repo#home-manager" -- switch --flake "$(target)" "$@"
+}
+
+cmd_news() {
+    local nix
+    nix="$(nix_bin)"
+    check_untracked
+    "$nix" run "$repo#home-manager" -- news --flake "$(target)" "$@"
 }
 
 cmd_diff() {
@@ -582,6 +591,7 @@ case "${1:-}" in
     check) shift; cmd_check "$@" ;;
     switch) shift; cmd_switch "$@" ;;
     diff) shift; cmd_diff "$@" ;;
+    news) shift; cmd_news "$@" ;;
     system) shift; cmd_system "$@" ;;
     baseline) shift; exec "$repo/bin/ws-baseline" "$@" ;;
     host) host ;;

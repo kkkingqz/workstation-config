@@ -19,6 +19,9 @@
   home.stateVersion = "26.05";
 
   programs.home-manager.enable = true;
+  # No news notification (notify-send) on every switch; read them with
+  # `ws news` (plain `home-manager news` looks for ~/.config/home-manager).
+  news.display = "silent";
 
   # Nothing may change the GNOME session or shadow apt tools yet:
   # - targets.genericLinux writes ~/.config/environment.d/10-home-manager.conf

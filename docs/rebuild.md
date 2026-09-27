@@ -218,6 +218,9 @@ ws check            # verify, wsflatpak, wsbox, ws-gnome, ws-suspend, ws system,
 установленными; ничего не меняет. Пустой вывод — система совпадает с repo.
 `ws check apt` сравнивает списки apt с установленными пакетами и только
 сообщает о различиях.
+Новости home-manager (изменения опций после обновления `flake.lock`) — `ws
+news`; `ws switch` о них не уведомляет (`news.display = "silent"`), а
+`home-manager news` без `--flake` конфигурацию не находит.
 
 Flatpak: remotes, приложения и overrides объявлены в
 `modules/home/flatpak.nix`; `ws switch` собирает из них
