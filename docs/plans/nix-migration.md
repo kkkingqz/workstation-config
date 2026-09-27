@@ -945,9 +945,10 @@ initramfs, ни `update-grub` не запускались. Ошибка в ко�
 `ws baseline diff pre-nix phase-5`: verify — только новые PASS, ни одного
 потерянного; остальное — ожидаемое (слой Nix, fstab, `nix-daemon`, ссылки
 home-manager, fzf 0.72 и zoxide 0.9.9 из Nix, xremap из store с тем же
-sha256). `phase-5` снят без `--with-sudo`: dpkg verify, initrd, get-default и
-ESP сравнены не были (ни одна фаза их не меняла: `ws system apply` не
-изменил файлов, initramfs и ESP не пересобирались). Критерий «recovery
+sha256). Эталон `nix-v1` (`--with-sudo`, 2026-09-27): dpkg verify, initrd и
+`refind.conf` на ESP совпадают с `pre-nix`; остальное — те же ожидаемые
+различия. `get-default` в `pre-nix` записан вручную; теперь его снимает
+`ws baseline capture --with-sudo` (без счётчика `gen` при сравнении). Критерий «recovery
 проверен» не выполнен по решению пользователя. Тег `nix-v1`.
 
 ---

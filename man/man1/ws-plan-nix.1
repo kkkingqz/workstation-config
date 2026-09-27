@@ -1216,9 +1216,10 @@ switch. \f(CRws check apt\fR сравнивает с \f(CRapt-mark showmanual\fR
 \f(CRws baseline diff pre-nix phase-5\fR: verify — только новые PASS, ни одного
 потерянного; остальное — ожидаемое (слой Nix, fstab, \f(CRnix-daemon\fR, ссылки
 home-manager, fzf 0.72 и zoxide 0.9.9 из Nix, xremap из store с тем же
-sha256). \f(CRphase-5\fR снят без \f(CR--with-sudo\fR: dpkg verify, initrd, get-default и
-ESP сравнены не были (ни одна фаза их не меняла: \f(CRws system apply\fR не
-изменил файлов, initramfs и ESP не пересобирались). Критерий «recovery
+sha256). Эталон \f(CRnix-v1\fR (\f(CR--with-sudo\fR, 2026-09-27): dpkg verify, initrd и
+\f(CRrefind.conf\fR на ESP совпадают с \f(CRpre-nix\fR; остальное — те же ожидаемые
+различия. \f(CRget-default\fR в \f(CRpre-nix\fR записан вручную; теперь его снимает
+\f(CRws baseline capture --with-sudo\fR (без счётчика \f(CRgen\fR при сравнении). Критерий «recovery
 проверен» не выполнен по решению пользователя. Тег \f(CRnix-v1\fR.
 .LP
 \l'2i'

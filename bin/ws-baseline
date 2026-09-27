@@ -18,8 +18,9 @@ Usage:
 capture   snapshot of owner checks, GNOME, Flatpak, Distrobox, user links,
           system files and tools into ~/.local/state/workstation/baseline/NAME
           --no-boxes    skip `wsbox check` (it starts the containers)
-          --with-sudo   also dpkg --verify, the initramfs listing and the rEFInd
-                        ESP refind.conf checksum (asks sudo)
+          --with-sudo   also dpkg --verify, the initramfs listing, the default
+                        Btrfs subvolume and the rEFInd ESP refind.conf
+                        checksum (asks sudo)
 diff      compare two baselines; owner checks are compared as sets of
           PASS/WARN/FAIL lines, everything else line by line
 USAGE
@@ -201,6 +202,9 @@ cmd_capture() {
     if [[ "$with_sudo" == true ]]; then
         echo "== sudo"
         sudo dpkg --verify > "$dir/system/dpkg-verify.txt" 2>&1 || true
+        # After @ is restored from recovery the default must be the new @
+        # (docs/plans/nix-migration.md, «Возврат @ из recovery»).
+        sudo btrfs subvolume get-default / > "$dir/system/get-default.txt" 2>&1 || true
         sudo lsinitrd "/boot/initrd.img-$(uname -r)" 2>/dev/null \
             | awk '{ print $NF }' | grep -E 't2bce|appletb|modprobe\.d|modules-load' \
             | sort > "$dir/system/initrd.txt" || true
@@ -287,6 +291,11 @@ cmd_diff() {
             checks/*)
                 normalize_check "$a/$rel" > "$tmp/a"
                 normalize_check "$b/$rel" > "$tmp/b"
+                ;;
+            # The generation counter grows with every write.
+            system/get-default.txt)
+                sed -E 's/ gen [0-9]+//' "$a/$rel" > "$tmp/a"
+                sed -E 's/ gen [0-9]+//' "$b/$rel" > "$tmp/b"
                 ;;
             gnome/dconf.ini)
                 grep -v "^caps-binary-state=" "$a/$rel" > "$tmp/a"
