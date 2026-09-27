@@ -3,11 +3,13 @@ set -euo pipefail
 
 repo="${WORKSTATION_CONFIG:-$HOME/.local/share/workstation-config}"
 settings="$repo/config/keyboard/settings.conf"
-state_dir="$repo/state/keyboard"
+# Machine-local state, outside the checkout: the GNOME shortcuts saved before
+# the first apply (restore target) and the xremap off flag.
+state_dir="$HOME/.local/state/workstation/keyboard"
 backup="$state_dir/gsettings-backup.tsv"
 # home-manager enables xremap.service (modules/home/xremap.nix); this flag is
 # its ConditionPathExists, so a restored profile stays off after a reboot.
-xremap_off="$HOME/.local/state/workstation/keyboard/xremap.disabled"
+xremap_off="$state_dir/xremap.disabled"
 
 [[ -r "$settings" ]] || { echo "ws-keyboard-apply: missing $settings" >&2; exit 66; }
 # shellcheck disable=SC1090

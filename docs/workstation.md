@@ -264,8 +264,9 @@ system/usr/local/libexec/ws-touchbar-fn
 system/systemd/system/ws-touchbar-fn.service
 ```
 
-Generated `gschemas.compiled`, `state/` и `runtime/` не являются source files и
-не коммитятся.
+Generated `gschemas.compiled` и `runtime/` не являются source files и
+не коммитятся. Machine-local state (backup сочетаний GNOME, флаг выключенного
+xremap) — в `~/.local/state/workstation/`, не в checkout.
 
 Полный справочник:
 
@@ -772,7 +773,6 @@ GNOME extension runtime copies являются реальными directories �
 Generated/runtime state:
 
 ```text
-state/
 runtime/
 gnome/extensions/*/schemas/gschemas.compiled
 ```

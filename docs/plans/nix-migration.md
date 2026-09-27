@@ -1041,10 +1041,14 @@ PASS, `ws baseline diff` пуст»:
 - ~~Закрепить образ `arch` по digest~~ — **сделано (2026-09-27):**
   `archlinux@sha256:917e543c…` (образ 2026-09-21, на котором работает
   контейнер); `wsbox check` сравнивает по repo digest, чужой digest — FAIL.
-- Удалить `state/` после переноса `gsettings-backup.tsv` — после задачи
-  GNOME через `dconf.settings`. Архив откатных копий v15–v26 удалён
-  (2026-09-27, решение пользователя); остались рабочие файлы
-  `state/keyboard/gsettings-backup.tsv` и `state/gnome/last-apply.*`.
+- ~~Удалить `state/` после переноса `gsettings-backup.tsv`~~ — **сделано
+  (2026-09-27):** архив откатных копий v15–v26 удалён ранее (решение
+  пользователя); `ws-keyboard-apply` держит `gsettings-backup.tsv` в
+  `~/.local/state/workstation/keyboard/` рядом с `xremap.disabled`, файл
+  перенесён туда. `state/gnome/last-apply.*` после задачи GNOME не
+  используются, перенесены в `~/.local/state/workstation/state-before-nix/`.
+  `state/` убран из `.gitignore`; verify: FAIL, если `state/` снова появится
+  в checkout, WARN, если нет backup сочетаний.
 - ~~Убрать `t2bce-build` и `touchbar-build`~~ — **сделано иначе
   (2026-09-27):** по решению пользователя оба оставлены и описаны в
   `containers.ini` (общий HOME хоста, `additional_packages` по фактически

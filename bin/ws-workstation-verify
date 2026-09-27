@@ -403,7 +403,7 @@ for p in state runtime config/micro-help/buffers; do
 done
 [[ "$runtime_tracked" == false ]] && pass "runtime/generated directories are not tracked"
 
-for ignored in state/probe runtime/probe config/micro-help/buffers/probe gnome/extensions/workstation-input-source@local/schemas/gschemas.compiled gnome/extensions/workstation-smart-popup@local/schemas/gschemas.compiled; do
+for ignored in runtime/probe config/micro-help/buffers/probe gnome/extensions/workstation-input-source@local/schemas/gschemas.compiled gnome/extensions/workstation-smart-popup@local/schemas/gschemas.compiled; do
     if git -C "$repo" check-ignore -q -- "$ignored"; then
         pass ".gitignore covers: $ignored"
     else
@@ -918,6 +918,9 @@ xremap_unit="$(readlink -f "$HOME/.config/systemd/user/xremap.service" 2>/dev/nu
 [[ -e "$HOME/.local/state/workstation/keyboard/xremap.disabled" ]] \
     && warn "xremap switched off by ws-keyboard restore (ws-keyboard apply turns it on)" \
     || pass "xremap not switched off by ws-keyboard restore"
+[[ -s "$HOME/.local/state/workstation/keyboard/gsettings-backup.tsv" ]] \
+    && pass "original GNOME shortcuts saved for ws-keyboard restore" \
+    || warn "no ~/.local/state/workstation/keyboard/gsettings-backup.tsv; ws-keyboard restore has nothing to restore"
 [[ -n "$xremap_env_bin" && "$xremap_env_bin" == "$xremap_real" ]] \
     && pass "xremap.service runs the same binary as ~/.local/bin/xremap" \
     || fail "xremap.service XREMAP_BIN ${xremap_env_bin:-unset} differs from ~/.local/bin/xremap"
@@ -1767,6 +1770,13 @@ fi
 
 section "17. Legacy artifacts that should be gone"
 
+# Machine-local state lives in ~/.local/state/workstation, not in the checkout.
+if [[ -e "$repo/state" ]]; then
+    fail "state/ in the checkout is obsolete: move keyboard/gsettings-backup.tsv to ~/.local/state/workstation/keyboard/"
+else
+    pass "no state/ in the checkout"
+fi
+
 legacy_repo_paths=(
     bin/ws-nautilus-go
     systemd/user/ws-touchbar-fn.service
@@ -1808,7 +1818,7 @@ while IFS= read -r -d '' path; do
             ;;
         *)
             case "$path" in
-                state/*|runtime/*|config/micro-help/buffers/*|*/schemas/gschemas.compiled)
+                runtime/*|config/micro-help/buffers/*|*/schemas/gschemas.compiled)
                     info "ignored/generated untracked file: $(q "$path")"
                     ;;
                 fix-keyboard-layer-v*.sh|*/fix-keyboard-layer-v*.sh|rollback-keyboard-layer-v*.sh|*/rollback-keyboard-layer-v*.sh)

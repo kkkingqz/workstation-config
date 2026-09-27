@@ -540,12 +540,12 @@ Generated files are not source-of-truth:
 
 ```text
 gnome/extensions/*/schemas/gschemas.compiled
-state/
 runtime/
 ```
 
-`state/` содержит machine-local backups и rollback data и целиком игнорируется
-Git.
+Machine-local state — вне checkout, в `~/.local/state/workstation/keyboard/`:
+`gsettings-backup.tsv` (сочетания GNOME до первого `ws-keyboard apply`, их
+возвращает `ws-keyboard restore`) и `xremap.disabled`.
 
 ## Runtime installation
 
