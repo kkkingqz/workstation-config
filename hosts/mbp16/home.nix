@@ -9,6 +9,7 @@
     ../../modules/home/man.nix
     ../../modules/home/gnome-extensions.nix
     ../../modules/home/flatpak.nix
+    ../../modules/home/gnome.nix
   ];
 
   home.username = facts.user;

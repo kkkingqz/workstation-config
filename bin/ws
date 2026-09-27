@@ -25,7 +25,6 @@ apply     run the layer owners in order, as by hand (no sudo steps):
             extensions  ws-keyboard-install-extensions
             tiling      ws-tiling-apply
             keyboard    ws-keyboard-apply
-            gnome       ws-gnome apply
             flatpak     wsflatpak apply
             distrobox   wsbox apply
           a step whose preflight fails (exit 69: e.g. new extensions need a
@@ -126,7 +125,6 @@ apply_steps=(
     "extensions ws-keyboard-install-extensions"
     "tiling ws-tiling-apply"
     "keyboard ws-keyboard-apply"
-    "gnome ws-gnome apply"
     "flatpak wsflatpak apply"
     "distrobox wsbox apply"
 )

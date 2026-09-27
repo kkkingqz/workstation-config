@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# The profile is declared in modules/home/gnome.nix and written by `ws switch`
+# (home-manager dconf.settings). This only compares the session with it.
+profile="${WS_GNOME_PROFILE:-$HOME/.config/workstation/gnome/settings.conf}"
+quiet=false
+
+usage() {
+    cat <<'USAGE'
+Usage:
+  ws-gnome-check           compare the session with the managed GNOME profile
+  ws-gnome-check --quiet   exit status only (for status/verify helpers)
+
+The profile (appearance and Ubuntu Dock) is declared in
+modules/home/gnome.nix and applied by `ws switch`; home-manager builds
+~/.config/workstation/gnome/settings.conf (SCHEMA|KEY|VALUE) for this check.
+USAGE
+}
+
+while (($#)); do
+    case "$1" in
+        --quiet) quiet=true; shift ;;
+        -h|--help) usage; exit 0 ;;
+        *) echo "ws-gnome-check: unknown argument: $1" >&2; usage >&2; exit 64 ;;
+    esac
+done
+
+die() {
+    echo "ws-gnome-check: $*" >&2
+    exit 1
+}
+
+say() {
+    [[ "$quiet" == true ]] || printf '%s\n' "$*"
+}
+
+command -v gsettings >/dev/null 2>&1 || die "gsettings not found"
+[[ -r "$profile" ]] || die "profile missing: $profile (run ws switch)"
+
+total=0
+drift=0
+while IFS='|' read -r schema key desired || [[ -n "${schema:-}" ]]; do
+    [[ -z "$schema" || "$schema" == \#* ]] && continue
+    ((total += 1))
+
+    if ! current="$(gsettings get "$schema" "$key" 2>/dev/null)"; then
+        ((drift += 1))
+        [[ "$quiet" == true ]] || printf '  MISSING %s %s (schema/key unavailable)\n' "$schema" "$key"
+        continue
+    fi
+
+    if [[ "$current" == "$desired" ]]; then
+        [[ "$quiet" == true ]] || printf '  OK      %s %s = %s\n' "$schema" "$key" "$current"
+    else
+        ((drift += 1))
+        [[ "$quiet" == true ]] || {
+            printf '  DRIFT   %s %s\n' "$schema" "$key"
+            printf '          current: %s\n' "$current"
+            printf '          desired: %s\n' "$desired"
+        }
+    fi
+done < "$profile"
+
+((total > 0)) || die "profile contains no settings: $profile"
+
+if ((drift == 0)); then
+    say "GNOME managed profile: in sync ($total settings)"
+    exit 0
+fi
+
+say "GNOME managed profile: $drift setting(s) differ; ws switch writes them again"
+exit 1

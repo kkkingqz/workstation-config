@@ -27,6 +27,7 @@ checkout, закрепляет бинарники и собирает систе
 Терминал                 config/fish, config/ghostty           ссылки, CLI-пакеты
 Команды ws-*             bin/                                  ссылки в ~/.local/bin
 Внешний вид GNOME        ws-gnome + config/gnome/settings.conf ссылка на команду
+                         (после миграции: modules/home/gnome.nix)
 Flatpak                  wsflatpak + config/flatpak/           ссылка на команду
                          (после миграции: modules/home/flatpak.nix)
 Distrobox                wsbox + config/distrobox/             ссылка на команду
@@ -982,8 +983,18 @@ sha256). Эталон `nix-v1` (`--with-sudo`, 2026-09-27): dpkg verify, initrd 
 Отдельные задачи, каждая — со своим эталоном и критерием «check владельца
 PASS, `ws baseline diff` пуст»:
 
-- GNOME через `dconf.settings` вместо `ws-gnome apply`. Учесть: home-manager
-  применяет значения при каждом switch, ручные правки будут откатываться.
+- ~~GNOME через `dconf.settings` вместо `ws-gnome apply`~~ — **сделано
+  (2026-09-27):** профиль внешнего вида и Ubuntu Dock (20 ключей) — в
+  `modules/home/gnome.nix`, пишется `ws switch`; значения не изменились,
+  ключи со значением по умолчанию теперь записаны явно. Ручные правки
+  откатываются следующим switch, удалённый ключ сбрасывается. Assertion
+  запрещает в `dconf.settings` ключи клавиатуры, Tiling, расширений и
+  масштаба. `ws-gnome-apply` удалён: `ws-gnome check` — это `ws-gnome-check`
+  по собранному `~/.config/workstation/gnome/settings.conf`, `apply` и
+  `rollback` только подсказывают, шага `gnome` в `ws apply` нет;
+  `state/gnome/last-apply.*` больше не пишутся. Сочетания клавиш остаются у
+  `ws-keyboard-apply`: restore возвращает сочетания GNOME, а `dconf.settings`
+  записывал бы их обратно при каждом switch.
 - ~~Flatpak через nix-flatpak или генерацию `apps.conf`~~ — **сделано
   (2026-09-27), генерацией:** remotes, apps, overrides и desktop overrides
   объявлены в `modules/home/flatpak.nix`; home-manager собирает

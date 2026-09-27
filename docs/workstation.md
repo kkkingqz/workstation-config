@@ -97,10 +97,11 @@ workstation-input-source@local
 
 # GNOME MANAGED APPEARANCE
 
-Штатный GNOME appearance/Dock baseline теперь хранится декларативно:
+Штатный GNOME appearance/Dock baseline хранится декларативно в
+`dconf.settings` home-manager и записывается `ws switch`:
 
 ```text
-config/gnome/settings.conf
+modules/home/gnome.nix
 ```
 
 Управление:
@@ -108,9 +109,6 @@ config/gnome/settings.conf
 ```console
 ws-gnome status
 ws-gnome check
-ws-gnome dry-run
-ws-gnome apply
-ws-gnome rollback
 ```
 
 Текущий профиль фиксирует небольшой curated набор appearance и Ubuntu Dock
@@ -730,7 +728,7 @@ workstation-config/
 │   ├── ws-keyboard-system-apply
 │   ├── ws-workstation-verify
 │   ├── ws-gnome
-│   ├── ws-gnome-apply
+│   ├── ws-gnome-check
 │   ├── ws-gnome-status
 │   ├── ws-xremap
 │   ├── ws-window
@@ -761,7 +759,8 @@ home-manager ставит ссылки на checkout (`~/.local/bin`, fish, Ghos
 и CLI (fzf, zoxide, eza, micro, nvd, xremap), unit `xremap.service` с
 `xremap.yml` из store, расширения GNOME с EGO по версии и hash
 (`pkgs/gnome-extensions.nix`), конфиг `wsflatpak` из
-`modules/home/flatpak.nix`; `ws system apply` ставит копии
+`modules/home/flatpak.nix`, профиль внешнего вида GNOME
+(`modules/home/gnome.nix`, `dconf.settings`); `ws system apply` ставит копии
 системных файлов из сборки `modules/system`; GNOME, Flatpak, Distrobox,
 клавиатура — прежние `bin/`-владельцы, их по порядку вызывает `ws apply`.
 Основная проверка — `ws check`.

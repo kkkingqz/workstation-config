@@ -544,11 +544,10 @@ for path in \
     bin/ws-keyboard-system-apply \
     bin/ws-workstation-verify \
     bin/ws-gnome \
-    bin/ws-gnome-apply \
+    bin/ws-gnome-check \
     bin/ws-gnome-status \
     bin/ws-gnome-test \
     config/fish/completions/ws-gnome-test.fish \
-    config/gnome/settings.conf \
     config/fish/completions/ws-gnome.fish \
     docs/gnome.md \
     system/udev/90-touchbar-native.rules \
@@ -578,7 +577,7 @@ done
 
 
 # GNOME desktop helpers are part of the reproducible user runtime layer.
-for name in ws-gnome ws-gnome-apply ws-gnome-status ws-gnome-test; do
+for name in ws-gnome ws-gnome-check ws-gnome-status ws-gnome-test; do
     check_runtime_helper "$name"
 done
 
@@ -616,35 +615,24 @@ contains_literal "$repo/bin/ws-suspend" '"$repo/bin/ws" system apply' \
 
 section "5.1 GNOME managed appearance"
 
-gnome_profile="$repo/config/gnome/settings.conf"
-if [[ -r "$gnome_profile" ]]; then
-    pass "GNOME managed profile present"
+# Declared in modules/home/gnome.nix (dconf.settings, written by ws switch);
+# the Nix module asserts that it does not overlap the keyboard, tiling,
+# extension and display owners.
+gnome_profile="$(readlink -f "$HOME/.config/workstation/gnome/settings.conf" 2>/dev/null || true)"
+if [[ "$gnome_profile" == /nix/store/*-gnome-settings.conf ]]; then
+    pass "GNOME check profile from Nix: ${gnome_profile#/nix/store/}"
 else
-    fail "GNOME managed profile missing: config/gnome/settings.conf"
+    fail "~/.config/workstation/gnome/settings.conf is not the Nix build (${gnome_profile:-missing}); ws switch"
 fi
 
-if [[ -x "$repo/bin/ws-gnome-apply" ]]; then
-    if WORKSTATION_CONFIG="$repo" "$repo/bin/ws-gnome-apply" --check --quiet >/dev/null 2>&1; then
+if [[ -x "$repo/bin/ws-gnome-check" ]]; then
+    if "$repo/bin/ws-gnome-check" --quiet >/dev/null 2>&1; then
         pass "GNOME managed appearance/Dock profile is in sync"
     else
-        fail "GNOME managed appearance/Dock profile has drift or cannot be validated"
+        fail "GNOME managed appearance/Dock profile has drift or cannot be validated (ws-gnome check)"
     fi
 else
-    fail "bin/ws-gnome-apply is missing or not executable"
-fi
-
-if [[ -r "$gnome_profile" ]]; then
-    forbidden_gnome_profile="$(
-        grep -nE \
-          'org\.gnome\.desktop\.interface\|text-scaling-factor|org\.gnome\.mutter\|experimental-features|org\.gnome\.desktop\.input-sources|org\.gnome\.desktop\.wm\.keybindings|org\.gnome\.settings-daemon\.plugins\.media-keys|org\.gnome\.shell\|(enabled-extensions|disabled-extensions)|org\.gnome\.shell\.extensions\.tiling-assistant' \
-          "$gnome_profile" 2>/dev/null || true
-    )"
-    if [[ -z "$forbidden_gnome_profile" ]]; then
-        pass "GNOME profile does not overlap display/keyboard/extension ownership"
-    else
-        fail "GNOME profile contains forbidden cross-layer settings:"
-        printf '%s\n' "$forbidden_gnome_profile" | sed 's/^/        /'
-    fi
+    fail "bin/ws-gnome-check is missing or not executable"
 fi
 
 
@@ -1544,7 +1532,8 @@ section "14.4 Nix layer (docs/plans/nix-migration.md)"
 for path in flake.nix hosts/mbp16/facts.nix hosts/mbp16/home.nix \
     modules/home/links.nix modules/home/cli.nix modules/home/xremap.nix pkgs/xremap.nix \
     modules/home/man.nix pkgs/man.nix pkgs/lowdown.nix \
-    modules/home/gnome-extensions.nix pkgs/gnome-extensions.nix modules/home/flatpak.nix \
+    modules/home/gnome-extensions.nix pkgs/gnome-extensions.nix \
+    modules/home/flatpak.nix modules/home/gnome.nix \
     modules/system/default.nix modules/system/common.nix \
     modules/system/boot/refind-grub-recovery.nix modules/system/hardware/t2-mbp16.nix \
     config/fish/conf.d/00-nix.fish config/nix/nix.conf .github/workflows/check.yml; do
@@ -1732,7 +1721,7 @@ fi
 
 
 if [[ -r "$repo/docs/gnome.md" ]]; then
-    grep -Fqi 'config/gnome/settings.conf' "$repo/docs/gnome.md" \
+    grep -Fqi 'modules/home/gnome.nix' "$repo/docs/gnome.md" \
         && grep -Fqi 'ws-gnome check' "$repo/docs/gnome.md" \
         && pass "docs/gnome.md documents the managed GNOME profile" \
         || fail "docs/gnome.md does not document the current managed GNOME profile"
@@ -1785,6 +1774,8 @@ legacy_repo_paths=(
     config/flatpak/apps.conf
     config/flatpak/remotes.conf
     config/flatpak/overrides/README.md
+    config/gnome/settings.conf
+    bin/ws-gnome-apply
     system/udev/70-workstation-uinput.rules
     config/tiny-dfr/config.toml
 )

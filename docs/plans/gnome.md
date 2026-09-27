@@ -45,19 +45,18 @@ Display scale остаётся inventory-only.
 
 # 2. Appearance/Dock source of truth — DONE
 
-Создан небольшой curated profile:
+Создан небольшой curated profile. С 2026-09-27 это `dconf.settings` в
+`modules/home/gnome.nix`, его пишет `ws switch` (раньше —
+`config/gnome/settings.conf` и `ws-gnome apply|rollback`):
 
 ```text
-config/gnome/settings.conf
+modules/home/gnome.nix
 ```
 
 Управление:
 
 ```console
 ws-gnome check
-ws-gnome dry-run
-ws-gnome apply
-ws-gnome rollback
 ```
 
 Profile фиксирует текущий рабочий GNOME/GTK + Ubuntu Dock baseline и специально
@@ -122,7 +121,7 @@ GNOME сейчас нет. Фактический scale встроенного d
 
 Ubuntu Dock остаётся штатным и расположен снизу.
 
-Текущие Dock values входят в `config/gnome/settings.conf`.
+Текущие Dock values входят в `modules/home/gnome.nix`.
 
 Стандартную кнопку `Show Applications` и меню приложений пока не заменяем.
 Установка ArcMenu или другого menu extension отложена.

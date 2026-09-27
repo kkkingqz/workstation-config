@@ -196,7 +196,7 @@ git clone https://github.com/kkkingqz/workstation-config.git ~/.local/share/work
 ~/.local/share/workstation-config/bootstrap.sh
 # logout/login: группа nix-users, PATH из 00-nix.fish, fish как login shell
 ws system apply     # системные файлы (sudo); затем reboot, если менялись modprobe/udev/cmdline
-ws apply            # расширения → tiling → клавиатура → GNOME → Flatpak → Distrobox
+ws apply            # расширения → tiling → клавиатура → Flatpak → Distrobox
 # logout/login: новые расширения GNOME активируются только в новой сессии
 ws apply            # шаг keyboard, не прошедший preflight в первый раз
 ws check            # verify, wsflatpak, wsbox, ws-gnome, ws-suspend, ws system, apt
@@ -239,25 +239,14 @@ ws-gnome check
 Source of truth:
 
 ```text
-config/gnome/settings.conf
+modules/home/gnome.nix
 ```
 
-Если `ws-gnome check` показывает drift относительно зафиксированного baseline,
-просмотреть изменения:
+Профиль записывает `ws switch` (home-manager `dconf.settings`); отдельного
+шага в `ws apply` нет. Drift в `ws-gnome check` значит, что ключ изменили
+вручную: следующий `ws switch` запишет значение из `gnome.nix` снова.
 
-```console
-ws-gnome dry-run
-```
-
-и только после этого применить:
-
-```console
-ws-gnome apply
-```
-
-(шаг `gnome` в `ws apply`)
-
-`ws-gnome apply` не управляет display scale, `monitors.xml`, Mutter
+Профиль не управляет display scale, `monitors.xml`, Mutter
 experimental flags, keyboard/input sources, extension enablement, wallpaper,
 Flatpak, Distrobox или Wine.
 

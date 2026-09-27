@@ -51,17 +51,33 @@ Wine
 
 # Управляемый appearance profile
 
-Source of truth:
+Source of truth (с 2026-09-27, раньше `config/gnome/settings.conf` и
+`ws-gnome apply`):
 
 ```text
-config/gnome/settings.conf
+modules/home/gnome.nix
 ```
 
-Формат строки:
+Профиль — `dconf.settings` home-manager. Его записывает `ws switch`
+(`dconf load`) при каждой активации:
 
-```text
-GSETTINGS_SCHEMA|KEY|GVARIANT_VALUE
+- ручное изменение этих ключей (в Settings, Tweaks, `gsettings set`)
+  откатывается следующим `ws switch`; менять значение — в `gnome.nix`;
+- ключ, убранный из `gnome.nix`, при следующем switch сбрасывается к
+  значению по умолчанию;
+- значения пишутся явно, даже если совпадают с дефолтом Ubuntu, чтобы
+  изменённый дефолт дистрибутива не пришёл незаметно.
+
+Изменение:
+
+```console
+$EDITOR ~/.local/share/workstation-config/modules/home/gnome.nix
+ws switch
+ws-gnome check
 ```
+
+Откат — `git revert`/правка и `ws switch` (или активация предыдущего
+поколения home-manager).
 
 Текущий профиль фиксирует только небольшой curated набор GNOME/GTK и Ubuntu
 Dock settings, полученный с рабочей системы 2026-09-23.
@@ -84,8 +100,7 @@ Show Applications true
 click action      focus-minimize-or-appspread
 ```
 
-Дополнительные текущие Dock settings также записаны в `settings.conf` для
-воспроизводимости.
+Остальные текущие Dock settings тоже записаны в `gnome.nix`.
 
 ## Что profile намеренно НЕ управляет
 
@@ -93,7 +108,8 @@ click action      focus-minimize-or-appspread
 display scale / monitors.xml
 org.gnome.mutter experimental-features
 input sources
-keyboard shortcuts
+keyboard shortcuts            ws-keyboard-apply (с restore)
+Tiling Assistant bindings     ws-tiling-apply
 GNOME extension enablement
 wallpaper
 Flatpak settings
@@ -101,8 +117,9 @@ Distrobox settings
 Wine settings
 ```
 
-Это защищает уже завершённый keyboard layer и не смешивает desktop baseline с
-application-specific integration.
+Keyboard shortcuts не перенесены в `dconf.settings`: `ws-keyboard restore`
+и откат неудачного apply возвращают сочетания GNOME, а home-manager
+записывал бы их обратно при каждом `ws switch`.
 
 # ws-gnome
 
@@ -111,10 +128,12 @@ application-specific integration.
 ```console
 ws-gnome status
 ws-gnome check
-ws-gnome dry-run
-ws-gnome apply
-ws-gnome rollback
+ws-gnome test
 ```
+
+`ws-gnome apply` и `ws-gnome rollback` больше не применяют ничего: они
+печатают, что профиль пишет `ws switch`, и выходят с кодом 64.
+`ws-gnome dry-run` — синоним `check`.
 
 ## status
 
@@ -138,7 +157,10 @@ ws-gnome-status
 ws-gnome check
 ```
 
-Сравнивает все managed keys с `config/gnome/settings.conf`. Ничего не меняет.
+Сравнивает сессию (`gsettings get`) с `~/.config/workstation/gnome/
+settings.conf` — файлом `SCHEMA|KEY|VALUE`, который home-manager собирает из
+того же набора в `gnome.nix`. Ничего не меняет. Прямой вызов —
+`ws-gnome-check`.
 
 Exit status:
 
@@ -147,62 +169,24 @@ Exit status:
 1  есть drift или ошибка проверки
 ```
 
-## dry-run
-
-```console
-ws-gnome dry-run
-```
-
-Показывает, какие значения изменил бы apply, но не вызывает `gsettings set`.
-
-## apply
-
-```console
-ws-gnome apply
-```
-
-Перед изменениями сохраняет предыдущие managed values в:
-
-```text
-state/gnome/last-apply.before
-```
-
-После успешного применения сохраняет итоговый managed state в:
-
-```text
-state/gnome/last-apply.after
-```
-
-`state/` является machine-local runtime state и не коммитится.
-
-Apply проверяет наличие и writable-state каждого schema/key до начала записи.
-При ошибке во время применения выполняется best-effort автоматический rollback
-к `last-apply.before`.
-
-## rollback
-
-```console
-ws-gnome rollback
-```
-
-Восстанавливает managed values, сохранённые перед последним `apply`.
-
 # Safety ownership rules
 
-`ws-gnome-apply` отказывается принимать profile entries, которые принадлежат
-другим workstation layers, включая:
+`modules/home/gnome.nix` проверяет при сборке (assertion), что во всём
+`dconf.settings` нет ключей других workstation layers:
 
 ```text
 org.gnome.desktop.interface text-scaling-factor
-org.gnome.mutter experimental-features
+org.gnome.mutter experimental-features / overlay-key
 org.gnome.desktop.input-sources/*
 org.gnome.desktop.wm.keybindings/*
+org.gnome.shell.keybindings/*
 org.gnome.settings-daemon.plugins.media-keys/*
 org.gnome.shell enabled-extensions / disabled-extensions
+org.gnome.shell.extensions.dash-to-dock hot-keys
 org.gnome.shell.extensions.tiling-assistant/*
 ```
 
-Таким образом GNOME appearance apply не может случайно переписать display,
+Таким образом GNOME appearance profile не может случайно переписать display,
 keyboard, Tiling Assistant или extension baseline.
 
 

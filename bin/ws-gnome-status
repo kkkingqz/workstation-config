@@ -316,13 +316,13 @@ else
 fi
 
 section "9. Managed appearance profile"
-profile="$repo/config/gnome/settings.conf"
-apply_helper="$repo/bin/ws-gnome-apply"
-if [[ -r "$profile" && -x "$apply_helper" ]]; then
-    if WORKSTATION_CONFIG="$repo" "$apply_helper" --check --quiet >/dev/null 2>&1; then
-        kv "config/gnome/settings.conf" "in sync"
+profile="$HOME/.config/workstation/gnome/settings.conf"
+check_helper="$repo/bin/ws-gnome-check"
+if [[ -r "$profile" && -x "$check_helper" ]]; then
+    if "$check_helper" --quiet >/dev/null 2>&1; then
+        kv "modules/home/gnome.nix" "in sync"
     else
-        kv "config/gnome/settings.conf" "DRIFT — run: ws-gnome check"
+        kv "modules/home/gnome.nix" "DRIFT — run: ws-gnome check"
     fi
 else
     kv "managed profile" "not installed yet"
