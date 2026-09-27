@@ -8,36 +8,9 @@ die() {
     exit 1
 }
 
-for cmd in python3 gsettings glib-compile-schemas; do
+for cmd in python3 glib-compile-schemas; do
     command -v "$cmd" >/dev/null 2>&1 || die "$cmd not found"
 done
-
-ensure_enabled() {
-    local uuid="$1"
-
-    python3 - "$uuid" <<'PY'
-import ast
-import subprocess
-import sys
-
-uuid = sys.argv[1]
-raw = subprocess.check_output(
-    ["gsettings", "get", "org.gnome.shell", "enabled-extensions"],
-    text=True,
-).strip()
-
-items = ast.literal_eval(raw)
-if uuid not in items:
-    items.append(uuid)
-
-value = "[" + ", ".join(repr(x) for x in items) + "]"
-subprocess.check_call([
-    "gsettings", "set",
-    "org.gnome.shell", "enabled-extensions",
-    value,
-])
-PY
-}
 
 install_extension() {
     local uuid="$1"
@@ -87,8 +60,6 @@ PY
         rm -rf -- "$dst/schemas"
     fi
 
-    ensure_enabled "$uuid"
-
     cmp -s "$src/metadata.json" "$dst/metadata.json" \
         || die "$uuid metadata runtime mismatch"
     cmp -s "$src/extension.js" "$dst/extension.js" \
@@ -97,10 +68,17 @@ PY
     echo "installed: $uuid"
 }
 
-install_extension workstation-smart-popup@local
-install_extension workstation-input-source@local
-install_extension workstation-dock-spring@local
+# The local extensions of modules/home/gnome-extensions.nix; ws switch builds
+# the list and enables them (enabled-extensions).
+list="$HOME/.config/workstation/gnome/extensions"
+[[ -r "$list" ]] || die "extension list missing: $list (run ws switch)"
+mapfile -t local_extensions < <(awk '!/^#/ && $2 == "local" { print $1 }' "$list")
+((${#local_extensions[@]})) || die "no local extensions in $list"
+
+for uuid in "${local_extensions[@]}"; do
+    install_extension "$uuid"
+done
 
 echo
-echo "GNOME workstation extension sources installed and enabled for the next/current shell session."
+echo "GNOME workstation extension sources installed (enabled by ws switch)."
 echo "If extension.js changed, log out and log back in on Wayland before relying on it."

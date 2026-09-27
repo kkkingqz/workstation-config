@@ -177,6 +177,13 @@ gcontains() {
     fi
 }
 
+# The extension list is built from modules/home/gnome-extensions.nix.
+ext_list_file="$HOME/.config/workstation/gnome/extensions"
+ext_list() {
+    [[ -r "$ext_list_file" ]] || return 0
+    awk -v s="${1:-}" '!/^#/ && NF == 2 && (s == "" || $2 == s) { print $1 }' "$ext_list_file"
+}
+
 extension_active() {
     local uuid="$1" label="$2" out
     if ! have gnome-extensions; then
@@ -1068,11 +1075,9 @@ fi
 
 section "10. GNOME extensions / D-Bus"
 
-extension_active xremap@k0kubun.com "xremap GNOME extension"
-extension_active window-control@carlo9890.github.io "Window Control"
-extension_active workstation-smart-popup@local "Smart Popup"
-extension_active workstation-dock-spring@local "Dock Spring"
-extension_active workstation-input-source@local "Input Source helper"
+for uuid in $(ext_list ego) $(ext_list local); do
+    extension_active "$uuid" "GNOME extension active"
+done
 
 if have gnome-extensions && gnome-extensions info tiling-assistant@ubuntu.com 2>/dev/null | grep -Eq 'State:[[:space:]]+ACTIVE|Enabled:[[:space:]]+Yes'; then
     pass "Tiling Assistant active: tiling-assistant@ubuntu.com"
@@ -1092,7 +1097,7 @@ else
     fail "Input Source D-Bus API unavailable"
 fi
 
-for uuid in workstation-smart-popup@local workstation-input-source@local workstation-dock-spring@local; do
+for uuid in $(ext_list local); do
     for file in metadata.json extension.js; do
         src="$repo/gnome/extensions/$uuid/$file"
         dst="$HOME/.local/share/gnome-shell/extensions/$uuid/$file"
@@ -1140,21 +1145,24 @@ PY
 
 section "10.1 GNOME extension policy"
 
-required_gnome_extensions=(
-    ding@rastersoft.com
-    snapd-prompting@canonical.com
-    snapd-search-provider@canonical.com
-    tiling-assistant@ubuntu.com
-    ubuntu-appindicators@ubuntu.com
-    ubuntu-dock@ubuntu.com
-    web-search-provider@ubuntu.com
-    window-control@carlo9890.github.io
-    window-monitor-pro@muhammed.hussien2030.gmail.com
-    workstation-input-source@local
-    workstation-smart-popup@local
-    workstation-dock-spring@local
-    xremap@k0kubun.com
-)
+# Every extension of modules/home/gnome-extensions.nix is required.
+ext_list_real="$(readlink -f "$ext_list_file" 2>/dev/null || true)"
+if [[ "$ext_list_real" == /nix/store/* ]]; then
+    pass "extension list from Nix: ${ext_list_real#/nix/store/}"
+else
+    fail "~/.config/workstation/gnome/extensions is not the Nix build (${ext_list_real:-missing}); ws switch"
+fi
+mapfile -t required_gnome_extensions < <(ext_list)
+
+# enabled-extensions = ego + local extensions, in list order (ws switch).
+declared_enabled="[$(for uuid in $(ext_list ego) $(ext_list local); do printf "'%s', " "$uuid"; done)"
+declared_enabled="${declared_enabled%, }]"
+actual_enabled="$(gsettings get org.gnome.shell enabled-extensions 2>/dev/null || true)"
+if [[ "$actual_enabled" == "$declared_enabled" ]]; then
+    pass "enabled-extensions matches modules/home/gnome-extensions.nix"
+else
+    fail "enabled-extensions differs from modules/home/gnome-extensions.nix (changed by hand?); ws switch writes it again"
+fi
 
 if have gnome-extensions; then
     enabled_gnome_extensions="$(gnome-extensions list --enabled 2>/dev/null || true)"
@@ -1193,11 +1201,7 @@ fi
 # pkgs/gnome-extensions.nix: EGO extensions pinned by version and hash, linked
 # file by file by home-manager. A real file here means GNOME (update) or a
 # manual install replaced the pinned copy.
-for uuid in \
-    window-control@carlo9890.github.io \
-    window-monitor-pro@muhammed.hussien2030.gmail.com \
-    xremap@k0kubun.com
-do
+for uuid in $(ext_list ego); do
     ext_dir="$HOME/.local/share/gnome-shell/extensions/$uuid"
     ext_foreign="$(find "$ext_dir" -type f 2>/dev/null | head -n1)"
     ext_meta="$(readlink -f "$ext_dir/metadata.json" 2>/dev/null || true)"
@@ -1623,7 +1627,7 @@ fi
 
 section "15. Extension schema source / generated files"
 
-for uuid in workstation-smart-popup@local workstation-input-source@local; do
+for uuid in $(ext_list local); do
     schema_dir="$repo/gnome/extensions/$uuid/schemas"
     if [[ -d "$schema_dir" ]]; then
         xml_count="$(find "$schema_dir" -maxdepth 1 -type f -name '*.gschema.xml' | wc -l)"
@@ -1653,7 +1657,7 @@ for uuid in workstation-smart-popup@local workstation-input-source@local; do
             rm -rf -- "$schema_tmp"
         fi
     else
-        fail "$uuid schemas directory missing"
+        pass "$uuid has no GSettings schemas"
     fi
 done
 

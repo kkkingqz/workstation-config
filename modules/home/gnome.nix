@@ -9,7 +9,8 @@
 # Deliberately not here (other owners or user choice): display scale and
 # monitors.xml, Mutter experimental-features, input sources and keyboard
 # shortcuts (ws-keyboard-apply, with restore), Tiling Assistant bindings
-# (ws-tiling-apply), enabled extensions, wallpaper.
+# (ws-tiling-apply), wallpaper. Enabled extensions are declared in
+# gnome-extensions.nix, also as dconf.settings.
 #
 # ws-gnome check compares the session with ~/.config/workstation/gnome/
 # settings.conf (SCHEMA|KEY|VALUE), built from the same attribute set.
@@ -44,7 +45,8 @@ let
     };
   };
 
-  # Keys other owners set; dconf.settings must not fight them.
+  # Keys that scripts set (keyboard, tiling) or that stay unmanaged;
+  # dconf.settings must not fight them.
   foreignDirs = [
     "org/gnome/desktop/input-sources"
     "org/gnome/desktop/wm/keybindings"
@@ -56,8 +58,6 @@ let
     "org/gnome/desktop/interface/text-scaling-factor"
     "org/gnome/mutter/experimental-features"
     "org/gnome/mutter/overlay-key"
-    "org/gnome/shell/enabled-extensions"
-    "org/gnome/shell/disabled-extensions"
     "org/gnome/shell/extensions/dash-to-dock/hot-keys"
   ];
   declared = lib.concatLists (lib.mapAttrsToList

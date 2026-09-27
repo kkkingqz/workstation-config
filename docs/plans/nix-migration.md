@@ -1051,6 +1051,29 @@ PASS, `ws baseline diff` пуст»:
   используются, перенесены в `~/.local/state/workstation/state-before-nix/`.
   `state/` убран из `.gitignore`; verify: FAIL, если `state/` снова появится
   в checkout, WARN, если нет backup сочетаний.
+- **Один источник для каждой настройки** (2026-09-27, решение пользователя).
+  Правило: всё, что выбираем мы, объявляется в Nix, по одному файлу на
+  область (`modules/home/*.nix`, `hosts/<name>/facts.nix`); скрипты только
+  применяют и проверяют и читают то, что собрано из Nix
+  (`~/.config/workstation/…`), а не держат свои копии списков. Родные форматы
+  программ остаются как есть (`xremap.yml`, ghostty, fish, udev/modprobe,
+  `*.gschema.xml`, `containers.ini` для `distrobox assemble`); простой текст —
+  только `hosts/*apt.txt`, который `bootstrap.sh` читает до Nix. Шаги, каждый
+  с `ws baseline diff` без регрессий:
+  1. **Сделано (2026-09-27).** Список расширений GNOME: один `modules/home/gnome-extensions.nix`
+     (uuid, источник: ubuntu / ego / local), из него `enabled-extensions`,
+     ссылки EGO и `~/.config/workstation/gnome/extensions`, который читают
+     verify, `ws-gnome-test`, `ws-gnome-status` и
+     `ws-keyboard-install-extensions`. Было: шесть копий списка.
+     `enabled-extensions` теперь = ego + local в прежнем порядке (три
+     расширения Ubuntu из него ушли: их и так включает режим сессии
+     `ubuntu.json`), `disabled-extensions` = `[]`; все 13 остались ACTIVE.
+     Installer больше не включает расширения сам. Ручное включение или
+     выключение расширения откатывается следующим switch.
+  2. Клавиатура: сочетания GNOME из `ws-keyboard-apply` и привязки из
+     `ws-tiling-apply` — данными в `modules/home/keyboard.nix`, скрипты
+     применяют собранный файл, `ws-keyboard restore` сохраняется.
+  3. `config/keyboard/settings.conf` — факты в `hosts/<name>/facts.nix`.
 - ~~Убрать `t2bce-build` и `touchbar-build`~~ — **сделано иначе
   (2026-09-27):** по решению пользователя оба оставлены и описаны в
   `containers.ini` (общий HOME хоста, `additional_packages` по фактически

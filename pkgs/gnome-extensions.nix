@@ -25,10 +25,11 @@ let
     };
 in
 {
-  # D-Bus window control for ws-window (docs/keyboard.md); version-name 11.
+  # What each one is for and whether it is enabled:
+  # modules/home/gnome-extensions.nix.
   window-control = ego {
     uuid = "window-control@carlo9890.github.io";
-    version = 1;
+    version = 1; # version-name 11
     hash = "sha256-CzggB2Ei0IkE2a/76lyyYmnmQBe5mVcpFI4W6aXMKEo=";
   };
   window-monitor-pro = ego {
@@ -36,7 +37,6 @@ in
     version = 3;
     hash = "sha256-aMEMTzT7qahGr2XF4gD/1HHgkZgFEcNONkx3j7Nq1Fs=";
   };
-  # WM_CLASS bridge for xremap application filters (ws-xremap waits for it).
   xremap = ego {
     uuid = "xremap@k0kubun.com";
     version = 15;

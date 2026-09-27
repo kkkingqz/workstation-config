@@ -222,7 +222,9 @@ Policy:
 
 - отсутствие любого перечисленного baseline extension -> FAIL;
 - другой неизвестный enabled extension -> WARN;
-- автоматически ничего не отключаем.
+- автоматически ничего не отключаем (с 2026-09-27 `enabled-extensions` пишет
+  `ws switch` из `modules/home/gnome-extensions.nix` — единственного списка;
+  вручную включённое расширение switch выключит).
 
 ---
 

@@ -181,7 +181,6 @@ org.gnome.desktop.input-sources/*
 org.gnome.desktop.wm.keybindings/*
 org.gnome.shell.keybindings/*
 org.gnome.settings-daemon.plugins.media-keys/*
-org.gnome.shell enabled-extensions / disabled-extensions
 org.gnome.shell.extensions.dash-to-dock hot-keys
 org.gnome.shell.extensions.tiling-assistant/*
 ```
@@ -192,22 +191,31 @@ keyboard, Tiling Assistant или extension baseline.
 
 # GNOME extension policy
 
-Обязательный enabled set:
+Единственный список расширений — `modules/home/gnome-extensions.nix`
+(с 2026-09-27; раньше свои копии были в verify, `ws-gnome-test`,
+`ws-gnome-status`, installer и здесь). Для каждого расширения — uuid и
+источник:
 
 ```text
-ding@rastersoft.com
-snapd-prompting@canonical.com
-snapd-search-provider@canonical.com
-tiling-assistant@ubuntu.com
-ubuntu-appindicators@ubuntu.com
-ubuntu-dock@ubuntu.com
-web-search-provider@ubuntu.com
-window-control@carlo9890.github.io
-window-monitor-pro@muhammed.hussien2030.gmail.com
-workstation-dock-spring@local
-workstation-input-source@local
-workstation-smart-popup@local
-xremap@k0kubun.com
+ubuntu  gnome-shell-ubuntu-extensions (apt), включает режим сессии Ubuntu
+ego     extensions.gnome.org, закреплён в pkgs/gnome-extensions.nix
+local   gnome/extensions/<uuid>, копирует ws-keyboard-install-extensions
+```
+
+Из списка собираются:
+
+- `enabled-extensions` (ego + local, `dconf.settings`) и пустой
+  `disabled-extensions` — пишет `ws switch`. Расширение, включённое или
+  выключенное вручную (Extension Manager, `gnome-extensions`), следующий
+  switch вернёт к списку; добавлять и убирать — в `gnome-extensions.nix`.
+- `~/.config/workstation/gnome/extensions` (`UUID SOURCE`) — его читают
+  verify, `ws-gnome-test`, `ws-gnome-status` и
+  `ws-keyboard-install-extensions`.
+
+Все расширения списка обязательны. Посмотреть текущий список:
+
+```console
+cat ~/.config/workstation/gnome/extensions
 ```
 
 `window-monitor-pro@muhammed.hussien2030.gmail.com` используется и входит в

@@ -619,6 +619,9 @@ workstation-dock-spring@local
 workstation-input-source@local
 ```
 
+Список всех расширений и источник каждого — `modules/home/gnome-extensions.nix`;
+`enabled-extensions` из него пишет `ws switch`.
+
 `workstation-*` sources находятся в `workstation-config` и устанавливаются
 командой:
 
@@ -635,8 +638,8 @@ ws-keyboard-install-extensions
 `pkgs/gnome-extensions.nix` закрепляет zip по версии EGO и hash,
 `modules/home/gnome-extensions.nix` раскладывает файлы ссылками в
 `~/.local/share/gnome-shell/extensions/<uuid>`. Вручную с EGO их не ставить.
-Включить (первый раз на новой машине) — `gnome-extensions enable <uuid>` и
-logout/login. Обновление: версия и hash в `pkgs/gnome-extensions.nix`,
+Включает их `ws switch` (`enabled-extensions`); на новой машине — logout/login
+после первого `ws switch` и `ws apply`. Обновление: версия и hash в `pkgs/gnome-extensions.nix`,
 `ws switch`, logout/login. Если GNOME или Extension Manager обновил
 расширение сам, verify покажет FAIL «files not from Nix»: убрать каталог и
 `ws switch`.

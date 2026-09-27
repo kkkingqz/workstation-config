@@ -160,21 +160,13 @@ expect_gsetting "$dock_schema" show-trash "false" "Dock trash hidden"
 
 section "4. GNOME extension policy"
 
-required_extensions=(
-    ding@rastersoft.com
-    snapd-prompting@canonical.com
-    snapd-search-provider@canonical.com
-    tiling-assistant@ubuntu.com
-    ubuntu-appindicators@ubuntu.com
-    ubuntu-dock@ubuntu.com
-    web-search-provider@ubuntu.com
-    window-control@carlo9890.github.io
-    window-monitor-pro@muhammed.hussien2030.gmail.com
-    workstation-input-source@local
-    workstation-smart-popup@local
-    workstation-dock-spring@local
-    xremap@k0kubun.com
-)
+# Every extension of modules/home/gnome-extensions.nix (built by ws switch).
+ext_list_file="$HOME/.config/workstation/gnome/extensions"
+required_extensions=()
+if [[ -r "$ext_list_file" ]]; then
+    mapfile -t required_extensions < <(awk '!/^#/ && NF == 2 { print $1 }' "$ext_list_file")
+fi
+((${#required_extensions[@]})) || fail "extension list missing: $ext_list_file (ws switch)"
 
 if have gnome-extensions; then
     enabled="$(gnome-extensions list --enabled 2>/dev/null || true)"
