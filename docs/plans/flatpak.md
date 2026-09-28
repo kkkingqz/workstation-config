@@ -21,7 +21,9 @@ volume: User Commands
 **2026-09-28: список приложений — `flatpak/apps.txt`** (`REMOTE APP` по
 строке), его читает `flatpak.nix`. `wsflatpak install` снова сам добавляет
 приложение (в этот файл; `--unmanaged` — не добавлять), `manage APP [REMOTE]`
-и `unmanage APP` добавляют и убирают строку; дальше `ws switch`. Изменение
+и `unmanage APP` добавляют и убирают строку; дальше `ws switch`: он
+добавляет файл в git и после успешной сборки сам коммитит его (только этот
+файл, сообщение `flatpak/apps.txt: +APP -APP (ws switch)`; push — вручную). Изменение
 остального:
 
 ```console
@@ -127,7 +129,7 @@ wsflatpak install APP
 ```
 
 ставит приложение и добавляет строку `REMOTE APP` в `flatpak/apps.txt`;
-приложение managed после `ws switch` (до него `wsflatpak check` показывает
+приложение managed после `ws switch`, который и коммитит файл (до него `wsflatpak check` показывает
 WARN: файл отличается от сборки). Не добавлять — `--unmanaged`; такое
 приложение `wsflatpak check` показывает как WARN unmanaged user app.
 Уже установленное — `wsflatpak manage APP`. 2026-09-27 — 2026-09-28

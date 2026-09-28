@@ -234,7 +234,7 @@ news`; `ws switch` о них не уведомляет (`news.display = "silent"
 `home-manager news` без `--flake` конфигурацию не находит.
 
 Flatpak: remotes и overrides объявлены в `flatpak/flatpak.nix`, приложения —
-в `flatpak/apps.txt` (`wsflatpak install` дописывает туда сам); `ws switch` собирает из них
+в `flatpak/apps.txt` (`wsflatpak install` дописывает туда сам, `ws switch` коммитит); `ws switch` собирает из них
 `~/.local/share/workstation/flatpak/` и ставит `.desktop` Claude, шаг `flatpak`
 в `ws apply` (`wsflatpak apply`) добавляет remotes, ставит приложения и
 применяет overrides (`helpws plan-flatpak`).

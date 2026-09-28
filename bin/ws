@@ -20,7 +20,8 @@ Usage:
   ws host
   ws news
 
-switch    home-manager switch for this user and host (pinned by flake.lock)
+switch    home-manager switch for this user and host (pinned by flake.lock);
+          after a successful switch commits flatpak/apps.txt if it changed
 news      home-manager news of this flake (switch does not notify about them)
 diff      build the home generation without activating it and show the
           package difference against the current one (nvd)
@@ -115,11 +116,28 @@ current_generation() {
     done
 }
 
+# Lists that commands edit in the checkout (wsflatpak install/manage/unmanage):
+# switch adds them before the build and commits them after a successful one.
+tool_lists=(flatpak/apps.txt)
+
+commit_tool_lists() {
+    local f changes
+    for f in "${tool_lists[@]}"; do
+        git -C "$repo" diff --quiet HEAD -- "$f" && continue
+        changes="$(git -C "$repo" diff HEAD -- "$f" |
+            sed -n 's/^\([+-]\)[^+#-][^ ]* \([^ ]*\)$/\1\2/p' | paste -sd' ')"
+        git -C "$repo" commit -q -m "$f: ${changes:-edited} (ws switch)" -- "$f"
+        echo "committed $f: ${changes:-edited}"
+    done
+}
+
 cmd_switch() {
     local nix
     nix="$(nix_bin)"
+    git -C "$repo" add -- "${tool_lists[@]}"
     check_untracked
     "$nix" run "$repo#home-manager" -- switch --flake "$(target)" "$@"
+    commit_tool_lists
 }
 
 cmd_news() {

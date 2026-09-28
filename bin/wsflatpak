@@ -124,7 +124,10 @@ def list_add(app, remote):
     if text and not text.endswith("\n"):
         text += "\n"
     APPS_LIST.write_text(text + f"{remote} {app}\n")
-    print(f"Added to {APPS_LIST}: {remote} {app}\nthen: ws switch")
+    print(
+        f"Added to {APPS_LIST}: {remote} {app}\n"
+        "then: ws switch (commits it)"
+    )
 
 
 def list_remove(app):
@@ -138,7 +141,10 @@ def list_remove(app):
         raise SystemExit(f"wsflatpak: {app} is not in {APPS_LIST}")
 
     APPS_LIST.write_text("".join(keep))
-    print(f"Removed from {APPS_LIST}: {app}\nthen: ws switch")
+    print(
+        f"Removed from {APPS_LIST}: {app}\n"
+        "then: ws switch (commits it)"
+    )
 
     desktop = DESKTOP_OVERRIDES / f"{app}.desktop"
     if override_file(app).exists() or desktop.exists():
