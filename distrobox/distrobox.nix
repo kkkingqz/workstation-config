@@ -84,7 +84,8 @@ let
       # Default Windows box: Wine from Arch with its native Wayland driver.
       name = "wine-wayland";
       image = "docker.io/library/archlinux:latest";
-      packages = [ "base-devel" "git" "mesa" "vulkan-intel" "vulkan-radeon" ];
+      # icoutils: icons of portable programs (wswin portable).
+      packages = [ "base-devel" "git" "icoutils" "mesa" "vulkan-intel" "vulkan-radeon" ];
       initHooks = [ ntsyncHook (pacmanHook [ "wine" "wine-mono" "wine-gecko" "winetricks" ]) ];
       # LogPixels 144: the Wayland driver does not scale (display scale 1.5).
       windows = { profile = "wine"; driver = "wayland"; dpi = 144; };
@@ -95,7 +96,7 @@ let
       # (WoW64), from the hook.
       name = "wine";
       image = hostUbuntu;
-      packages = [ "ca-certificates" "mesa-vulkan-drivers" ];
+      packages = [ "ca-certificates" "icoutils" "mesa-vulkan-drivers" ];
       initHooks = [ "${wsconfig}/distrobox/wine/winehq-install-hook" ];
       # WineHQ has no Mono/Gecko packages: wineboot would ask to download
       # them; winetricks adds them to a prefix that needs them.
@@ -108,7 +109,7 @@ let
       name = "proton";
       image = "docker.io/library/archlinux:latest";
       packages = [
-        "base-devel" "git" "mesa" "lib32-mesa" "vulkan-intel" "lib32-vulkan-intel"
+        "base-devel" "git" "icoutils" "mesa" "lib32-mesa" "vulkan-intel" "lib32-vulkan-intel"
         "vulkan-radeon" "lib32-vulkan-radeon" "vulkan-tools" "umu-launcher"
       ];
       preInitHooks = [ multilibHook ];

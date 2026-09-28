@@ -17,6 +17,12 @@ WinBox из `wine` проверен пользователем; `winbox3` и exp
 (distrobox с custom HOME отдаёт cwd как `/run/host/…`, это отвергает
 pressure-vessel). Пользовательская справка — `helpws windows`.
 
+Добавлено 2026-09-28 (решение пользователя): `wswin install` после
+установки спрашивает про каждый новый пункт меню Wine, добавить ли его на
+host; portable-программы — `wswin portable`. Пункты хранятся в prefix,
+на host — ссылки (`helpws windows`, «Меню GNOME»). `wine-wayland`:
+`LogPixels=144` (проверено на Notepad++).
+
 Первая версия (один
 Distrobox на каждое приложение, `~/.local/share/winapps`) заменена схемой
 ниже.

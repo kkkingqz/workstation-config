@@ -55,6 +55,7 @@ Proton и Steam Runtime umu скачивает при первом запуск�
 ```console
 wswin list
 wswin install [--box BOX] [--prefix NAME] SETUP.exe|.msi [ARG...]
+wswin portable [--box BOX] [--prefix NAME] FILE.exe|DIR|FILE.zip [APPNAME]
 wswin run APP [ARG...]
 wswin exec [--box BOX] [--prefix NAME] PROGRAM [ARG...]
 wswin prefix [--box BOX] NAME init [--dpi N]
@@ -62,6 +63,9 @@ wswin prefix [--box BOX] NAME winecfg|regedit|kill|path
 wswin prefix [--box BOX] NAME winetricks [ARG...]
 wswin prefix [--box BOX] NAME remove --force
 wswin shell [--box BOX] [--prefix NAME]
+wswin menu [--box BOX] [--prefix NAME] add
+wswin menu list|sync
+wswin menu remove ID
 ```
 
 - По умолчанию `--box wine-wayland` и стандартный prefix (`NAME` = `default`).
@@ -69,14 +73,34 @@ wswin shell [--box BOX] [--prefix NAME]
 - Файлы из host HOME, `/tmp`, `/media`, `/mnt` видны в контейнере по тому же
   пути.
 
-Установка программы с launcher:
+## Меню GNOME
+
+Пункты, которые Wine создаёт при установке (winemenubuilder), остаются в HOME
+контейнера. После установщика `wswin install` спрашивает про каждый новый
+пункт этого prefix, добавить ли его в меню host; позже —
+`wswin menu --box BOX --prefix NAME add`.
 
 ```console
 wswin install --prefix foo ~/Downloads/foo-setup.exe
 ```
 
-Затем запись в `windows/apps.nix` (`exe` — путь внутри prefix), `ws switch`:
-в меню GNOME появляется `ws-win-foo.desktop` (`wswin run foo`).
+Portable-программа (exe, каталог или zip) копируется в
+`PREFIX/drive_c/Portable/APPNAME`; если exe несколько — выбор по номеру;
+иконка берётся из exe (`icoutils` в контейнере), затем вопрос про меню:
+
+```console
+wswin portable --prefix tools ~/Downloads/tool.zip
+```
+
+Пункт меню хранится в prefix (`PREFIX/.wswin/menu/wswin-BOX-PREFIX-NAME.desktop`
+и иконка), в `~/.local/share/applications` — ссылка на него. Запуск:
+`wswin exec --box BOX --prefix NAME …`. Удаляется вместе с prefix
+(`wswin prefix … remove --force`) или `wswin menu remove ID`; после новой
+системы с сохранённым HOME — `wswin menu sync`.
+
+Программы, которые должны возвращаться вместе с репозиторием, — в
+`windows/apps.nix` (`exe` — путь внутри prefix), `ws switch`: launcher
+`ws-win-NAME.desktop` (`wswin run NAME`), как у WinBox.
 
 ## GPU
 

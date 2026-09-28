@@ -25,6 +25,7 @@ usage() {
 Usage:
   wswin list
   wswin install [--box BOX] [--prefix NAME] SETUP.exe|.msi [ARG...]
+  wswin portable [--box BOX] [--prefix NAME] FILE.exe|DIR|FILE.zip [APPNAME]
   wswin run APP [ARG...]
   wswin exec [--box BOX] [--prefix NAME] PROGRAM [ARG...]
   wswin prefix [--box BOX] NAME init [--dpi N]
@@ -32,9 +33,18 @@ Usage:
   wswin prefix [--box BOX] NAME winetricks [ARG...]
   wswin prefix [--box BOX] NAME remove --force
   wswin shell [--box BOX] [--prefix NAME]
+  wswin menu [--box BOX] [--prefix NAME] add
+  wswin menu list|sync
+  wswin menu remove ID
 
 BOX defaults to the default_box of apps.ini, NAME to "default" (the
 standard prefix $HOME/.wine of the box).
+
+Host menu entries made by install/portable/menu add are kept in the prefix
+(PREFIX/.wswin/menu) and linked into ~/.local/share/applications as
+wswin-BOX-PREFIX-NAME.desktop; they go with `prefix ... remove`, `menu sync`
+links them again (new system, restored HOME). Programs that must come back
+with the repository: windows/apps.nix.
 USAGE
 }
 
@@ -200,6 +210,278 @@ host_path() {
     fi
 }
 
+# ---------------------------------------------------------------------------
+# Host menu entries (wswin-*.desktop): the file lives in the prefix, the host
+# gets a link.
+
+apps_dir="$HOME/.local/share/applications"
+
+menu_dir() {
+    printf '%s/.wswin/menu\n' "$1"
+}
+
+slug() {
+    local s="${1,,}"
+    s="$(sed -E 's/[^a-z0-9._]+/-/g; s/^-+//; s/-+$//' <<<"$s")"
+    printf '%s\n' "${s:-app}"
+}
+
+# y/N (or Y/n with a second argument "yes") from the terminal; no terminal:
+# the default.
+ask() {
+    local question="$1" default="${2:-no}" hint="[y/N]" answer=""
+
+    [[ "$default" == yes ]] && hint="[Y/n]"
+    if ! read -r -p "$question $hint " answer </dev/tty 2>/dev/null; then
+        printf '%s %s (no terminal: %s)\n' "$question" "$hint" "$default" >&2
+        answer=""
+    fi
+    answer="${answer,,}"
+    [[ -z "$answer" ]] && answer="$default"
+    [[ "$answer" == y || "$answer" == yes ]]
+}
+
+# An argument for Exec= (desktop entry quoting, then string escaping).
+desktop_quote() {
+    local s="$1"
+    s="${s//\\/\\\\}"
+    s="${s//\"/\\\"}"
+    s="${s//\`/\\\`}"
+    s="${s//\$/\\\$}"
+    s="\"$s\""
+    printf '%s\n' "${s//\\/\\\\}"
+}
+
+desktop_key() {
+    sed -nE "s/^$2=//p" "$1" | head -n1
+}
+
+# Write the launcher into the prefix and link it into the host menu.
+#   make_launcher BOX PNAME NAME EXEC_ARG ICON WMCLASS SOURCE
+# EXEC_ARG is already quoted for Exec=; ICON is a file or a theme name.
+make_launcher() {
+    local box="$1" pname="$2" name="$3" exec_arg="$4" icon="$5" wmclass="$6" source="$7"
+    local prefix dir id file
+
+    prefix="$(prefix_path "$box" "$pname")"
+    dir="$(menu_dir "$prefix")"
+    id="wswin-$(slug "$box")-$(slug "$pname")-$(slug "$name")"
+    file="$dir/$id.desktop"
+    mkdir -p "$dir" "$apps_dir"
+
+    if [[ -f "$icon" ]]; then
+        cp -f -- "$icon" "$dir/$id.png"
+        icon="$dir/$id.png"
+    fi
+
+    {
+        printf '[Desktop Entry]\n'
+        printf 'Type=Application\n'
+        printf 'Name=%s\n' "$name"
+        printf 'Exec=wswin exec --box %s --prefix %s %s\n' "$box" "$pname" "$exec_arg"
+        printf 'Icon=%s\n' "${icon:-application-x-executable}"
+        printf 'Terminal=false\n'
+        printf 'StartupNotify=true\n'
+        [[ -z "$wmclass" ]] || printf 'StartupWMClass=%s\n' "$wmclass"
+        printf 'X-Workstation-Box=%s\n' "$box"
+        printf 'X-Workstation-Prefix=%s\n' "$pname"
+        [[ -z "$source" ]] || printf 'X-Wswin-Source=%s\n' "$source"
+    } > "$file"
+
+    ln -sfn -- "$file" "$apps_dir/$id.desktop"
+    printf 'Menu: %s -> %s\n' "$name" "$apps_dir/$id.desktop"
+}
+
+# The largest PNG Wine extracted for a theme icon name (container HOME).
+wine_icon() {
+    local home="$1" name="$2" size
+
+    for size in 256 128 64 48 32 16; do
+        if [[ -f "$home/.local/share/icons/hicolor/${size}x${size}/apps/$name.png" ]]; then
+            printf '%s\n' "$home/.local/share/icons/hicolor/${size}x${size}/apps/$name.png"
+            return 0
+        fi
+    done
+    printf '%s\n' "$name"
+}
+
+# Menu entries Wine made for PREFIX (winemenubuilder writes them into the
+# container HOME): "MTIME PATH" lines.
+wine_entries() {
+    local box="$1" prefix="$2" home file wp
+
+    home="$(box_home "$box")"
+    [[ -d "$home/.local/share/applications/wine" ]] || return 0
+
+    while IFS= read -r -d '' file; do
+        wp="$(sed -nE 's/^Exec=env "?WINEPREFIX=([^" ]+)"? .*/\1/p' "$file" | head -n1)"
+        [[ -n "$wp" ]] || wp="$home/.wine"
+        [[ "$wp" == "$prefix" ]] || continue
+        printf '%s %s\n' "$(stat -c %Y "$file")" "$file"
+    done < <(find "$home/.local/share/applications/wine" -name '*.desktop' -print0)
+}
+
+# Offer one Wine entry for the host menu (skips entries already added).
+offer_wine_entry() {
+    local box="$1" pname="$2" file="$3" prefix name exec_line exec_arg icon
+
+    prefix="$(prefix_path "$box" "$pname")"
+    if grep -qsxF "X-Wswin-Source=$file" "$(menu_dir "$prefix")"/*.desktop; then
+        return 0
+    fi
+
+    name="$(desktop_key "$file" Name)"
+    exec_line="$(desktop_key "$file" Exec)"
+    # Exec=env "WINEPREFIX=..." wine ARG: ARG is kept as Wine quoted it.
+    exec_arg="${exec_line#* wine }"
+    [[ "$exec_arg" != "$exec_line" && -n "$name" ]] || return 0
+
+    ask "Add \"$name\" to the host menu?" || return 0
+    icon="$(wine_icon "$(box_home "$box")" "$(desktop_key "$file" Icon)")"
+    make_launcher "$box" "$pname" "$name" "$exec_arg" "$icon" \
+        "$(desktop_key "$file" StartupWMClass)" "$file"
+}
+
+cmd_menu() {
+    local box pname rest prefix action entry
+    parse_target "$@"
+    set -- "${rest[@]}"
+    action="${1:-}"
+
+    case "$action" in
+        add)
+            prefix="$(prefix_path "$box" "$pname")"
+            [[ -d "$prefix" ]] || die "no prefix: $prefix"
+            while read -r _ entry; do
+                offer_wine_entry "$box" "$pname" "$entry"
+            done < <(wine_entries "$box" "$prefix")
+            ;;
+        list)
+            local link target state
+            printf '%-48s %-8s %s\n' ID STATE NAME
+            for link in "$apps_dir"/wswin-*.desktop; do
+                [[ -L "$link" ]] || continue
+                target="$(readlink -f "$link" || true)"
+                if [[ -f "$target" ]]; then state=ok; else state=dangling; fi
+                printf '%-48s %-8s %s\n' "$(basename "$link" .desktop)" "$state" \
+                    "$( [[ -f "$target" ]] && desktop_key "$target" Name )"
+            done
+            ;;
+        remove)
+            local id="${2:-}" link target
+            [[ -n "$id" ]] || die "usage: wswin menu remove ID"
+            link="$apps_dir/${id%.desktop}.desktop"
+            [[ -L "$link" ]] || die "no wswin menu entry: $id"
+            target="$(readlink -f "$link" || true)"
+            rm -f -- "$link"
+            [[ -z "$target" ]] || rm -f -- "$target" "${target%.desktop}.png"
+            printf 'Removed %s\n' "$id"
+            ;;
+        sync)
+            local b home p f
+            for link in "$apps_dir"/wswin-*.desktop; do
+                [[ -L "$link" && ! -e "$link" ]] && rm -f -- "$link" \
+                    && printf 'Removed dangling %s\n' "$(basename "$link")"
+            done
+            while IFS= read -r b; do
+                [[ -n "$(box_value "$b" profile)" ]] || continue
+                home="$(box_home "$b")"
+                for p in "$home/.wine" "$home"/prefixes/*; do
+                    for f in "$(menu_dir "$p")"/*.desktop; do
+                        [[ -f "$f" ]] || continue
+                        ln -sfn -- "$f" "$apps_dir/$(basename "$f")"
+                        printf 'Linked %s\n' "$(basename "$f")"
+                    done
+                done
+            done < <(sections "$boxes_ini")
+            ;;
+        *)
+            die "usage: wswin menu [--box BOX] [--prefix NAME] add | menu list|sync | menu remove ID"
+            ;;
+    esac
+}
+
+# Host menu links of one prefix, before the prefix goes.
+remove_menu_links() {
+    local prefix="$1" link target
+
+    for link in "$apps_dir"/wswin-*.desktop; do
+        [[ -L "$link" ]] || continue
+        target="$(readlink "$link")"
+        [[ "$target" == "$prefix/"* ]] || continue
+        rm -f -- "$link"
+        printf 'Removed menu entry %s\n' "$(basename "$link" .desktop)"
+    done
+}
+
+# Icon of a Windows executable, extracted inside the box (icoutils).
+exe_icon() {
+    local box="$1" exe="$2" out="$3"
+
+    exec_box "$box" sh -c '
+        command -v wrestool >/dev/null && command -v icotool >/dev/null || exit 1
+        tmp="$(mktemp -d)"
+        trap "rm -rf \"\$tmp\"" EXIT
+        wrestool -x -t 14 "$1" > "$tmp/icon.ico" 2>/dev/null || exit 1
+        icotool -x -o "$tmp" "$tmp/icon.ico" 2>/dev/null || exit 1
+        best="$(ls -S "$tmp"/*.png 2>/dev/null | head -n1)"
+        [ -n "$best" ] && cp "$best" "$2"
+    ' _ "$exe" "$out" >/dev/null 2>&1
+}
+
+# A portable program: copied (exe, directory or zip) into
+# PREFIX/drive_c/Portable/NAME, optionally a host menu entry.
+cmd_portable() {
+    local box pname rest src name prefix dest exe icon
+    local -a exes=()
+    parse_target "$@"
+    set -- "${rest[@]}"
+    (($#)) || die "usage: wswin portable [--box BOX] [--prefix NAME] FILE.exe|DIR|FILE.zip [APPNAME]"
+
+    [[ -e "$1" ]] || die "not found: $1"
+    src="$(realpath -- "$1")"
+    name="${2:-$(basename "$src")}"
+    name="${name%.*}"
+    [[ -d "$src" ]] && name="${2:-$(basename "$src")}"
+
+    ensure_prefix "$box" "$pname"
+    prefix="$(prefix_path "$box" "$pname")"
+    dest="$prefix/drive_c/Portable/$name"
+    [[ ! -e "$dest" ]] || die "already there: $dest"
+    mkdir -p "$dest"
+
+    case "${src,,}" in
+        *.zip) unzip -q -d "$dest" "$src" ;;
+        *.exe) cp -- "$src" "$dest/" ;;
+        *) [[ -d "$src" ]] || die "not an .exe, .zip or directory: $src"
+           cp -a -- "$src/." "$dest/" ;;
+    esac
+    printf 'Portable %s: %s\n' "$name" "$dest"
+
+    mapfile -t exes < <(find "$dest" -maxdepth 3 -type f -iname '*.exe' | sort)
+    ((${#exes[@]})) || die "no .exe in $dest"
+    exe="${exes[0]}"
+    if ((${#exes[@]} > 1)); then
+        local i answer
+        for i in "${!exes[@]}"; do
+            printf '  %d) %s\n' "$((i + 1))" "${exes[$i]#$dest/}"
+        done
+        read -r -p "Program to start [1]: " answer </dev/tty 2>/dev/null || answer=1
+        [[ "$answer" =~ ^[0-9]+$ ]] && ((answer >= 1 && answer <= ${#exes[@]})) || answer=1
+        exe="${exes[$((answer - 1))]}"
+    fi
+
+    if ask "Add \"$name\" to the host menu?" yes; then
+        icon="$(mktemp --suffix=.png "${XDG_RUNTIME_DIR:-/tmp}/wswin-icon.XXXXXX")"
+        exe_icon "$box" "$exe" "$icon" || icon=""
+        [[ -z "$icon" || -s "$icon" ]] || icon=""
+        make_launcher "$box" "$pname" "$name" "$(desktop_quote "$exe")" "$icon" \
+            "$(basename "$exe")" ""
+        [[ -z "$icon" ]] || rm -f -- "$icon"
+    fi
+    printf 'Start: wswin exec --box %s --prefix %s %q\n' "$box" "$pname" "$exe"
+}
+
 cmd_install() {
     local box pname rest file prefix run
     parse_target "$@"
@@ -214,13 +496,24 @@ cmd_install() {
     prefix="$(prefix_path "$box" "$pname")"
     run="$(runner "$box")"
 
+    local before entry mtime
+    before="$(wine_entries "$box" "$prefix")"
+
     case "${file,,}" in
         *.msi) in_box "$box" "$prefix" "$run" msiexec /i "$file" "$@" ;;
         *) in_box "$box" "$prefix" "$run" "$file" "$@" ;;
     esac
 
     printf '\nInstalled into %s/%s (%s).\n' "$box" "$pname" "$prefix"
-    printf 'Launcher: windows/apps.nix (exe relative to the prefix), then ws switch.\n'
+
+    # winemenubuilder writes the entries right after the installer.
+    sleep 2
+    while read -r mtime entry; do
+        [[ -n "$entry" ]] || continue
+        grep -qxF "$mtime $entry" <<<"$before" && continue
+        offer_wine_entry "$box" "$pname" "$entry"
+    done < <(wine_entries "$box" "$prefix")
+    printf 'More later: wswin menu --box %s --prefix %s add\n' "$box" "$pname"
 }
 
 cmd_exec() {
@@ -306,6 +599,7 @@ cmd_prefix() {
         remove)
             [[ "${1:-}" == --force ]] || die "prefix removal requires --force"
             [[ -d "$prefix" ]] || die "no prefix: $prefix"
+            remove_menu_links "$prefix"
             printf 'Removing %s\n' "$prefix"
             rm -rf -- "$prefix"
             ;;
@@ -364,6 +658,8 @@ main() {
     case "$cmd" in
         list) cmd_list "$@" ;;
         install) cmd_install "$@" ;;
+        portable) cmd_portable "$@" ;;
+        menu) cmd_menu "$@" ;;
         run) cmd_run "$@" ;;
         exec) cmd_exec "$@" ;;
         prefix) cmd_prefix "$@" ;;
