@@ -1,6 +1,6 @@
 title: ws-roadmap
 section: 1
-date: 2026-09-26
+date: 2026-09-28
 source: Workstation
 volume: User Commands
 
@@ -17,7 +17,7 @@ volume: User Commands
 - rEFInd + T2 kernel `7.2.7-1-t2-resolute`;
 - Btrfs root с `@`, `@home`, `@root`, `@srv`, `@cache`, `@tmp`, `@log`, `.snapshots`;
 - Wi-Fi, Bluetooth, T2 audio, microphone, camera;
-- Intel UHD 630 как primary GPU + AMD dGPU offload;
+- Intel UHD 630 как primary GPU; AMD dGPU выключена при загрузке (rEFInd «Ubuntu», `helpws workstation`), offload в «Ubuntu (AMD)»;
 - рабочий `deep/S3` suspend/resume;
 - suspend layer: deep-only, Broadcom guard, patched `t2bce` (`helpws suspend`); ASPM не форсируется;
 - Touch Bar в родном режиме (`hid-appletb-kbd` + `ws-touchbar-fn`):

@@ -1,5 +1,5 @@
 # MacBookPro16,1 with T2: Touch Bar native mode, T2 network and firmware,
-# the suspend layer (docs/suspend.md).
+# the suspend layer (docs/suspend.md), dGPU power-off at boot.
 { file, ... }:
 {
   files = [
@@ -17,6 +17,10 @@
     (file "/usr/lib/systemd/system-sleep/80-broadcom-aspm" "system/files/usr/lib/systemd/system-sleep/80-broadcom-aspm" "0755")
     (file "/etc/systemd/system/broadcom-aspm-restore.service" "system/files/systemd/system/broadcom-aspm-restore.service" "0644")
 
+    # AMD dGPU off and off the PCI bus when booted with ws.dgpu=off (rEFInd "Ubuntu")
+    (file "/usr/local/sbin/ws-dgpu-off" "system/files/usr/local/sbin/ws-dgpu-off" "0755")
+    (file "/etc/systemd/system/ws-dgpu-off.service" "system/files/systemd/system/ws-dgpu-off.service" "0644")
+
     # T2 base (t2linux setup, captured in phase -1)
     (file "/etc/udev/rules.d/30-amdgpu-pm.rules" "system/files/udev/30-amdgpu-pm.rules" "0644")
     (file "/etc/udev/rules.d/99-network-t2-ncm.rules" "system/files/udev/99-network-t2-ncm.rules" "0644")
@@ -29,6 +33,7 @@
   units = {
     "ws-touchbar-fn.service" = "enabled";
     "get-apple-firmware.service" = "enabled";
+    "ws-dgpu-off.service" = "enabled";
     "broadcom-aspm-restore.service" = "static";
   };
 

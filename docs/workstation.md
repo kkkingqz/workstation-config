@@ -1,6 +1,6 @@
 title: ws-workstation
 section: 1
-date: 2026-09-26
+date: 2026-09-28
 source: Workstation
 volume: User Commands
 
@@ -308,9 +308,59 @@ Intel UHD 630      → primary GPU
 AMD Radeon dGPU    → render/offload GPU
 ```
 
-Intel используется для desktop. AMD доступна приложениям через GPU offload.
+Intel используется для desktop: `apple-gmux force_igd=y` переключает панель
+на Intel, gnome-shell и все приложения рисуют на нём. Когда AMD включена
+(«Ubuntu (AMD)»), она доступна через GPU offload (`switcherooctl launch`,
+«Запустить с дискретной видеокартой»).
 
-Runtime power-off AMD dGPU в текущей конфигурации не используется.
+Runtime PM у amdgpu на этом Mac нет (`Runtime PM not available`: ни ATPX, ни
+ACPI `_PR3`, ни BACO), поэтому включённая AMD постоянно в D0. Выключить её
+можно только через vga_switcheroo, после чего gmux снимает с неё питание.
+Это делается при загрузке, и способ выбирается пунктом rEFInd:
+
+```text
+Ubuntu          ws.dgpu=off → ws-dgpu-off.service выключает AMD и убирает её с шины PCI до GDM
+Ubuntu (AMD)    AMD включена: внешние мониторы, GPU offload
+macOS
+Recovery        GRUB, AMD включена
+```
+
+- Без AMD **не работают внешние мониторы**: все Thunderbolt DP выведены на
+  dGPU (`card2-DP-4…7`). Для монитора загрузиться в «Ubuntu (AMD)».
+- Выключение только при загрузке: vga_switcheroo при OFF не проверяет открытых
+  клиентов, а GTK4-приложения держат render node AMD открытым.
+- После `OFF` карта до перезагрузки не включается. `ws-dgpu-off` убирает весь
+  пакет Navi 14 (`01:00.0`–`03:00.1`) с шины PCI: иначе `amdgpu` при S3
+  сбрасывает выключенную карту, сон прерывается, и система потом погибает.
+  HDMI-аудио карты убирается первым, пока карта включена. Подробности —
+  `helpws suspend`.
+- `default_selection +`: rEFInd предлагает пункт прошлой загрузки.
+- «Ubuntu (AMD)» — ручной пункт в `system/files/esp/refind.conf`. Он грузит
+  `/boot/ws/vmlinuz` и `/boot/ws/initrd.img`, жёсткие ссылки на новейшее ядро и
+  его initrd (rEFInd не следует по symlink). Их обновляет `ws-boot-links` из
+  `/etc/kernel/postinst.d`, `/etc/kernel/postrm.d` и
+  `/etc/initramfs/post-update.d`; первый раз — `ws system apply`.
+- Параметры ядра «Ubuntu (AMD)» = `refind_linux.conf` без `ws.dgpu=off`.
+  Меняя их, править оба файла; `ws-workstation-verify` (14.5) их сравнивает.
+- На 2026-09-28 «Ubuntu (AMD)» ещё ни разу не загружался; «Ubuntu» с
+  `ws.dgpu=off` проверен, включая S3 (`helpws suspend`).
+- `refind.conf` лежит на отдельном ESP (`nvme0n1p3`), `ws system apply` его не
+  ставит:
+
+```bash
+sudo mount /dev/disk/by-partuuid/b3575417-21a5-43db-9c6e-dc2dd5510c76 /mnt
+sudo cp /mnt/EFI/BOOT/refind.conf /mnt/EFI/BOOT/refind.conf.before-amd-entry
+sudo cp ~/wsconfig/system/files/esp/refind.conf /mnt/EFI/BOOT/refind.conf
+sudo umount /mnt
+```
+
+Проверка: `journalctl -b -u ws-dgpu-off` (`DIS: :Off`, затем
+`dGPU powered off; 0000:01:00.0 and everything below it removed from PCI`) и
+`lspci -d 1002:` — пусто. Перед удалением скрипт проверяет, что
+конфигурационное пространство карты читается как `ff ff`, то есть питание
+снято: `power_state` для этого не годится, он остаётся `D3hot` (ACPI power
+resource у dGPU нет, ядро не знает, что gmux снял питание).
+Замер 2026-09-27 в простое от батареи: около 16 Вт без AMD против около 24 Вт с ней.
 
 ---
 

@@ -1,6 +1,6 @@
 title: ws-plan-t2
 section: 1
-date: 2026-09-21
+date: 2026-09-28
 source: Workstation
 volume: User Commands
 
@@ -159,7 +159,7 @@ systemctl suspend-then-hibernate
 
 ## Что специально не делаем
 
-- не пытаемся любой ценой добиться runtime power-off AMD dGPU;
+- не пытаемся добиться runtime PM AMD dGPU (его нет); AMD выключается только при загрузке, пунктом rEFInd «Ubuntu» (`helpws workstation`, GRAPHICS);
 - не меняем работающий `deep/S3`;
 - не трогаем runtime PM Touch Bar;
 - не запускаем `powertop --auto-tune`;

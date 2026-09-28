@@ -1,0 +1,5 @@
+#!/bin/sh
+# Kernel and initramfs hook: keeps /boot/ws on the newest kernel for the
+# rEFInd entry "Ubuntu (AMD)". Never fails the kernel or initramfs update.
+/usr/local/sbin/ws-boot-links || echo "zz-ws-boot-links: ws-boot-links failed; rEFInd \"Ubuntu (AMD)\" may boot an older kernel" >&2
+exit 0

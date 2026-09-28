@@ -1,6 +1,6 @@
 title: ws-rebuild
 section: 1
-date: 2026-09-26
+date: 2026-09-28
 source: Workstation
 volume: User Commands
 
@@ -148,6 +148,9 @@ pm_async=off
 T2 отказывала в stateful suspend (`helpws suspend`).
 
 Не добавлять параметры, которых нет в зафиксированном рабочем `/proc/cmdline`.
+
+Пункт «Ubuntu» добавляет `ws.dgpu=off` (выключение AMD при загрузке), ручной
+пункт «Ubuntu (AMD)» грузит `/boot/ws` без него (`helpws workstation`, GRAPHICS).
 
 После восстановления boot config заменить старые UUID на UUID новой установки там, где это требуется.
 
@@ -527,10 +530,11 @@ GNOME lock screen    EN
 
 ```text
 Intel UHD 630  → primary desktop GPU
-AMD dGPU       → render/offload
+AMD dGPU       → выключена в rEFInd «Ubuntu» (ws.dgpu=off), render/offload в «Ubuntu (AMD)»
 ```
 
-Не пытаться автоматически воспроизвести старые экспериментальные AMD power tweaks.
+Выключение AMD ставит `ws system apply` (`ws-dgpu-off`, `helpws workstation`,
+GRAPHICS). Других AMD power tweaks не воспроизводить.
 
 Machine-state archive содержит:
 

@@ -1,0 +1,90 @@
+#!/bin/sh
+# Powers the AMD dGPU off for the rest of the boot and takes it off the PCI
+# bus. amdgpu has no runtime PM on this Mac (no ATPX, no ACPI _PR3, no BACO),
+# so vga_switcheroo OFF is the only way to turn it off: amdgpu suspends the
+# card and apple-gmux cuts its power.
+#
+# The card cannot come back before the next boot: the PCIe switch inside the
+# Navi 14 package (01:00.0, 02:00.0) loses its configuration with the power,
+# and vga_switcheroo ON ends in "PSP create ring failed" (2026-09-28). amdgpu
+# still runs its S3 callbacks for a switched-off card, though, and the MODE1
+# reset in its suspend_noirq fails and aborts S3. So after OFF the whole
+# package is removed from the bus: no driver takes part in sleep, and
+# apple-gmux cuts the power again on resume by itself. See docs/suspend.md.
+#
+# The HDMI audio function (03:00.1) goes first, while the card is still on:
+# vga_switcheroo OFF locks its ALSA card (card->shutdown), and removing it
+# afterwards hangs forever in snd_card_free (2026-09-28). For the same reason
+# the script refuses to run once the card is already off.
+#
+# Run by ws-dgpu-off.service at boot when the kernel command line has
+# ws.dgpu=off (the default rEFInd entry "Ubuntu"), before GDM opens any GPU:
+# vga_switcheroo does not check for open clients on OFF. External displays
+# (Thunderbolt DP on the dGPU) need "Ubuntu (AMD)". See docs/workstation.md,
+# GRAPHICS.
+set -eu
+
+switch=/sys/kernel/debug/vgaswitcheroo/switch
+pci=/sys/bus/pci/devices
+
+# amdgpu registers its switcheroo client late (firmware load), well after
+# systemd starts: wait for the discrete client.
+i=0
+until grep -q '^[0-9]*:DIS:' "$switch" 2>/dev/null; do
+    i=$((i + 1))
+    if [ "$i" -gt 60 ]; then
+        echo "ws-dgpu-off: no discrete vga_switcheroo client after 60 s; dGPU left on" >&2
+        cat "$switch" >&2 2>/dev/null || true
+        exit 1
+    fi
+    sleep 1
+done
+cat "$switch"
+
+# Only the GPU line tells: the audio client shows DynOff whenever the HDA
+# controller is runtime suspended.
+if grep -q '^[0-9]*:DIS:.:Off:' "$switch"; then
+    echo "ws-dgpu-off: dGPU already switched off; removing it now would hang, reboot first" >&2
+    exit 1
+fi
+gpu="$(sed -n 's/^[0-9]*:DIS:.:[A-Za-z]*:\(.*\)$/\1/p' "$switch")"
+
+# /sys/devices/pci0000:00/0000:00:01.0/0000:01:00.0/0000:02:00.0/0000:03:00.0:
+# everything below the root port belongs to the package and loses its power.
+path="$(readlink -f "$pci/$gpu")"
+top="$(echo "$path" | cut -d/ -f6)"
+if [ -z "$top" ] || [ "$(cat "$pci/$top/vendor")" != 0x1002 ]; then
+    echo "ws-dgpu-off: unexpected topology above $gpu (${top:-none}); dGPU left on" >&2
+    exit 1
+fi
+
+# Other functions of the card (0000:03:00.1); the bridge directory also holds
+# port service devices such as 0000:02:00.0:pcie210.
+for dev in "${path%/*}/${gpu%.*}".[0-7]; do
+    [ "${dev##*/}" = "$gpu" ] && continue
+    echo 1 > "$dev/remove"
+    echo "ws-dgpu-off: removed ${dev##*/} from PCI"
+done
+
+echo OFF > "$switch"
+cat "$switch"
+if ! grep -q "^[0-9]*:DIS:.:Off:$gpu\$" "$switch"; then
+    echo "ws-dgpu-off: dGPU did not switch off" >&2
+    exit 1
+fi
+
+# Config space of a card without power reads back as all ones.
+for dev in "$gpu" "$top"; do
+    if [ "$(od -An -tx1 -N2 "$pci/$dev/config" | tr -d ' \n')" != ffff ]; then
+        echo "ws-dgpu-off: $dev still answers after OFF; left on the bus" >&2
+        exit 1
+    fi
+done
+
+echo 1 > "$pci/$top/remove"
+
+if [ -e "$pci/$gpu" ]; then
+    echo "ws-dgpu-off: $gpu is still on the bus after removing $top" >&2
+    exit 1
+fi
+echo "ws-dgpu-off: dGPU powered off; $top and everything below it removed from PCI"

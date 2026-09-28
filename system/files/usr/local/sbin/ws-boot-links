@@ -1,0 +1,39 @@
+#!/bin/sh
+# Stable paths to the newest kernel for the manual rEFInd entry "Ubuntu (AMD)"
+# (system/files/esp/refind.conf): /boot/ws/vmlinuz and /boot/ws/initrd.img are
+# hard links to /boot/vmlinuz-<newest> and its initrd. rEFInd does not follow
+# symlinks, and a manual entry cannot name "the newest kernel" itself.
+#
+# Runs from /etc/kernel/postinst.d, /etc/kernel/postrm.d and
+# /etc/initramfs/post-update.d (arguments ignored), and by ws system apply.
+# The newest kernel is the one the auto-detected "Ubuntu" entry boots.
+set -eu
+
+boot=/boot
+dir="$boot/ws"
+
+kernel="$(ls "$boot"/vmlinuz-* 2>/dev/null | sort -V | tail -n1)"
+if [ -z "$kernel" ]; then
+    echo "ws-boot-links: no $boot/vmlinuz-* found; $dir left as is" >&2
+    exit 0
+fi
+version="${kernel#"$boot"/vmlinuz-}"
+initrd="$boot/initrd.img-$version"
+if [ ! -f "$initrd" ]; then
+    # Kernel installed, initrd not built yet: the initramfs hook runs us again.
+    echo "ws-boot-links: $initrd missing; $dir left as is" >&2
+    exit 0
+fi
+
+mkdir -p "$dir"
+# Replace each link by rename, so the entry never sees a missing file.
+link() {
+    [ "$1" -ef "$2" ] && return 0
+    ln -f "$1" "$2.new"
+    mv -f "$2.new" "$2"
+}
+link "$kernel" "$dir/vmlinuz"
+link "$initrd" "$dir/initrd.img"
+echo "$version" > "$dir/version.new"
+mv -f "$dir/version.new" "$dir/version"
+echo "ws-boot-links: $dir -> $version"

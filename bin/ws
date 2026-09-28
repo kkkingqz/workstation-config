@@ -415,7 +415,7 @@ tiny_dfr_installed() {
 # nothing reboots.
 cmd_system_apply() {
     local tree kind a b backup tmp unit changed=0 modprobe=false grub=false
-    local refind=false d3cold=false touchbar=false saved=false dev cfg out rc=0
+    local refind=false d3cold=false touchbar=false bootlinks=false saved=false dev cfg out rc=0
     local -a restart=()
 
     command -v sudo >/dev/null 2>&1 || die "sudo not found"
@@ -451,6 +451,7 @@ cmd_system_apply() {
                     /etc/modprobe.d/*) modprobe=true ;;
                     /etc/default/grub.d/*) grub=true ;;
                     /boot/refind_linux.conf) refind=true ;;
+                    /usr/local/sbin/ws-boot-links) bootlinks=true ;;
                     */70-bcm4364-no-d3cold.rules) d3cold=true ;;
                 esac
                 ;;
@@ -508,6 +509,13 @@ cmd_system_apply() {
     sudo udevadm control --reload-rules
     sudo udevadm trigger --subsystem-match=input --action=change || true
     sudo udevadm settle || true
+
+    # The hooks keep /boot/ws current from now on; create it the first time.
+    if [[ "$bootlinks" == true || ! -e /boot/ws/vmlinuz ]]; then
+        echo
+        echo "== /boot/ws (rEFInd \"Ubuntu (AMD)\")"
+        sudo /usr/local/sbin/ws-boot-links
+    fi
 
     # hid-appletb-kbd options are read from the initramfs at boot.
     if [[ "$modprobe" == true ]]; then
@@ -581,6 +589,7 @@ PY
     echo
     echo "$changed file(s) changed."
     [[ "$refind" == true ]] && echo "refind_linux.conf changed: the kernel command line applies on the next boot."
+    [[ "$refind" == true ]] && echo "refind.conf on the ESP is not installed by apply; copy system/files/esp/refind.conf by hand (docs/workstation.md, GRAPHICS)."
     [[ "$d3cold" == true ]] && echo "The d3cold rule takes effect on the next boot."
     return "$rc"
 }

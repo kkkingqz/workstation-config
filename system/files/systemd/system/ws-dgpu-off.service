@@ -1,0 +1,17 @@
+[Unit]
+Description=Power off the AMD dGPU (boot option ws.dgpu=off)
+Documentation=file:///usr/local/sbin/ws-dgpu-off
+ConditionKernelCommandLine=ws.dgpu=off
+After=systemd-modules-load.service sys-kernel-debug.mount
+Wants=sys-kernel-debug.mount
+# Nothing may hold the card open when it is switched off.
+Before=display-manager.service switcheroo-control.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/ws-dgpu-off
+TimeoutStartSec=90
+
+[Install]
+WantedBy=multi-user.target

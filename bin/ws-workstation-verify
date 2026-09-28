@@ -1528,8 +1528,9 @@ systemctl is-enabled --quiet get-apple-firmware.service 2>/dev/null \
 compare_file /usr/share/grub/default/grub /etc/default/grub \
     "/etc/default/grub is the package template"
 
+# ws.dgpu=off belongs to the default rEFInd entry only (section 14.5).
 refind_args="$(sed -nE 's/^"Ubuntu" "(.*)"$/\1/p' "$repo/system/files/boot/refind_linux.conf" \
-    | tr ' ' '\n' | grep -vE '^(root|rootflags)=|^(rw|ro)$' | xargs)"
+    | tr ' ' '\n' | grep -vE '^(root|rootflags)=|^(rw|ro)$|^ws\.dgpu=off$' | xargs)"
 grub_args="$(sed -nE 's/^GRUB_CMDLINE_LINUX_DEFAULT="(.*)"$/\1/p' \
     "$repo/system/files/default/grub.d/10-workstation-cmdline.cfg")"
 [[ -n "$refind_args" && "$refind_args" == "$grub_args" ]] \
@@ -1670,6 +1671,73 @@ if [[ -d /nix/var/nix ]]; then
 else
     warn "Nix not installed yet (phase 0 of docs/plans/nix-migration.md)"
 fi
+
+section "14.5 dGPU power / rEFInd Ubuntu (AMD)"
+
+# rEFInd "Ubuntu" boots with ws.dgpu=off: ws-dgpu-off.service powers the AMD
+# dGPU off and removes it from the PCI bus. "Ubuntu (AMD)" boots /boot/ws
+# without it (docs/workstation.md, docs/suspend.md).
+for pair in \
+    "system/files/usr/local/sbin/ws-dgpu-off:/usr/local/sbin/ws-dgpu-off" \
+    "system/files/systemd/system/ws-dgpu-off.service:/etc/systemd/system/ws-dgpu-off.service" \
+    "system/files/usr/local/sbin/ws-boot-links:/usr/local/sbin/ws-boot-links" \
+    "system/files/kernel/zz-ws-boot-links:/etc/kernel/postinst.d/zz-ws-boot-links" \
+    "system/files/kernel/zz-ws-boot-links:/etc/kernel/postrm.d/zz-ws-boot-links" \
+    "system/files/kernel/zz-ws-boot-links:/etc/initramfs/post-update.d/zz-ws-boot-links"
+do
+    tracked "${pair%%:*}" "${pair%%:*}"
+    compare_file "$repo/${pair%%:*}" "${pair#*:}" "runtime ${pair#*:} matches repo"
+done
+for path in system/files/usr/local/sbin/ws-dgpu-off system/files/usr/local/sbin/ws-boot-links \
+    system/files/kernel/zz-ws-boot-links; do
+    check_exec_tracked "$path"
+done
+
+systemctl is-enabled --quiet ws-dgpu-off.service 2>/dev/null \
+    && pass "ws-dgpu-off.service enabled" \
+    || fail "ws-dgpu-off.service not enabled (ws system apply)"
+
+if grep -Eq '(^| )ws\.dgpu=off( |$)' /proc/cmdline; then
+    systemctl is-active --quiet ws-dgpu-off.service 2>/dev/null \
+        && pass "booted with ws.dgpu=off: ws-dgpu-off.service succeeded" \
+        || fail "booted with ws.dgpu=off but ws-dgpu-off.service is not active (journalctl -b -u ws-dgpu-off)"
+    # ws-dgpu-off removes the card only after its config space reads ffff
+    # (power cut), so a bus without AMD devices means the card is off.
+    amd_devices=""
+    for dev in /sys/bus/pci/devices/*; do
+        [[ "$(cat "$dev/vendor" 2>/dev/null)" == 0x1002 ]] && amd_devices+=" ${dev##*/}"
+    done
+    [[ -z "$amd_devices" ]] \
+        && pass "AMD dGPU powered off and removed from PCI" \
+        || fail "AMD devices still on the PCI bus:$amd_devices (journalctl -b -u ws-dgpu-off)"
+else
+    dgpu_state="$(cat /sys/bus/pci/devices/0000:03:00.0/power_state 2>/dev/null || echo absent)"
+    pass "booted with the AMD dGPU on (rEFInd Ubuntu (AMD) or GRUB): $dgpu_state"
+fi
+
+newest_kernel="$(ls /boot/vmlinuz-* 2>/dev/null | sort -V | tail -n1)"
+newest_version="${newest_kernel#/boot/vmlinuz-}"
+if [[ -z "$newest_kernel" ]]; then
+    fail "no /boot/vmlinuz-* found"
+elif [[ /boot/ws/vmlinuz -ef "$newest_kernel" && /boot/ws/initrd.img -ef "/boot/initrd.img-$newest_version" ]]; then
+    pass "/boot/ws links the newest kernel and initrd: $newest_version"
+else
+    fail "/boot/ws does not link $newest_version (kernel and initrd); run sudo /usr/local/sbin/ws-boot-links"
+fi
+[[ "$newest_version" == *-t2-* ]] \
+    || warn "newest kernel $newest_version is not a T2 kernel; rEFInd boots it by default"
+
+# The manual entry must boot with the same parameters, minus ws.dgpu=off.
+amd_opts="$(awk '/^menuentry "Ubuntu \(AMD\)"/ { e = 1 } e && $1 == "options" { sub(/^[^"]*"/, ""); sub(/"[^"]*$/, ""); print; exit }' \
+    "$repo/system/files/esp/refind.conf")"
+default_opts="$(sed -nE 's/^"Ubuntu" "(.*)"$/\1/p' "$repo/system/files/boot/refind_linux.conf" \
+    | tr ' ' '\n' | grep -vx 'ws.dgpu=off' | xargs)"
+[[ -n "$amd_opts" && "$(xargs <<<"$amd_opts")" == "$default_opts" ]] \
+    && pass "refind.conf Ubuntu (AMD) options = refind_linux.conf Ubuntu minus ws.dgpu=off" \
+    || fail "refind.conf Ubuntu (AMD) options ($amd_opts) differ from refind_linux.conf ($default_opts)"
+grep -q 'ws\.dgpu=off' "$repo/system/files/boot/refind_linux.conf" \
+    && pass "refind_linux.conf Ubuntu boots with ws.dgpu=off" \
+    || fail "refind_linux.conf Ubuntu lacks ws.dgpu=off"
 
 section "15. Extension schema source / generated files"
 

@@ -1,6 +1,6 @@
 title: ws-suspend
 section: 1
-date: 2026-09-26
+date: 2026-09-28
 source: Workstation
 volume: User Commands
 
@@ -15,14 +15,16 @@ sleep        deep / S3 only
 cmdline      intel_iommu=on iommu=pt pm_async=off   (без pcie_aspm=force)
 t2bce        0.07-nostatefix1 (локальная сборка, updates/t2bce)
 Touch Bar    родной режим (см. helpws touchbar)
+AMD dGPU     ws.dgpu=off: выключена и убрана с шины PCI
 ```
 
-Слой состоит из трёх частей:
+Слой состоит из четырёх частей:
 
 ```text
 deep-only sleep        systemd никогда не откатывается на s2idle
 Broadcom Wi-Fi guards  ASPM off на время сна, без D3cold
 t2bce fix              no-state fallback не роняет ядро
+dGPU off the bus       amdgpu не участвует в S3 с выключенной картой
 ```
 
 Всё управляется командой `ws-suspend`:
@@ -69,6 +71,61 @@ s2idle виснет. 2026-09-25 12:00 так и было: brcmfmac не ушёл
 
 Hook лежит в `/usr/lib/systemd/system-sleep/`, потому что systemd-sleep
 читает hooks оттуда.
+
+## AMD dGPU при ws.dgpu=off
+
+```text
+/usr/local/sbin/ws-dgpu-off                  OFF и удаление карты с шины PCI
+/etc/systemd/system/ws-dgpu-off.service      при загрузке, до GDM
+```
+
+При загрузке с `ws.dgpu=off` (rEFInd «Ubuntu») `ws-dgpu-off` выключает AMD
+через vga_switcheroo, gmux снимает с неё питание (см. `helpws workstation`,
+GRAPHICS), и скрипт убирает карту с шины PCI.
+
+Без удаления S3 не работает. `amdgpu` в `suspend_noirq` для S3 всегда делает
+`MODE1 reset` и не проверяет, что карта выключена (так и в upstream).
+Регистры выключенной карты читаются как `ffffffff`, сброс падает, `amdgpu`
+возвращает `-22`, и S3 прерывается:
+
+```text
+amdgpu 0000:03:00.0: psp reg (0x16080) wait timed out ... read: ffffffff
+amdgpu 0000:03:00.0: GPU mode1 reset failed
+amdgpu 0000:03:00.0: PM: failed to suspend noirq: error -22
+```
+
+Откат прерванного S3 роняет оба xHCI-контроллера Thunderbolt (`HC died`), и
+через несколько минут система погибает без единой строки в логе:
+2026-09-27 22:31 (крышка закрыта, logind повторил suspend) и
+2026-09-28 08:51 (крышка открыта, повтора не было).
+
+Включать карту на время сна нельзя. Она стоит за PCIe-коммутатором внутри
+пакета Navi 14 (`01:00.0`, `02:00.0`), который теряет конфигурацию вместе с
+питанием: после `ON` карта недоступна (`Unable to change power state from
+D3cold to D0`), `PSP create ring failed` (проверено 2026-09-28). У автора
+поддержки gmux для T2 на MacBookPro16,1 то же и после `pci rescan` (LKML,
+«apple-gmux: support MMIO gmux type on T2 Macs», 2023-02).
+
+Поэтому после `OFF` скрипт убирает с шины весь пакет, начиная с `01:00.0`:
+драйверы карты в S3 не участвуют, а `apple-gmux` после resume сам снова
+снимает с неё питание (`gmux_resume`). Порядок важен:
+
+1. Сначала HDMI-аудио карты (`03:00.1`), пока карта включена. При `OFF`
+   vga_switcheroo блокирует его ALSA-карту (`card->shutdown`), и удаление
+   после `OFF` навсегда виснет в `snd_card_free` (2026-09-28: `tee` в
+   состоянии D; спать после этого нельзя, перезагрузка виснет в конце).
+2. `OFF` и проверка: конфигурационное пространство карты и `01:00.0`
+   читается как `ffff`.
+3. `echo 1 > /sys/bus/pci/devices/0000:01:00.0/remove`.
+
+Если карта уже выключена, скрипт отказывается работать. Запуск только до GDM:
+vga_switcheroo при `OFF` открытых клиентов не проверяет.
+
+После удаления `amdgpu` до перезагрузки остаётся клиентом vga_switcheroo
+(`1:DIS: :Off:0000:03:00.0` в `/sys/kernel/debug/vgaswitcheroo/switch`).
+Писать туда нельзя: `ON` включает питание gmux и даёт Oops в
+`amdgpu_switcheroo_set_state`, после чего блокировка vga_switcheroo занята
+навсегда (2026-09-28, старый hook сна писал туда `ON`).
 
 ## ASPM
 
@@ -211,6 +268,16 @@ Touch Bar native mode S3 cycles            OK
 модули из репозитория == установленные      srcversion совпадает
 ```
 
+2026-09-28:
+
+```text
+S3 с AMD, убранной с шины (ws-dgpu-off вручную)       OK
+S3 с AMD, убранной с шины при загрузке (8 минут)      OK
+```
+
+После resume оба xHCI Thunderbolt пишут `xHC error in resume, USBSTS 0x401,
+Reinit` и работают дальше; так же было и с включённой AMD.
+
 ## Source of truth
 
 ```text
@@ -222,6 +289,8 @@ system/files/udev/70-bcm4364-no-d3cold.rules
 system/files/usr/local/sbin/broadcom-aspm-suspend-guard
 system/files/usr/lib/systemd/system-sleep/80-broadcom-aspm
 system/files/systemd/system/broadcom-aspm-restore.service
+system/files/usr/local/sbin/ws-dgpu-off
+system/files/systemd/system/ws-dgpu-off.service
 ```
 
 ## Не использовать
@@ -232,4 +301,8 @@ T2Linux-Suspend-Fix / t2-suspend.service / t2-resume.service
 s2idle
 pcie_aspm=force, pcie_ports=compat, i915.enable_guc=3
 Touch Bar display mode (appletbdrm, tiny-dfr) вместе с suspend
+S3 с AMD, выключенной через vga_switcheroo, но оставленной на шине PCI
+ON для AMD после OFF (карта до перезагрузки не оживает)
+удаление HDMI-аудио AMD после OFF (виснет в snd_card_free)
+ID_SEAT для узлов AMD: logind создаёт seat, GDM запускает на нём greeter
 ```
