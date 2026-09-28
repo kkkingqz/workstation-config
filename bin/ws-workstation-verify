@@ -508,7 +508,6 @@ for path in \
     bin/ws-keyboard-apply \
     bin/ws-keyboard-status \
     bin/ws-xremap \
-    system/files/udev/99-workstation-uinput.rules \
     docs/keyboard.md \
     docs/touchbar.md
 do
@@ -537,16 +536,6 @@ for path in \
     terminal/fish/completions/ws-gnome-test.fish \
     terminal/fish/completions/ws-gnome.fish \
     docs/gnome.md \
-    system/files/udev/90-touchbar-native.rules \
-    system/files/modprobe/tb.conf \
-    system/files/modprobe/touchbar-native.conf \
-    system/files/usr/local/libexec/ws-touchbar-fn \
-    system/files/systemd/system/ws-touchbar-fn.service \
-    system/files/sleep.conf.d/80-deep-only.conf \
-    system/files/udev/70-bcm4364-no-d3cold.rules \
-    system/files/usr/local/sbin/broadcom-aspm-suspend-guard \
-    system/files/usr/lib/systemd/system-sleep/80-broadcom-aspm \
-    system/files/systemd/system/broadcom-aspm-restore.service \
     system/kernel/t2bce/nostate-fix.patch \
     system/kernel/t2bce/t2bce.nix \
     docs/suspend.md \
@@ -577,9 +566,6 @@ check_runtime_helper ws-suspend
 # Functional baseline / regression gate of the Nix migration.
 check_runtime_helper ws-baseline
 check_runtime_helper ws
-for path in system/files/usr/local/sbin/broadcom-aspm-suspend-guard system/files/usr/lib/systemd/system-sleep/80-broadcom-aspm; do
-    [[ -e "$repo/$path" ]] && check_exec_tracked "$path"
-done
 
 section "5. Apply reproducibility"
 
@@ -597,7 +583,6 @@ contains_literal "$repo/bin/ws-keyboard-system-apply" '"$repo/bin/ws" system app
     "ws-keyboard-system-apply delegates to ws system apply (one owner of system files)"
 contains_literal "$repo/bin/ws-suspend" '"$repo/bin/ws" system apply' \
     "ws-suspend apply delegates to ws system apply (one owner of system files)"
-[[ -e "$repo/system/files/usr/local/libexec/ws-touchbar-fn" ]] && check_exec_tracked "system/files/usr/local/libexec/ws-touchbar-fn"
 
 
 section "5.1 GNOME managed appearance"
@@ -651,7 +636,6 @@ section "5.3 Managed Distrobox / Podman layer"
 for path in \
     bin/wsbox \
     terminal/fish/completions/wsbox.fish \
-    system/files/modules-load.d/ntsync.conf \
     distrobox/arch/wsbox-host-ntsync/PKGBUILD \
     distrobox/arch/wsbox-host-ntsync/README.md \
     distrobox/arch/wsbox-host-ntsync/install-hook \
@@ -675,11 +659,6 @@ if [[ -e "$repo/terminal/fish/completions/wsbox.fish" ]]; then
         "$repo/terminal/fish/completions/wsbox.fish" \
         "Fish wsbox completion points into repo"
 fi
-
-ntsync_source="$repo/system/files/modules-load.d/ntsync.conf"
-ntsync_runtime="/etc/modules-load.d/ntsync.conf"
-compare_file "$ntsync_source" "$ntsync_runtime" \
-    "host NTSync modules-load config matches repo source"
 
 if lsmod 2>/dev/null | awk '$1 == "ntsync" { found=1 } END { exit !found }'; then
     pass "host ntsync module loaded"
@@ -942,24 +921,27 @@ while IFS= read -r -d '' path; do
     fi
 done < <(git -C "$repo" ls-files -z)
 
-fn_helper="$repo/system/files/usr/local/libexec/ws-touchbar-fn"
-if [[ -r "$fn_helper" ]]; then
-    fn_pyc="$(mktemp)"
+while IFS= read -r -d '' path; do
+    head -n1 "$repo/$path" 2>/dev/null | grep -Eq '^#!.*python' || continue
+    py_out="$(mktemp)"
     if python3 -c 'import py_compile, sys; py_compile.compile(sys.argv[1], cfile=sys.argv[2], doraise=True)' \
-        "$fn_helper" "$fn_pyc" >/dev/null 2>&1; then
-        pass "Python syntax: system/files/usr/local/libexec/ws-touchbar-fn"
+        "$repo/$path" "$py_out" >/dev/null 2>&1; then
+        pass "Python syntax: $path"
     else
-        fail "Python syntax error: system/files/usr/local/libexec/ws-touchbar-fn"
+        fail "Python syntax error: $path"
     fi
-    rm -f -- "$fn_pyc"
-fi
+    rm -f -- "$py_out"
+done < <(git -C "$repo" ls-files -z)
 
-if have udevadm && [[ -r "$repo/system/files/udev/90-touchbar-native.rules" ]]; then
-    if udevadm verify --resolve-names=never "$repo/system/files/udev/90-touchbar-native.rules" >/dev/null 2>&1; then
-        pass "udev syntax: system/files/udev/90-touchbar-native.rules"
-    else
-        fail "udev syntax error: system/files/udev/90-touchbar-native.rules"
-    fi
+if have udevadm; then
+    while IFS= read -r -d '' path; do
+        [[ "$path" == *.rules ]] || continue
+        if udevadm verify --resolve-names=never "$repo/$path" >/dev/null 2>&1; then
+            pass "udev syntax: $path"
+        else
+            fail "udev syntax error: $path"
+        fi
+    done < <(git -C "$repo" ls-files -z)
 fi
 
 if have shellcheck; then
@@ -1479,34 +1461,15 @@ else
     pass "tiny-dfr not installed"
 fi
 
+# Installed files and unit states: ws system check (system/*.nix manifest).
 systemctl is-active --quiet ws-touchbar-fn.service 2>/dev/null \
     && pass "ws-touchbar-fn.service active" \
     || fail "ws-touchbar-fn.service not active"
-systemctl is-enabled --quiet ws-touchbar-fn.service 2>/dev/null \
-    && pass "ws-touchbar-fn.service enabled" \
-    || fail "ws-touchbar-fn.service not enabled"
-
-for pair in \
-    "system/files/udev/90-touchbar-native.rules:/etc/udev/rules.d/90-touchbar-native.rules" \
-    "system/files/modprobe/tb.conf:/etc/modprobe.d/tb.conf" \
-    "system/files/modprobe/touchbar-native.conf:/etc/modprobe.d/touchbar-native.conf" \
-    "system/files/usr/local/libexec/ws-touchbar-fn:/usr/local/libexec/ws-touchbar-fn" \
-    "system/files/systemd/system/ws-touchbar-fn.service:/etc/systemd/system/ws-touchbar-fn.service"
-do
-    compare_file "$repo/${pair%%:*}" "${pair#*:}" "runtime ${pair#*:} matches repo"
-done
 
 if [[ -e /etc/tiny-dfr/config.toml ]]; then
     warn "obsolete runtime /etc/tiny-dfr/config.toml still exists (ws-keyboard-system-apply removes it)"
 else
     pass "obsolete /etc/tiny-dfr/config.toml absent"
-fi
-
-udev_runtime="/etc/udev/rules.d/99-workstation-uinput.rules"
-if [[ -r "$udev_runtime" ]]; then
-    compare_file "$repo/system/files/udev/99-workstation-uinput.rules" "$udev_runtime" "runtime 99-workstation-uinput.rules matches repo"
-else
-    fail "installed uinput rule missing: $udev_runtime"
 fi
 
 if [[ -e "$repo/system/files/udev/70-workstation-uinput.rules" ]]; then
@@ -1532,16 +1495,6 @@ if grep -Eq '(^| )pcie_aspm(=|\.policy=)' /proc/cmdline; then
 else
     pass "kernel cmdline does not force ASPM"
 fi
-
-for pair in \
-    "system/files/sleep.conf.d/80-deep-only.conf:/etc/systemd/sleep.conf.d/80-deep-only.conf" \
-    "system/files/udev/70-bcm4364-no-d3cold.rules:/etc/udev/rules.d/70-bcm4364-no-d3cold.rules" \
-    "system/files/usr/local/sbin/broadcom-aspm-suspend-guard:/usr/local/sbin/broadcom-aspm-suspend-guard" \
-    "system/files/usr/lib/systemd/system-sleep/80-broadcom-aspm:/usr/lib/systemd/system-sleep/80-broadcom-aspm" \
-    "system/files/systemd/system/broadcom-aspm-restore.service:/etc/systemd/system/broadcom-aspm-restore.service"
-do
-    compare_file "$repo/${pair%%:*}" "${pair#*:}" "runtime ${pair#*:} matches repo"
-done
 
 t2bce_ver="$(cat /sys/module/t2bce_core/version 2>/dev/null || true)"
 if [[ "$t2bce_ver" == *nostatefix* ]]; then
@@ -1578,48 +1531,15 @@ if [[ -e /etc/systemd/system/tiny-dfr-sleep.service ]]; then
     warn "obsolete /etc/systemd/system/tiny-dfr-sleep.service still exists"
 fi
 
-section "14.2 Captured T2 / boot / recovery system files"
+section "14.2 Boot / recovery"
 
-refind_partuuid=b3575417-21a5-43db-9c6e-dc2dd5510c76
-
-# Captured byte-for-byte before the Nix migration (docs/plans/nix-migration.md,
-# phase -1). They are not installed by any apply script yet; verify only
-# checks that the running system still matches the repository.
-for pair in \
-    "system/files/udev/30-amdgpu-pm.rules:/etc/udev/rules.d/30-amdgpu-pm.rules" \
-    "system/files/udev/99-network-t2-ncm.rules:/etc/udev/rules.d/99-network-t2-ncm.rules" \
-    "system/files/NetworkManager/conf.d/99-network-t2-ncm.conf:/etc/NetworkManager/conf.d/99-network-t2-ncm.conf" \
-    "system/files/modprobe/apple-gmux.conf:/etc/modprobe.d/apple-gmux.conf" \
-    "system/files/modules-load.d/t2.conf:/etc/modules-load.d/t2.conf" \
-    "system/files/systemd/system/get-apple-firmware.service:/etc/systemd/system/get-apple-firmware.service" \
-    "system/files/boot/refind_linux.conf:/boot/refind_linux.conf" \
-    "system/files/default/grub.d/10-workstation-cmdline.cfg:/etc/default/grub.d/10-workstation-cmdline.cfg" \
-    "system/files/default/grub.d/99-recovery-menu.cfg:/etc/default/grub.d/99-recovery-menu.cfg" \
-    "system/files/usr/local/sbin/system-backup-snapshot:/usr/local/sbin/system-backup-snapshot"
-do
-    tracked "${pair%%:*}" "${pair%%:*}"
-    compare_file "$repo/${pair%%:*}" "${pair#*:}" "runtime ${pair#*:} matches repo"
-done
-[[ -e "$repo/system/files/usr/local/sbin/system-backup-snapshot" ]] \
-    && check_exec_tracked "system/files/usr/local/sbin/system-backup-snapshot"
-
-systemctl is-enabled --quiet get-apple-firmware.service 2>/dev/null \
-    && pass "get-apple-firmware.service enabled" \
-    || fail "get-apple-firmware.service not enabled"
+# The files and units themselves: ws system check. GRUB, rEFInd and the
+# "Ubuntu (AMD)" entry get their kernel parameters from facts.nix.
 
 # /etc/default/grub belongs to the grub package (ucf); workstation settings
 # live only in grub.d drop-ins.
 compare_file /usr/share/grub/default/grub /etc/default/grub \
     "/etc/default/grub is the package template"
-
-# ws.dgpu=off belongs to the default rEFInd entry only (section 14.5).
-refind_args="$(sed -nE 's/^"Ubuntu" "(.*)"$/\1/p' "$repo/system/files/boot/refind_linux.conf" \
-    | tr ' ' '\n' | grep -vE '^(root|rootflags)=|^(rw|ro)$|^ws\.dgpu=off$' | xargs)"
-grub_args="$(sed -nE 's/^GRUB_CMDLINE_LINUX_DEFAULT="(.*)"$/\1/p' \
-    "$repo/system/files/default/grub.d/10-workstation-cmdline.cfg")"
-[[ -n "$refind_args" && "$refind_args" == "$grub_args" ]] \
-    && pass "GRUB and rEFInd kernel parameters match: $grub_args" \
-    || fail "GRUB ($grub_args) and rEFInd ($refind_args) kernel parameters differ"
 
 # Recovery must not stop in emergency mode when a non-system disk is absent.
 non_system_mounts="$(awk '$0 !~ /^[[:space:]]*#/ && NF >= 4 && $2 ~ /^\/mnt\// && $4 !~ /(^|,)nofail(,|$)/ { print $2 }' /etc/fstab 2>/dev/null)"
@@ -1633,18 +1553,6 @@ if [[ -e /etc/default/grub.d/90-pcie-aspm.cfg ]]; then
     warn "/etc/default/grub.d/90-pcie-aspm.cfg forces ASPM on GRUB/recovery kernels (docs/suspend.md)"
 else
     pass "no forced ASPM in GRUB drop-ins"
-fi
-
-# rEFInd lives on its own ESP (nvme0n1p3), which is not mounted in normal
-# operation; compare only when it is. ws-baseline capture --with-sudo mounts
-# it read-only and records the checksum.
-tracked system/files/esp/refind.conf system/files/esp/refind.conf
-refind_esp="$(findmnt -rno TARGET "/dev/disk/by-partuuid/$refind_partuuid" 2>/dev/null | head -n1)"
-if [[ -n "$refind_esp" ]]; then
-    compare_file "$repo/system/files/esp/refind.conf" "$refind_esp/EFI/BOOT/refind.conf" \
-        "runtime rEFInd refind.conf matches repo"
-else
-    info "rEFInd ESP not mounted; refind.conf compared by ws-baseline capture --with-sudo"
 fi
 
 section "14.3 Default terminal (xdg-terminal-exec)"
@@ -1761,26 +1669,6 @@ section "14.5 dGPU power / rEFInd Ubuntu (AMD)"
 # rEFInd "Ubuntu" boots with ws.dgpu=off: ws-dgpu-off.service powers the AMD
 # dGPU off and removes it from the PCI bus. "Ubuntu (AMD)" boots /boot/ws
 # without it (docs/workstation.md, docs/suspend.md).
-for pair in \
-    "system/files/usr/local/sbin/ws-dgpu-off:/usr/local/sbin/ws-dgpu-off" \
-    "system/files/systemd/system/ws-dgpu-off.service:/etc/systemd/system/ws-dgpu-off.service" \
-    "system/files/usr/local/sbin/ws-boot-links:/usr/local/sbin/ws-boot-links" \
-    "system/files/kernel/zz-ws-boot-links:/etc/kernel/postinst.d/zz-ws-boot-links" \
-    "system/files/kernel/zz-ws-boot-links:/etc/kernel/postrm.d/zz-ws-boot-links" \
-    "system/files/kernel/zz-ws-boot-links:/etc/initramfs/post-update.d/zz-ws-boot-links"
-do
-    tracked "${pair%%:*}" "${pair%%:*}"
-    compare_file "$repo/${pair%%:*}" "${pair#*:}" "runtime ${pair#*:} matches repo"
-done
-for path in system/files/usr/local/sbin/ws-dgpu-off system/files/usr/local/sbin/ws-boot-links \
-    system/files/kernel/zz-ws-boot-links; do
-    check_exec_tracked "$path"
-done
-
-systemctl is-enabled --quiet ws-dgpu-off.service 2>/dev/null \
-    && pass "ws-dgpu-off.service enabled" \
-    || fail "ws-dgpu-off.service not enabled (ws system apply)"
-
 if grep -Eq '(^| )ws\.dgpu=off( |$)' /proc/cmdline; then
     systemctl is-active --quiet ws-dgpu-off.service 2>/dev/null \
         && pass "booted with ws.dgpu=off: ws-dgpu-off.service succeeded" \
@@ -1810,18 +1698,6 @@ else
 fi
 [[ "$newest_version" == *-t2-* ]] \
     || warn "newest kernel $newest_version is not a T2 kernel; rEFInd boots it by default"
-
-# The manual entry must boot with the same parameters, minus ws.dgpu=off.
-amd_opts="$(awk '/^menuentry "Ubuntu \(AMD\)"/ { e = 1 } e && $1 == "options" { sub(/^[^"]*"/, ""); sub(/"[^"]*$/, ""); print; exit }' \
-    "$repo/system/files/esp/refind.conf")"
-default_opts="$(sed -nE 's/^"Ubuntu" "(.*)"$/\1/p' "$repo/system/files/boot/refind_linux.conf" \
-    | tr ' ' '\n' | grep -vx 'ws.dgpu=off' | xargs)"
-[[ -n "$amd_opts" && "$(xargs <<<"$amd_opts")" == "$default_opts" ]] \
-    && pass "refind.conf Ubuntu (AMD) options = refind_linux.conf Ubuntu minus ws.dgpu=off" \
-    || fail "refind.conf Ubuntu (AMD) options ($amd_opts) differ from refind_linux.conf ($default_opts)"
-grep -q 'ws\.dgpu=off' "$repo/system/files/boot/refind_linux.conf" \
-    && pass "refind_linux.conf Ubuntu boots with ws.dgpu=off" \
-    || fail "refind_linux.conf Ubuntu lacks ws.dgpu=off"
 
 section "15. Extension schema source / generated files"
 

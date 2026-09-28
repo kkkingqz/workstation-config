@@ -16,11 +16,12 @@ Usage:
   ws-baseline list
 
 capture   snapshot of owner checks, GNOME, Flatpak, Distrobox, user links,
-          system files and tools into ~/.local/state/workstation/baseline/NAME
+          system files and tools into ~/.local/state/workstation/baseline/NAME;
+          system files are those of `ws system manifest` (file and watch)
           --no-boxes    skip `wsbox check` (it starts the containers)
           --with-sudo   also dpkg --verify, the initramfs listing, the default
-                        Btrfs subvolume and the rEFInd ESP refind.conf
-                        checksum (asks sudo)
+                        Btrfs subvolume and checksums of the manifest's ESP
+                        files (asks sudo)
 diff      compare two baselines; owner checks are compared as sets of
           PASS/WARN/FAIL lines, everything else line by line
 USAGE
@@ -32,33 +33,6 @@ die() {
 }
 
 have() { command -v "$1" >/dev/null 2>&1; }
-
-# Runtime copies of system/ and other system files the workstation owns.
-system_files=(
-    /etc/udev/rules.d/30-amdgpu-pm.rules
-    /etc/udev/rules.d/70-bcm4364-no-d3cold.rules
-    /etc/udev/rules.d/90-touchbar-native.rules
-    /etc/udev/rules.d/99-network-t2-ncm.rules
-    /etc/udev/rules.d/99-workstation-uinput.rules
-    /etc/NetworkManager/conf.d/99-network-t2-ncm.conf
-    /etc/modprobe.d/apple-gmux.conf
-    /etc/modprobe.d/tb.conf
-    /etc/modprobe.d/touchbar-native.conf
-    /etc/modules-load.d/ntsync.conf
-    /etc/modules-load.d/t2.conf
-    /etc/systemd/sleep.conf.d/80-deep-only.conf
-    /etc/systemd/system/broadcom-aspm-restore.service
-    /etc/systemd/system/get-apple-firmware.service
-    /etc/systemd/system/ws-touchbar-fn.service
-    /usr/lib/systemd/system-sleep/80-broadcom-aspm
-    /usr/local/libexec/ws-touchbar-fn
-    /usr/local/sbin/broadcom-aspm-suspend-guard
-    /usr/local/sbin/system-backup-snapshot
-    /boot/refind_linux.conf
-    /etc/default/grub
-    /etc/default/keyboard
-    /etc/fstab
-)
 
 # path -> resolved target and content hash, for every entry under the given
 # locations (symlinks are listed with their final target).
@@ -112,6 +86,12 @@ cmd_capture() {
         echo "repo-dirty: $(git -C "$repo" status --porcelain 2>/dev/null | wc -l)"
     } > "$dir/meta.txt"
 
+    # What the system layer owns (system/*.nix): files, ESP files, units and
+    # the files it watches. Kept with the baseline, so diff compares what
+    # each baseline covered at its time.
+    "$repo/bin/ws" system manifest > "$dir/system/manifest.txt" 2>/dev/null \
+        || die "ws system manifest failed"
+
     echo "== owner checks"
     # wsbox check first: it starts the containers, and verify runs its
     # in-container checks only when they are already running.
@@ -119,6 +99,7 @@ cmd_capture() {
         run_to "$dir/checks/wsbox-check.txt" "$repo/bin/wsbox" check
     fi
     run_to "$dir/checks/ws-workstation-verify.txt" "$repo/bin/ws-workstation-verify" --strict
+    run_to "$dir/checks/ws-system-check.txt" "$repo/bin/ws" system check
     run_to "$dir/checks/wsflatpak-check.txt" "$repo/bin/wsflatpak" check
     run_to "$dir/checks/ws-gnome-check.txt" "$repo/bin/ws-gnome" check
     run_to "$dir/checks/ws-gnome-test.txt" "$repo/bin/ws-gnome" test
@@ -165,8 +146,9 @@ cmd_capture() {
         > "$dir/user/environment.txt" || true
 
     echo "== system"
-    local f
-    for f in "${system_files[@]}"; do
+    local f kind a
+    while IFS=$'\t' read -r kind a f; do
+        [[ "$kind" == file || "$kind" == watch ]] || continue
         if [[ -r "$f" ]]; then
             printf '%s\t%s\n' "$f" "$(sha256sum -- "$f" | cut -c1-16)"
         elif [[ -e "$f" ]]; then
@@ -174,7 +156,7 @@ cmd_capture() {
         else
             printf '%s\tMISSING\n' "$f"
         fi
-    done > "$dir/system/files.txt"
+    done < "$dir/system/manifest.txt" > "$dir/system/files.txt"
     ls -1 /etc/default/grub.d/ > "$dir/system/grub.d.txt" 2>&1 || true
     run_to "$dir/system/units-enabled.txt" systemctl list-unit-files --state=enabled --no-legend
     tr ' ' '\n' < /proc/cmdline | grep -v '^initrd=' > "$dir/system/cmdline.txt"
@@ -208,13 +190,17 @@ cmd_capture() {
         sudo lsinitrd "/boot/initrd.img-$(uname -r)" 2>/dev/null \
             | awk '{ print $NF }' | grep -E 't2bce|appletb|modprobe\.d|modules-load' \
             | sort > "$dir/system/initrd.txt" || true
-        # rEFInd ESP (not mounted in normal operation): read-only checksum.
-        sudo sh -c '
-            esp="$(mktemp -d)"
-            mount -o ro /dev/disk/by-partuuid/b3575417-21a5-43db-9c6e-dc2dd5510c76 "$esp" \
-                && { sha256sum "$esp/EFI/BOOT/refind.conf" | sed "s|$esp|ESP|"; umount "$esp"; }
-            rmdir "$esp"
-        ' > "$dir/system/refind-esp.txt" 2>&1 || true
+        # ESP files of the manifest (the ESP is not mounted in normal
+        # operation): read-only checksums.
+        while IFS=$'\t' read -r kind a f; do
+            [[ "$kind" == esp ]] || continue
+            sudo sh -c '
+                esp="$(mktemp -d)"
+                mount -o ro "/dev/disk/by-partuuid/$1" "$esp" \
+                    && { sha256sum "$esp/$2" | sed "s|$esp|ESP|"; umount "$esp"; }
+                rmdir "$esp"
+            ' sh "$a" "$f" 2>&1 || true
+        done < "$dir/system/manifest.txt" > "$dir/system/refind-esp.txt"
     fi
 
     echo
@@ -284,6 +270,11 @@ cmd_diff() {
                 sed -E "s/^\('[a-z]+', '[a-z]+'\)$/<layout>/" "$a/$rel" > "$tmp/a"
                 sed -E "s/^\('[a-z]+', '[a-z]+'\)$/<layout>/" "$b/$rel" > "$tmp/b"
                 ;;
+            # OK/DIFFERS/MISSING per entry; the summary names the store path.
+            checks/ws-system-check.txt)
+                grep -E '^[A-Z]+ ' "$a/$rel" | sort > "$tmp/a"
+                grep -E '^[A-Z]+ ' "$b/$rel" | sort > "$tmp/b"
+                ;;
             checks/ws-workstation-verify.txt)
                 normalize_verify "$a" > "$tmp/a"
                 normalize_verify "$b" > "$tmp/b"
@@ -301,7 +292,7 @@ cmd_diff() {
                 grep -v "^caps-binary-state=" "$a/$rel" > "$tmp/a"
                 grep -v "^caps-binary-state=" "$b/$rel" > "$tmp/b"
                 ;;
-            gnome/extensions-enabled.txt)
+            gnome/extensions-enabled.txt|system/files.txt)
                 sort "$a/$rel" > "$tmp/a"
                 sort "$b/$rel" > "$tmp/b"
                 ;;

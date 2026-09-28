@@ -15,7 +15,7 @@ Usage:
   ws apply [STEP...]
   ws update [STEP...]
   ws check [-v] | ws check apt
-  ws system diff|check|apply
+  ws system diff|check|apply|manifest|tree
   ws baseline capture|diff|list ...
   ws host
   ws news
@@ -61,7 +61,12 @@ system    build the host system file tree (system) and compare it
           /etc/default/keyboard (GDM: EN only), removes known obsolete files,
           enables and restarts units, reloads udev, rebuilds the initramfs
           if modprobe.d changed and runs update-grub if grub.d changed;
-          it does not touch the ESP and does not reboot
+          it does not touch the ESP and does not reboot;
+          manifest prints what the system layer owns (file MODE PATH,
+          esp PARTUUID PATH, unit STATE NAME, restart - NAME, watch - PATH:
+          files it depends on without installing them); tree prints the
+          built tree (files/, esp/, manifest); both are what ws-baseline
+          and the checks read
 baseline  functional baseline, see ws-baseline --help
 host      print the flake host name used for this machine
 USAGE
@@ -100,7 +105,7 @@ target() {
 check_untracked() {
     local untracked
     untracked="$(git -C "$repo" ls-files --others --exclude-standard -- \
-        flake.nix flake.lock hosts modules pkgs)"
+        '*.nix' flake.lock)"
     [[ -z "$untracked" ]] || die "untracked flake files (git add them first):
 $untracked"
 }
@@ -328,7 +333,9 @@ cmd_system() {
     case "$mode" in
         diff|check) ;;
         apply) shift; cmd_system_apply "$@"; return ;;
-        *) die "usage: ws system diff|check|apply" ;;
+        tree) system_tree; return ;;
+        manifest) cat "$(system_tree)/manifest"; return ;;
+        *) die "usage: ws system diff|check|apply|manifest|tree" ;;
     esac
     tree="$(system_tree)"
 

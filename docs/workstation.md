@@ -335,22 +335,28 @@ Recovery        GRUB, AMD включена
   HDMI-аудио карты убирается первым, пока карта включена. Подробности —
   `helpws suspend`.
 - `default_selection +`: rEFInd предлагает пункт прошлой загрузки.
-- «Ubuntu (AMD)» — ручной пункт в `system/files/esp/refind.conf`. Он грузит
+- «Ubuntu (AMD)» — ручной пункт в `system/files/esp/refind.conf` (шаблон).
+  Он грузит
   `/boot/ws/vmlinuz` и `/boot/ws/initrd.img`, жёсткие ссылки на новейшее ядро и
   его initrd (rEFInd не следует по symlink). Их обновляет `ws-boot-links` из
   `/etc/kernel/postinst.d`, `/etc/kernel/postrm.d` и
   `/etc/initramfs/post-update.d`; первый раз — `ws system apply`.
-- Параметры ядра «Ubuntu (AMD)» = `refind_linux.conf` без `ws.dgpu=off`.
-  Меняя их, править оба файла; `ws-workstation-verify` (14.5) их сравнивает.
-- На 2026-09-28 «Ubuntu (AMD)» ещё ни разу не загружался; «Ubuntu» с
-  `ws.dgpu=off` проверен, включая S3 (`helpws suspend`).
+- Параметры ядра всех пунктов — из `nix/hosts/mbp16/facts.nix`
+  (`kernelParams`, `rootUuid`): `refind_linux.conf`, GRUB (`grub.d`) и
+  `@AMD_OPTIONS@` в `refind.conf` собираются из них; «Ubuntu» добавляет
+  `refindDefaultParams` (`ws.dgpu=off`). Править только `facts.nix`.
+- «Ubuntu» с `ws.dgpu=off` проверен, включая S3 (`helpws suspend`);
+  «Ubuntu (AMD)» загружается (Proton и Steam на AMD проверены 2026-09-28), S3
+  в нём не проверялся.
 - `refind.conf` лежит на отдельном ESP (`nvme0n1p3`), `ws system apply` его не
-  ставит:
+  ставит; копируется собранный (`ws system check` сравнивает его, когда ESP
+  смонтирован):
 
 ```bash
 sudo mount /dev/disk/by-partuuid/b3575417-21a5-43db-9c6e-dc2dd5510c76 /mnt
-sudo cp /mnt/EFI/BOOT/refind.conf /mnt/EFI/BOOT/refind.conf.before-amd-entry
-sudo cp ~/wsconfig/system/files/esp/refind.conf /mnt/EFI/BOOT/refind.conf
+sudo cp /mnt/EFI/BOOT/refind.conf /mnt/EFI/BOOT/refind.conf.bak
+sudo cp "$(ws system tree)/esp/EFI/BOOT/refind.conf" /mnt/EFI/BOOT/refind.conf
+ws system check
 sudo umount /mnt
 ```
 

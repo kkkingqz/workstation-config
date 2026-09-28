@@ -6,7 +6,12 @@
 #   $out/files/<absolute path>   files for /
 #   $out/esp/<path>              files on the rEFInd ESP (compared only)
 #   $out/manifest                file MODE PATH | esp PARTUUID PATH |
-#                                unit STATE NAME | restart - NAME
+#                                unit STATE NAME | restart - NAME |
+#                                watch - PATH
+#
+# The manifest is the list of what the system layer owns: `ws system
+# manifest` prints it, ws-baseline and the checks read it instead of keeping
+# their own lists.
 { lib, runCommand, writeText, facts }:
 let
   repo = ./..;
@@ -44,4 +49,7 @@ runCommand "system-${facts.hardware}" { } ''
   ${lib.concatMapStrings (name: ''
     printf 'restart\t-\t%s\n' ${name} >> $out/manifest
   '') (collect "restart")}
+  ${lib.concatMapStrings (path: ''
+    printf 'watch\t-\t%s\n' ${lib.escapeShellArg path} >> $out/manifest
+  '') (collect "watch")}
 ''
