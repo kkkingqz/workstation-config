@@ -154,28 +154,34 @@ else
     run sudo chmod 2775 "$images"
 fi
 virsh=(sudo virsh -q -c qemu:///system)
-if [[ "$dry_run" == false ]] && "${virsh[@]}" pool-info default >/dev/null 2>&1; then
+# Output first, then grep: grep -q stops reading, virsh gets SIGPIPE, and
+# pipefail would count the match as a failure.
+info_of() {
+    [[ "$dry_run" == false ]] || return 0
+    "${virsh[@]}" "$@" 2>/dev/null || true
+}
+if [[ -n "$(info_of pool-info default)" ]]; then
     echo "pool default defined"
 else
     run "${virsh[@]}" pool-define-as default dir --target "$images"
 fi
-if [[ "$dry_run" == false ]] && "${virsh[@]}" pool-info default 2>/dev/null | grep -Eq '^Autostart:[[:space:]]+yes'; then
+if grep -Eq '^Autostart:[[:space:]]+yes' <<<"$(info_of pool-info default)"; then
     echo "pool default autostarts"
 else
     run "${virsh[@]}" pool-autostart default
 fi
-if [[ "$dry_run" == false ]] && "${virsh[@]}" pool-info default 2>/dev/null | grep -Eq '^State:[[:space:]]+running'; then
+if grep -Eq '^State:[[:space:]]+running' <<<"$(info_of pool-info default)"; then
     echo "pool default running"
 else
     run "${virsh[@]}" pool-start default
 fi
 # NAT network of the package (virbr0); Wi-Fi cannot be bridged.
-if [[ "$dry_run" == false ]] && "${virsh[@]}" net-info default 2>/dev/null | grep -Eq '^Autostart:[[:space:]]+yes'; then
+if grep -Eq '^Autostart:[[:space:]]+yes' <<<"$(info_of net-info default)"; then
     echo "network default autostarts"
 else
     run "${virsh[@]}" net-autostart default
 fi
-if [[ "$dry_run" == false ]] && "${virsh[@]}" net-info default 2>/dev/null | grep -Eq '^Active:[[:space:]]+yes'; then
+if grep -Eq '^Active:[[:space:]]+yes' <<<"$(info_of net-info default)"; then
     echo "network default active"
 else
     run "${virsh[@]}" net-start default
