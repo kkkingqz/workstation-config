@@ -75,13 +75,15 @@ wswin menu remove ID
 
 ## Меню GNOME
 
-Пункты, которые Wine создаёт при установке (winemenubuilder), остаются в HOME
-контейнера. После установщика `wswin install` спрашивает про каждый новый
-пункт этого prefix, добавить ли его в меню host; позже —
-`wswin menu --box BOX --prefix NAME add`. Proton пунктов Wine не создаёт:
-для `proton` (и любой программы) пункт на exe —
+Установщик создаёт ярлыки Windows (`.lnk`) в меню «Пуск» и на рабочем столе
+prefix. После установщика `wswin install` спрашивает про каждый новый ярлык
+этого prefix, добавить ли его в меню host (по одному вопросу на exe; ярлыки
+не на exe пропускаются). Так же во всех контейнерах, включая `proton`
+(Proton не создаёт Linux-пунктов Wine). Позже — `wswin menu --box BOX
+--prefix NAME add`; пункт на любой exe —
 `wswin menu --box BOX --prefix NAME add PROGRAM.exe [TITLE]` (путь на host
-или внутри prefix, иконка из exe).
+или внутри prefix). Иконка берётся из exe (`icoutils` в контейнере), запуск
+— из каталога программы.
 
 ```console
 wswin install --prefix foo ~/Downloads/foo-setup.exe

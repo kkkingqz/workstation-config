@@ -118,7 +118,8 @@ prefix_path() {
 # Run a command in BOX with WINEPREFIX. For proton, GAMEID tells umu which
 # protonfixes apply (none for umu-default). With a custom HOME distrobox
 # starts in /run/host/$PWD, which the Steam Runtime (pressure-vessel)
-# refuses: start in the container HOME instead.
+# refuses: start in WSWIN_CWD (a host path that exists in the container) or
+# the container HOME.
 in_box() {
     local box="$1" prefix="$2"
     shift 2
@@ -127,7 +128,8 @@ in_box() {
         WINEPREFIX="$prefix" \
         GAMEID="${GAMEID:-umu-default}" \
         WINEDEBUG="${WINEDEBUG:--all}" \
-        bash -c 'cd "$HOME" && exec "$@"' _ "$@"
+        WSWIN_CWD="${WSWIN_CWD:-}" \
+        bash -c 'cd "${WSWIN_CWD:-$HOME}" && exec "$@"' _ "$@"
 }
 
 exec_box() {
@@ -257,10 +259,11 @@ desktop_key() {
 }
 
 # Write the launcher into the prefix and link it into the host menu.
-#   make_launcher BOX PNAME NAME EXEC_ARG ICON WMCLASS SOURCE
+#   make_launcher BOX PNAME NAME EXEC_ARG ICON WMCLASS SOURCE [TARGET]
 # EXEC_ARG is already quoted for Exec=; ICON is a file or a theme name.
 make_launcher() {
     local box="$1" pname="$2" name="$3" exec_arg="$4" icon="$5" wmclass="$6" source="$7"
+    local target="${8:-}"
     local prefix dir id file
 
     prefix="$(prefix_path "$box" "$pname")"
@@ -286,60 +289,131 @@ make_launcher() {
         printf 'X-Workstation-Box=%s\n' "$box"
         printf 'X-Workstation-Prefix=%s\n' "$pname"
         [[ -z "$source" ]] || printf 'X-Wswin-Source=%s\n' "$source"
+        [[ -z "$target" ]] || printf 'X-Wswin-Target=%s\n' "$target"
     } > "$file"
 
     ln -sfn -- "$file" "$apps_dir/$id.desktop"
     printf 'Menu: %s -> %s\n' "$name" "$apps_dir/$id.desktop"
 }
 
-# The largest PNG Wine extracted for a theme icon name (container HOME).
-wine_icon() {
-    local home="$1" name="$2" size
+# Windows shortcuts (.lnk) of PREFIX that an installer made: Start Menu
+# (all users and the user) and desktops. The same in every profile (Proton
+# writes no Linux menu entries): "MTIME PATH" lines.
+lnk_entries() {
+    local prefix="$1" root
 
-    for size in 256 128 64 48 32 16; do
-        if [[ -f "$home/.local/share/icons/hicolor/${size}x${size}/apps/$name.png" ]]; then
-            printf '%s\n' "$home/.local/share/icons/hicolor/${size}x${size}/apps/$name.png"
-            return 0
-        fi
-    done
-    printf '%s\n' "$name"
+    for root in \
+        "$prefix/drive_c/ProgramData/Microsoft/Windows/Start Menu" \
+        "$prefix"/drive_c/users/*/"AppData/Roaming/Microsoft/Windows/Start Menu" \
+        "$prefix"/drive_c/users/*/Desktop; do
+        [[ -d "$root" ]] || continue
+        find -L "$root" -maxdepth 5 -iname '*.lnk' -printf '%T@ %p\n' 2>/dev/null
+    done | sort -u
 }
 
-# Menu entries Wine made for PREFIX (winemenubuilder writes them into the
-# container HOME): "MTIME PATH" lines.
-wine_entries() {
-    local box="$1" prefix="$2" home file wp
+# TARGET<TAB>WORKDIR<TAB>ARGS of a .lnk, TARGET and WORKDIR as host paths
+# inside PREFIX (C:\... resolved case-insensitively); nothing when the link
+# does not point at a file of the prefix.
+lnk_read() {
+    python3 - "$1" "$2" <<'PY'
+import os, struct, sys
 
-    home="$(box_home "$box")"
-    [[ -d "$home/.local/share/applications/wine" ]] || return 0
+path, prefix = sys.argv[1], sys.argv[2]
+d = open(path, 'rb').read()
+if d[:4] != b'L\0\0\0':
+    sys.exit(0)
+flags = struct.unpack_from('<I', d, 20)[0]
+pos = 76
+if flags & 0x1:                          # LinkTargetIDList
+    pos += 2 + struct.unpack_from('<H', d, pos)[0]
+target = ''
+if flags & 0x2:                          # LinkInfo
+    li = pos
+    size, hdr, liflags, _v, base, _n, suffix = struct.unpack_from('<7I', d, li)
+    def cstr(off, wide=False):
+        if wide:
+            end = off
+            while d[end:end + 2] != b'\0\0':
+                end += 2
+            return d[off:end].decode('utf-16le')
+        return d[off:d.index(b'\0', off)].decode('cp1252')
+    if liflags & 1:
+        if hdr >= 0x24:
+            ubase, usuffix = struct.unpack_from('<2I', d, li + 28)
+            target = cstr(li + ubase, True) + cstr(li + usuffix, True)
+        else:
+            target = cstr(li + base) + cstr(li + suffix)
+    pos += size
+wide = flags & 0x80
+def rstr():
+    global pos
+    n = struct.unpack_from('<H', d, pos)[0]
+    pos += 2
+    if wide:
+        s = d[pos:pos + 2 * n].decode('utf-16le'); pos += 2 * n
+    else:
+        s = d[pos:pos + n].decode('cp1252'); pos += n
+    return s.rstrip('\0')
+f = {}
+for bit, key in ((0x4, 'name'), (0x8, 'rel'), (0x10, 'wd'), (0x20, 'args'), (0x40, 'icon')):
+    f[key] = rstr() if flags & bit else ''
 
-    while IFS= read -r -d '' file; do
-        wp="$(sed -nE 's/^Exec=env "?WINEPREFIX=([^" ]+)"? .*/\1/p' "$file" | head -n1)"
-        [[ -n "$wp" ]] || wp="$home/.wine"
-        [[ "$wp" == "$prefix" ]] || continue
-        printf '%s %s\n' "$(stat -c %Y "$file")" "$file"
-    done < <(find "$home/.local/share/applications/wine" -name '*.desktop' -print0)
+def unix(win):
+    win = win.rstrip('\0')
+    if len(win) < 3 or win[1] != ':' or win[0].lower() != 'c':
+        return ''
+    cur = os.path.join(prefix, 'drive_c')
+    for part in [p for p in win[3:].split('\\') if p]:
+        try:
+            names = os.listdir(cur)
+        except OSError:
+            return ''
+        match = next((n for n in names if n == part), None) \
+            or next((n for n in names if n.lower() == part.lower()), None)
+        if match is None:
+            return ''
+        cur = os.path.join(cur, match)
+    return cur
+
+t = unix(target)
+if not t and f['rel']:
+    t = os.path.normpath(os.path.join(os.path.dirname(path), f['rel'].replace('\\', '/')))
+if not t or not os.path.isfile(t):
+    sys.exit(0)
+wd = unix(f['wd']) or os.path.dirname(t)
+print('\t'.join((t, wd, f['args'].replace('\t', ' '))))
+PY
 }
 
-# Offer one Wine entry for the host menu (skips entries already added).
-offer_wine_entry() {
-    local box="$1" pname="$2" file="$3" prefix name exec_line exec_arg icon
+# Offer one shortcut for the host menu (once per target .exe of the prefix).
+offer_lnk_entry() {
+    local box="$1" pname="$2" file="$3" prefix info target args title icon arg
+    local -a words=()
 
     prefix="$(prefix_path "$box" "$pname")"
-    if grep -qsxF "X-Wswin-Source=$file" "$(menu_dir "$prefix")"/*.desktop; then
+    info="$(lnk_read "$file" "$prefix")"
+    [[ -n "$info" ]] || return 0
+    IFS=$'\t' read -r target _ args <<<"$info"
+    [[ "${target,,}" == *.exe ]] || return 0
+    if grep -qsxF "X-Wswin-Target=$target" "$(menu_dir "$prefix")"/*.desktop; then
         return 0
     fi
 
-    name="$(desktop_key "$file" Name)"
-    exec_line="$(desktop_key "$file" Exec)"
-    # Exec=env "WINEPREFIX=..." wine ARG: ARG is kept as Wine quoted it.
-    exec_arg="${exec_line#* wine }"
-    [[ "$exec_arg" != "$exec_line" && -n "$name" ]] || return 0
+    title="$(basename "$file")"
+    title="${title%.*}"
+    ask "Add \"$title\" (${target#"$prefix"/}) to the host menu?" || return 0
 
-    ask "Add \"$name\" to the host menu?" || return 0
-    icon="$(wine_icon "$(box_home "$box")" "$(desktop_key "$file" Icon)")"
-    make_launcher "$box" "$pname" "$name" "$exec_arg" "$icon" \
-        "$(desktop_key "$file" StartupWMClass)" "$file"
+    arg="$(desktop_quote "$target")"
+    [[ -z "$args" ]] || read -ra words <<<"$args"
+    for a in "${words[@]}"; do
+        arg+=" $(desktop_quote "$a")"
+    done
+
+    icon="$(mktemp --suffix=.png "${XDG_RUNTIME_DIR:-/tmp}/wswin-icon.XXXXXX")"
+    exe_icon "$box" "$target" "$icon" || true
+    [[ -s "$icon" ]] || { rm -f -- "$icon"; icon=""; }
+    make_launcher "$box" "$pname" "$title" "$arg" "$icon" "$(basename "$target")" "$file" "$target"
+    [[ -z "$icon" ]] || rm -f -- "$icon"
 }
 
 cmd_menu() {
@@ -364,13 +438,13 @@ cmd_menu() {
                 exe_icon "$box" "$exe" "$icon" || true
                 [[ -s "$icon" ]] || { rm -f -- "$icon"; icon=""; }
                 make_launcher "$box" "$pname" "$title" "$(desktop_quote "$exe")" "$icon" \
-                    "$(basename "$exe")" ""
+                    "$(basename "$exe")" "" "$exe"
                 [[ -z "$icon" ]] || rm -f -- "$icon"
                 return 0
             fi
             while read -r _ entry; do
-                offer_wine_entry "$box" "$pname" "$entry"
-            done < <(wine_entries "$box" "$prefix")
+                offer_lnk_entry "$box" "$pname" "$entry"
+            done < <(lnk_entries "$prefix")
             ;;
         list)
             local link target state
@@ -492,7 +566,7 @@ cmd_portable() {
         exe_icon "$box" "$exe" "$icon" || icon=""
         [[ -z "$icon" || -s "$icon" ]] || icon=""
         make_launcher "$box" "$pname" "$name" "$(desktop_quote "$exe")" "$icon" \
-            "$(basename "$exe")" ""
+            "$(basename "$exe")" "" "$exe"
         [[ -z "$icon" ]] || rm -f -- "$icon"
     fi
     printf 'Start: wswin exec --box %s --prefix %s %q\n' "$box" "$pname" "$exe"
@@ -513,7 +587,7 @@ cmd_install() {
     run="$(runner "$box")"
 
     local before entry mtime
-    before="$(wine_entries "$box" "$prefix")"
+    before="$(lnk_entries "$prefix")"
 
     case "${file,,}" in
         *.msi) in_box "$box" "$prefix" "$run" msiexec /i "$file" "$@" ;;
@@ -522,25 +596,28 @@ cmd_install() {
 
     printf '\nInstalled into %s/%s (%s).\n' "$box" "$pname" "$prefix"
 
-    # winemenubuilder writes the entries right after the installer.
-    sleep 2
+    # Every new or changed shortcut the installer made in the prefix.
     while read -r mtime entry; do
         [[ -n "$entry" ]] || continue
         grep -qxF "$mtime $entry" <<<"$before" && continue
-        offer_wine_entry "$box" "$pname" "$entry"
-    done < <(wine_entries "$box" "$prefix")
+        offer_lnk_entry "$box" "$pname" "$entry"
+    done < <(lnk_entries "$prefix")
     printf 'More later: wswin menu --box %s --prefix %s add [PROGRAM.exe [TITLE]]\n' "$box" "$pname"
 }
 
 cmd_exec() {
-    local box pname rest prefix
+    local box pname rest prefix program cwd=""
     parse_target "$@"
     set -- "${rest[@]}"
     (($#)) || die "program required"
 
     ensure_prefix "$box" "$pname"
     prefix="$(prefix_path "$box" "$pname")"
-    in_box "$box" "$prefix" "$(runner "$box")" "$(host_path "$1")" "${@:2}"
+    program="$(host_path "$1")"
+    # A program file starts in its own directory (games load data relative
+    # to it), as from Explorer.
+    [[ -f "$program" ]] && cwd="$(dirname "$program")"
+    WSWIN_CWD="$cwd" in_box "$box" "$prefix" "$(runner "$box")" "$program" "${@:2}"
 }
 
 # The program starts in its own directory, as from Explorer.
