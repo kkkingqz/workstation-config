@@ -6,8 +6,7 @@ volume: User Commands
 
 # TERMINAL WORKSTATION
 
-**Ghostty + Fish — рабочий справочник**  
-**Baseline:** 2026-09-21
+**Ghostty + Fish — рабочий справочник**
 
 > Этот документ — краткая практическая справка по текущей терминальной среде.
 > Для полного состояния workstation используй `helpws workstation`.
@@ -20,7 +19,7 @@ volume: User Commands
 
 ```console
 helpws                 # этот справочник
-helpws workstation     # полный baseline workstation
+helpws workstation     # вся workstation подробно
 helpws man ws-terminal
 helpws man ws-workstation
 ```
@@ -449,24 +448,9 @@ data             ~/.local/share/<tool>/...
 ~/wsconfig
 ```
 
-Структура:
-
-```text
-wsconfig/
-├── bin/
-│   ├── dotgit
-│   ├── helpws
-│   └── ws-doc-build
-├── terminal/
-│   ├── fish/
-│   ├── ghostty/
-│   ├── micro-help/
-│   └── xdg-terminals/
-├── docs/
-│   ├── terminal.md
-│   └── workstation.md
-└── nix/pkgs/man.nix      man pages из docs/ (собирает Nix)
-```
+Терминальная часть: `terminal/` (fish, ghostty, micro-help, xdg-terminals),
+`bin/` (`dotgit`, `helpws`, `ws-doc-build`), `docs/`. Весь репозиторий —
+`helpws readme`.
 
 Каталог checkout — настройка хоста: `wsconfig` в
 `nix/hosts/<host>/facts.nix` (относительно `$HOME`). Скрипты находят
@@ -492,12 +476,8 @@ git -C ~/wsconfig
 
 # ДОКУМЕНТАЦИЯ
 
-Markdown — источник истины:
-
-```text
-docs/runbooks/terminal.md
-docs/architecture/workstation.md
-```
+Markdown в `docs/` — источник истины (`architecture/`, `runbooks/`,
+`plans/`, `history/`); `helpws` находит страницу по `title:`.
 
 Man pages собирает Nix из `docs/` (`nix/pkgs/man.nix`: `ws-doc-build` с
 lowdown из nixpkgs) и ставит `ws switch` в `~/.local/share/man/man1`; в git их
@@ -533,15 +513,9 @@ man ws-workstation
 
 ```text
 ~/.config/fish/config.fish
-~/.config/fish/conf.d/00-nix.fish
-~/.config/fish/conf.d/eza.fish
-~/.config/fish/conf.d/fzf-options.fish
-~/.config/fish/conf.d/git-prompt.fish
-~/.config/fish/conf.d/user-bin.fish
-~/.config/fish/functions/fish_prompt.fish
-~/.config/fish/functions/fish_right_prompt.fish
-~/.config/fish/functions/fzf_cd_browser.fish
-~/.config/fish/completions/helpws.fish
+~/.config/fish/conf.d/        00-nix, eza, fzf-options, git-prompt, user-bin
+~/.config/fish/functions/     prompt, title, fzf_cd_browser
+~/.config/fish/completions/   helpws, wsbox, wsflatpak, wswin, ws-gnome
 ```
 
 Все файлы из `terminal/fish/` (и `terminal/ghostty/*.ghostty`, команды `bin/`)

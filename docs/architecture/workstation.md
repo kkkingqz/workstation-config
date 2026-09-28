@@ -4,13 +4,12 @@ date: 2026-09-28
 source: Workstation
 volume: User Commands
 
-# UBUNTU T2 WORKSTATION — CURRENT BASELINE
+# UBUNTU T2 WORKSTATION
 
-**Дата:** 2026-09-23
 **Платформа:** MacBook Pro 16" 2019 (`MacBookPro16,1`, Intel/T2)
 
-> Этот документ описывает текущее рабочее состояние workstation.
-> Практический справочник по терминалу открывается командой `helpws`.
+> Текущее рабочее состояние workstation подробно. Слои и правила —
+> `helpws layers`, проверки — `helpws checks`, терминал — `helpws terminal`.
 
 ---
 
@@ -186,17 +185,6 @@ closed app               nothing happens; application is not launched
 Extension не перехватывает сам drop и не патчит Ubuntu Dock или Desktop Icons
 NG.
 
-GNOME host layer was finalized and fully smoke-tested on 2026-09-23.
-
-Final GNOME-specific additions include:
-
-```text
-managed Yaru / Ubuntu Dock profile
-host Qt5/Qt6 native Wayland integration
-explicit required-extension policy
-workstation-dock-spring@local
-```
-
 Dock Spring behavior:
 
 ```text
@@ -265,8 +253,7 @@ system/files/usr/local/libexec/ws-touchbar-fn
 system/files/systemd/system/ws-touchbar-fn.service
 ```
 
-Generated `gschemas.compiled` и `runtime/` не являются source files и
-не коммитятся. Machine-local state (backup сочетаний GNOME, флаг выключенного
+Generated `gschemas.compiled` не является source file и не коммитится. Machine-local state (backup сочетаний GNOME, флаг выключенного
 xremap) — в `~/.local/state/workstation/`, не в checkout.
 
 Полный справочник:
@@ -354,8 +341,8 @@ Recovery        GRUB, AMD включена
   `@AMD_OPTIONS@` в `refind.conf` собираются из них; «Ubuntu» добавляет
   `refindDefaultParams` (`ws.dgpu=off`). Править только `facts.nix`.
 - «Ubuntu» с `ws.dgpu=off` проверен, включая S3 (`helpws suspend`);
-  «Ubuntu (AMD)» загружается (Proton и Steam на AMD проверены 2026-09-28), S3
-  в нём не проверялся.
+  «Ubuntu (AMD)» загружается, Proton и Steam в нём работают на AMD; S3 в
+  нём не проверялся.
 - `refind.conf` лежит на отдельном ESP (`nvme0n1p3`), `ws system apply` его не
   ставит; копируется собранный (`ws system check` сравнивает его, когда ESP
   смонтирован):
@@ -374,7 +361,7 @@ sudo umount /mnt
 конфигурационное пространство карты читается как `ff ff`, то есть питание
 снято: `power_state` для этого не годится, он остаётся `D3hot` (ACPI power
 resource у dGPU нет, ядро не знает, что gmux снял питание).
-Замер 2026-09-27 в простое от батареи: около 16 Вт без AMD против около 24 Вт с ней.
+В простое от батареи — около 16 Вт без AMD против около 24 Вт с ней.
 
 ---
 
@@ -395,8 +382,8 @@ t2bce 0.07-nostatefix1     отказ T2 от stateful suspend не роняет
 Touch Bar родной режим     без appletbdrm / tiny-dfr
 ```
 
-ASPM принудительно **не** включается (`pcie_aspm=force` убран 2026-09-25):
-все отказы T2 от stateful suspend случились с ним.
+ASPM принудительно **не** включается: все отказы T2 от stateful suspend
+случились с `pcie_aspm=force` (`helpws history-suspend`).
 
 Управление и подробности:
 
@@ -433,12 +420,9 @@ xremap пропускает `KEY_FN` (`skip_key_event: false`) и одновре
 Fn для своего Apple `apple_fn` mode. `ws-touchbar-fn` слушает Fn на
 `workstation-xremap` и переключает `hid-appletb-kbd` mode 1/2.
 
-`tiny-dfr` (режим дисплея Touch Bar, `appletbdrm`) не используется: на этой
-машине все сбои suspend 2026-09-22..25 случились в режиме дисплея, в родном
-режиме их не было.
-
-Исторические `react-drm`, `mac-touchbar-plus` и `tiny-dfr` не являются current
-baseline.
+`tiny-dfr` (режим дисплея Touch Bar, `appletbdrm`) не используется: все
+сбои suspend на этой машине случились в режиме дисплея
+(`helpws history-suspend`).
 
 Подробности:
 
@@ -480,7 +464,7 @@ windows/apps.nix                   Windows-программы с launcher (helpw
 bin/wsbox, bin/wswin, bin/ws-gpu
 ```
 
-С 2026-09-27 контейнеры объявлены в `distrobox/distrobox.nix` (общие
+Контейнеры объявлены в `distrobox/distrobox.nix` (общие
 значения по умолчанию, у контейнера — только образ, HOME, пакеты,
 экспорты). `ws switch` собирает из них `containers.ini` (формат
 `distrobox assemble`) и `exports.ini` в `~/.local/share/workstation/distrobox/`,
@@ -855,21 +839,15 @@ GNOME (`nix/pkgs/gnome-extensions.nix`), конфиг `wsflatpak` из
 `flatpak/flatpak.nix`, профиль внешнего вида GNOME
 (`gnome/gnome.nix`, `dconf.settings`); `ws system apply` ставит копии
 системных файлов из сборки `system`; GNOME, Flatpak, Distrobox,
-клавиатура — прежние `bin/`-владельцы, их по порядку вызывает `ws apply`.
+клавиатура — `bin/`-владельцы, их по порядку вызывает `ws apply`.
 Основная проверка — `ws check`.
 
 Runtime helper paths в `~/.local/bin` используют symlink на repository.
 GNOME extension runtime copies являются реальными directories в
 `~/.local/share/gnome-shell/extensions/`.
 
-Generated/runtime state:
-
-```text
-runtime/
-gnome/extensions/*/schemas/gschemas.compiled
-```
-
-не коммитится.
+Сгенерированное (`gnome/extensions/*/schemas/gschemas.compiled`, `man/`
+локальной сборки) не коммитится.
 
 Перед commit используется:
 
@@ -910,7 +888,7 @@ Touch Bar работает в родном режиме: `hid-appletb-kbd` + `ws
 
 ---
 
-# CURRENT BASELINE
+# СВОДКА
 
 ```text
 Ubuntu 26.04.1 LTS

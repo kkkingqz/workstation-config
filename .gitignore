@@ -1,6 +1,3 @@
-# Downloaded runtime binaries
-runtime/
-
 # GNOME GSettings compiled schemas are generated from tracked XML sources
 gnome/extensions/*/schemas/gschemas.compiled
 

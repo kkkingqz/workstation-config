@@ -127,7 +127,7 @@ done < <(git -C "$repo" ls-files -z)
 [[ "$junk_found" == false ]] && pass "no obvious tracked editor/backup/one-shot junk"
 
 runtime_tracked=false
-for p in state runtime; do
+for p in state man; do
     if git -C "$repo" ls-files -- "$p" | grep -q .; then
         runtime_tracked=true
         fail "generated/runtime path is tracked: $p"
@@ -135,14 +135,14 @@ for p in state runtime; do
 done
 [[ "$runtime_tracked" == false ]] && pass "runtime/generated directories are not tracked"
 
-for ignored in runtime/probe $(for uuid in $(ext_list local); do
+for ignored in $(for uuid in $(ext_list local); do
     [[ -d "$repo/gnome/extensions/$uuid/schemas" ]] \
         && echo "gnome/extensions/$uuid/schemas/gschemas.compiled"
 done); do
     if git -C "$repo" check-ignore -q -- "$ignored"; then
         pass ".gitignore covers: $ignored"
     else
-        warn ".gitignore does not cover expected runtime path: $ignored"
+        warn ".gitignore does not cover generated path: $ignored"
     fi
 done
 
@@ -367,7 +367,7 @@ while IFS= read -r -d '' path; do
             ;;
         *)
             case "$path" in
-                runtime/*|*/schemas/gschemas.compiled)
+                */schemas/gschemas.compiled)
                     info "ignored/generated untracked file: $(q "$path")"
                     ;;
                 fix-keyboard-layer-v*.sh|*/fix-keyboard-layer-v*.sh|rollback-keyboard-layer-v*.sh|*/rollback-keyboard-layer-v*.sh)

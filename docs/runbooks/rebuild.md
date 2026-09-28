@@ -276,237 +276,70 @@ gnome/gnome.nix
 experimental flags, keyboard/input sources, extension enablement, wallpaper,
 Flatpak, Distrobox или Wine.
 
-Display scale после reinstall выбирается штатно через `Settings -> Displays`;
-текущий рабочий checkpoint — logical scale `1.5`.
+Display scale после reinstall выбирается штатно через `Settings -> Displays`:
+logical scale `1.5`.
 
 Wine не устанавливать на host: Windows-программы живут в контейнерах
 `wine-wayland`, `wine`, `proton` (`helpws windows`).
 
 
-
 # 6.2. Host Qt integration
 
-Для host Qt5/Qt6 applications установить:
-
-```console
-sudo apt install --no-install-recommends \
-    qgnomeplatform-qt5 \
-    qgnomeplatform-qt6 \
-    qtwayland5 \
-    qt6-wayland
-```
-
-Не добавлять глобальные Qt platform/theme/scale environment overrides.
-
-Ожидаемый baseline:
-
-```text
-Qt5 -> native Wayland + QGnomePlatform automatically
-Qt6 -> native Wayland + QGnomePlatform automatically
-```
-
-Qt внутри Distrobox относится к managed Distrobox layer.
+`qgnomeplatform-qt5`, `qgnomeplatform-qt6`, `qtwayland5`, `qt6-wayland` — в
+`nix/hosts/apt.txt` (ставит `bootstrap.sh`, сверяет `ws check apt`).
+Глобальных Qt overrides (`QT_QPA_PLATFORM` и т. п.) нет, это проверяет
+`ws check home`. Qt5 и Qt6 сами берут native Wayland и QGnomePlatform.
 
 
 # 6.3. Distrobox / Podman managed layer
 
-Установить только host infrastructure:
+Host-пакеты (`podman`, `distrobox`, `uidmap`, …) ставит `bootstrap.sh`,
+модуль `ntsync` — `ws system apply`, контейнеры — шаг `distrobox` в `ws
+apply` (`wsbox apply`). HOME контейнеров (`~/distrobox/<имя>/`) приходит с
+восстановленным HOME пользователя; без него контейнеры создаются пустыми.
 
-```console
-sudo apt install --no-install-recommends -y \
-    podman distrobox uidmap fuse-overlayfs slirp4netns passt
-```
+Вручную после создания:
 
-Runtime helper и Fish completion — ссылки home-manager, их создаёт
-`ws switch` (`nix/home/links.nix`, `helpws layers`). Без Nix —
-вручную:
+- AUR в `arch` — через `paru`, если его нет:
 
-```console
-repo="$HOME/wsconfig"
+  ```fish
+  set tmp (mktemp -d)
+  git clone https://aur.archlinux.org/paru.git "$tmp/paru"
+  cd "$tmp/paru"
+  makepkg -si
+  cd
+  rm -rf "$tmp"
+  ```
 
-mkdir -p "$HOME/.local/bin" "$HOME/.config/fish/completions"
+  затем нужные AUR-пакеты и `wsbox apply arch` (экспорты).
+- WinBox, если prefix потерян: `wswin prefix --box wine-wayland winbox init`
+  и `winbox.exe` (WinBox 3.x, mikrotik.com) в
+  `~/distrobox/wine-wayland/prefixes/winbox/drive_c/Program Files/WinBox/`.
+- Rust в `touchbar-build`, если его HOME потерян: rustup в HOME контейнера
+  (`~/distrobox/touchbar-build/.rustup`, `.cargo`).
 
-ln -sfn "$repo/bin/wsbox" "$HOME/.local/bin/wsbox"
-ln -sfn \
-    "$repo/terminal/fish/completions/wsbox.fish" \
-    "$HOME/.config/fish/completions/wsbox.fish"
-```
-
-Host NTSync source of truth:
-
-```text
-system/files/modules-load.d/ntsync.conf
-```
-
-Ставит его `ws system apply` (раздел 6.0); вручную:
-
-```console
-sudo install -Dm644 \
-    "$repo/system/files/modules-load.d/ntsync.conf" \
-    /etc/modules-load.d/ntsync.conf
-
-sudo modprobe ntsync
-ls -l /dev/ntsync
-```
-
-Создать/восстановить managed containers:
-
-```console
-wsbox apply
-wsbox status
-```
-
-(шаг `distrobox` в `ws apply`)
-
-Managed set:
-
-```text
-ubuntu
-arch
-wine-wayland
-wine
-proton
-t2bce-build
-touchbar-build
-```
-
-Custom HOME каждого box находится в `~/distrobox/<имя>/` и не
-удаляется `wsbox remove`/`recreate`.
-`distrobox rm` (его вызывают `remove` и `recreate`) удаляет
-экспортированные ярлыки контейнера; `recreate` экспортирует их заново, а
-если приложения ещё нет (AUR в `arch`), пишет WARN — после установки
-`wsbox apply NAME`.
-
-Virtual provider host NTSync (`wsbox-host-ntsync`, `NTSYNC-MODULE`) Arch
-ставит сам при создании: `base-devel` и `git` — пакеты контейнера, init hook
-`distrobox/arch/wsbox-host-ntsync/install-hook` собирает пакет от имени
-пользователя и ставит его (при каждом старте контейнера, если его нет). Без
-него pacman/paru тянут в контейнер ядро `linux` для `ntsync-autoload`.
-Проверка:
-
-```console
-wsbox run arch pacman -Qi wsbox-host-ntsync
-```
-
-AUR-пакеты в `arch` — через `paru`; если он ещё не установлен:
-
-```fish
-set tmp (mktemp -d)
-git clone https://aur.archlinux.org/paru.git "$tmp/paru"
-cd "$tmp/paru"
-makepkg -si
-cd
-rm -rf "$tmp"
-```
-
-Проверить, что Arch-контейнеры (`arch`, `wine-wayland`, `proton`) не
-содержат собственного kernel/initramfs stack:
-
-```console
-wsbox run wine-wayland bash -lc '
-pacman -Q wsbox-host-ntsync wine ntsync-autoload
-for p in linux mkinitcpio mkinitcpio-busybox
-do
-    pacman -Q "$p" 2>/dev/null || echo "$p: absent"
-done
-ls -l /dev/ntsync
-pacman -Dk
-'
-```
-
-Windows-контейнеры (`wine-wayland`, `wine`, `proton`) ставят Wine, WineHQ
-и umu сами при создании (хуки в `distrobox.nix`, `helpws windows`).
-Prefixes лежат в их HOME и переживают recreate. WinBox — prefix
-`~/distrobox/wine-wayland/prefixes/winbox` (`LogPixels=144`), launcher
-`ws-win-winbox.desktop` из `windows/apps.nix`. Если prefix потерян:
-
-```console
-wswin prefix --box wine-wayland winbox init
-```
-
-и положить `winbox.exe` (WinBox 3.x, mikrotik.com) в
-`~/distrobox/wine-wayland/prefixes/winbox/drive_c/Program Files/WinBox/`.
-
-Steam — flatpak (`wsflatpak apply`), udev-правила контроллеров — `steam-devices`
-из `nix/hosts/apt.txt` (`sudo apt install steam-devices`; `ws check apt` сверяет список).
-
-Проверка:
+`wsbox-host-ntsync` (`NTSYNC-MODULE`) Arch-контейнеры ставят сами (init
+hook), Wine/WineHQ/umu — хуки Windows-контейнеров. Steam — flatpak, правила
+контроллеров — `steam-devices` (apt-список).
 
 ```console
 wsbox check
 ```
 
-Ожидаемо `FAIL=0 WARN=0`. Контейнеры объявлены в
-`distrobox/distrobox.nix` (`containers.ini` собирает `ws switch`);
-build-контейнеры `t2bce-build` и `touchbar-build` тоже там; Rust в `touchbar-build` —
-rustup в его HOME (`~/distrobox/touchbar-build/.rustup`, `.cargo`), на новой
-машине ставится вручную (`helpws workstation`, Managed Distrobox layer).
-
-Подробности:
-
-```console
-helpws distrobox
-```
+Подробности: `helpws distrobox`, `helpws windows`.
 
 
 # 6.4. Keyboard / shortcuts
 
-После clone `wsconfig` восстановить system-level keyboard state:
+Системная часть (uinput, GDM/login только US, Touch Bar: udev, modprobe,
+`ws-touchbar-fn`) — `ws system apply` (раздел 6.0; при изменении modprobe
+пересобирает initramfs). Пользовательская — шаги `extensions`, `tiling`,
+`keyboard` в `ws apply`; после первой установки расширений нужен
+logout/login и ещё один `ws apply`.
 
 ```console
-~/wsconfig/bin/ws-keyboard-system-apply
-```
-
-Он устанавливает:
-
-```text
-/etc/udev/rules.d/99-workstation-uinput.rules
-GDM/login layout = US only
-/etc/udev/rules.d/90-touchbar-native.rules
-/etc/modprobe.d/tb.conf
-/etc/modprobe.d/touchbar-native.conf
-/usr/local/libexec/ws-touchbar-fn + ws-touchbar-fn.service
-```
-
-При изменении modprobe-файлов он сам пересобирает initramfs.
-
-Это обёртка над `ws system apply` (нужен Nix, раздел 6.0): он ставит все
-системные файлы из `system` — и suspend layer из раздела 8, и T2
-base из разделов 4–5, — только отличающиеся, с бэкапом в
-`/var/backups/workstation/system-<время>/`. Без изменений:
-`ws system diff`.
-
-Затем установить наши GNOME extensions:
-
-```console
-~/wsconfig/bin/ws-keyboard-install-extensions
-```
-
-После первой установки extensions на Wayland выполнить logout/login.
-
-Затем:
-
-```console
-~/wsconfig/bin/ws-tiling-apply
-~/wsconfig/bin/ws-keyboard-apply
-```
-
-Расширения, tiling и клавиатура — шаги `extensions`, `tiling`, `keyboard`
-в `ws apply`; `ws-keyboard-system-apply` (sudo) в него не входит.
-
-Целевые input sources:
-
-```text
-us
-ru
-ua
-```
-
-Проверить:
-
-```console
-ws-input-source status
 ws-keyboard check
+ws-input-source status
 ```
 
 Ожидаемое поведение:
@@ -541,10 +374,10 @@ GRAPHICS). Других AMD power tweaks не воспроизводить.
 deep / S3
 ```
 
-Восстановить suspend layer из repository:
+Файлы слоя сна уже поставил `ws system apply` (раздел 6.0). Патченые модули
+t2bce собираются под установленное ядро:
 
 ```console
-ws-suspend apply
 ws-suspend t2bce-build
 ws-suspend t2bce-install
 sudo reboot
@@ -557,7 +390,7 @@ sudo reboot
 Проверить:
 
 ```bash
-cat /sys/power/mem_sleep
+ws-suspend check
 ws-suspend status
 ```
 
@@ -581,16 +414,10 @@ Touch Bar USB runtime PM специально не оптимизировать.
 
 # 9. Touch Bar
 
-Baseline — родной режим Touch Bar: кнопки рисует T2, режимом управляет
+Родной режим Touch Bar: кнопки рисует T2, режимом управляет
 `hid-appletb-kbd`, Fn за xremap пробрасывает `ws-touchbar-fn`. Отдельный
 пакет не нужен; `tiny-dfr` **не устанавливать** (причины: `helpws touchbar`).
-
-Всё ставит system-level workstation config из раздела 6.4:
-
-```console
-ws-keyboard-system-apply
-sudo reboot
-```
+Всё ставит `ws system apply` (раздел 6.0), режим меняется после reboot.
 
 Целевое поведение:
 
@@ -603,19 +430,15 @@ sudo reboot
 Проверить:
 
 ```console
-cat /sys/bus/usb/devices/7-6/bConfigurationValue
-lsmod | grep appletbdrm
-systemctl is-active ws-touchbar-fn.service
+ws-suspend check      # USB configuration 1, без appletbdrm, ws-touchbar-fn active
 ```
-
-Ожидается `1`, пустой вывод `lsmod` и `active`.
 
 Не устанавливать Touch Bar renderer/daemon, которые переводят Touch Bar в
 режим дисплея (`tiny-dfr`, `react-drm`, `mac-touchbar-plus`).
 
 ---
 
-# 10. GNOME extensions текущего baseline
+# 10. GNOME extensions
 
 Для keyboard/window/tiling layer используются:
 
@@ -652,14 +475,11 @@ ws-keyboard-install-extensions
 Закрепить версию: `pin = { version = N; hash = "sha256-…"; }` у расширения
 в `gnome/gnome-extensions.nix` (N — номер из ссылки на zip EGO), `ws
 switch`. Такое расширение ставит Nix ссылками, и обновлять его в Extension
-Manager нельзя: verify покажет FAIL «files not from Nix», `ws update
+Manager нельзя: `ws-gnome check` покажет FAIL «files not from Nix», `ws update
 extensions` при закреплённых расширениях отказывается.
 
-`Window Monitor Pro` используется и входит в baseline расширений; keyboard
-baseline от него не зависит.
-
-`workstation-dock-spring@local` schema не использует. Общий installer должен
-установить его runtime copy так же, как остальные local extensions.
+`Window Monitor Pro` обязателен в списке расширений; клавиатура от него не
+зависит.
 
 После logout/login проверить:
 
@@ -674,40 +494,39 @@ closed Dock app + external file drag + long hover
 
 ---
 
-# 10.1. GNOME final verification
-
-After restoring the GNOME host layer:
+# 10.1. Проверка GNOME
 
 ```console
-ws-gnome test
+ws-gnome test        # автоматическая часть: RESULT: AUTOMATED CHECKS PASSED
 ```
 
-Expected automatic result:
+Затем по его списку вручную, в том числе Dock Spring:
 
 ```text
-RESULT: AUTOMATED CHECKS PASSED
+running/minimized app + file hover ~1.3 s -> окно выходит вперёд
+closed pinned app + long file hover       -> приложение не запускается
+Nautilus -> drop в окно приложения        -> работает
 ```
-
-Then manually verify Dock Spring:
-
-```text
-running/minimized app + file hover ~1.3 s -> existing window appears
-closed pinned app + long file hover       -> application stays closed
-Nautilus -> application window drop       -> works
-```
-
-The Touch Bar is validated separately in the T2 layer and does not block the
-GNOME plan.
 
 ---
 
 # 11. Финальная проверка
 
-Запустить:
-
 ```bash
 ws check
 ```
+
+Сравнить с эталоном старой системы из архива `ws collect`:
+
+```console
+tar -xzf ws-collect-HOST-DATE.tar.gz
+cp -a ws-collect-HOST-DATE/baseline ~/.local/state/workstation/baseline/before-reinstall
+ws baseline capture after-reinstall
+ws baseline diff before-reinstall after-reinstall
+```
+
+Ожидаемые отличия — только то, что зависит от установки (UUID, версии
+пакетов, хэши изменённых файлов).
 
 Затем вручную проверить:
 
@@ -726,7 +545,7 @@ ws check
 - Dock Spring: running app activates after ~1.3 s hover;
 - Dock Spring: closed app remains closed on hover.
 
-После этого установка считается восстановленной до текущего baseline.
+После этого установка восстановлена; `ws checkpoint create after-reinstall`.
 
 # 12. Recovery
 

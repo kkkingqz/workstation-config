@@ -4,7 +4,7 @@ date: 2026-09-25
 source: Workstation
 volume: User Commands
 
-# KEYBOARD — FINAL macOS-STYLE PROFILE ON GNOME
+# KEYBOARD — macOS-STYLE PROFILE ON GNOME
 
 ## Назначение
 
@@ -23,9 +23,7 @@ Apple Control   = PC Ctrl  = Linux Ctrl
 Профиль один: macOS-style с одинаковой семантикой модификаторов на Apple и
 PC keyboard. Параметры запуска xremap (`--desktop gnome`,
 `--watch=config,device`) заданы в unit `xremap.service`
-(`keyboard/xremap.nix`, переменные `XREMAP_DESKTOP`, `XREMAP_WATCH`);
-до 2026-09-27 они и проверки `PROFILE=macos`,
-`PC_MODIFIER_LAYOUT=semantic` лежали в `config/keyboard/settings.conf`.
+(`keyboard/xremap.nix`, переменные `XREMAP_DESKTOP`, `XREMAP_WATCH`).
 
 ## Архитектура
 
@@ -203,8 +201,9 @@ overview LED off (временный EN)
 bin/ws-caps-led
 ```
 
-вызывается GNOME extension по абсолютному repository path. Он не является
-обычной пользовательской CLI-командой и не обязан находиться в `$PATH`.
+вызывается GNOME extension через `~/.local/share/workstation/wsconfig/bin/`
+(ссылка home-manager на checkout). Это не пользовательская команда, в
+`~/.local/bin` её нет (`binExcluded` в `nix/home/links.nix`).
 
 ## GDM login и GNOME lock screen
 
@@ -249,13 +248,7 @@ GNOME Shell может reload'ить `InputSourceManager` при переход�
 в password input purpose. Поэтому extension повторно принудительно ставит EN
 на каждом `current-source-changed`, пока активен `unlock-dialog`.
 
-Используется GNOME Shell 50 signal:
-
-```text
-locked-changed
-```
-
-Старый ошибочный вариант `notify::locked` не используется.
+Используется сигнал GNOME Shell 50 `locked-changed`.
 
 Важно: lock screen **не изменяет** сохранённый `caps-binary-state`. После
 unlock обычная EN/RU/UA логика продолжает работать.
@@ -508,7 +501,7 @@ skip_key_event: false
 `ws-touchbar-fn.service`: пока Fn зажата, `hid-appletb-kbd` переключается в
 mode 2 (media/brightness), при отпускании возвращается mode 1.
 
-Подробности и причины отказа от `tiny-dfr`:
+Подробности Touch Bar:
 
 ```console
 helpws touchbar
@@ -556,12 +549,7 @@ gnome/extensions/workstation-input-source@local/
   schemas/org.gnome.shell.extensions.workstation-input-source.gschema.xml
 ```
 
-Generated files are not source-of-truth:
-
-```text
-gnome/extensions/*/schemas/gschemas.compiled
-runtime/
-```
+Generated `gnome/extensions/*/schemas/gschemas.compiled` не коммитится.
 
 Machine-local state — вне checkout, в `~/.local/state/workstation/keyboard/`:
 `gsettings-backup.tsv` (сочетания GNOME до первого `ws-keyboard apply`, их
@@ -573,8 +561,7 @@ Command helpers устанавливаются в `~/.local/bin` как symlink 
 (ссылки home-manager, `ws switch`).
 
 xremap binary — из Nix: `nix/pkgs/xremap.nix`, upstream
-`xremap-linux-x86_64-gnome.zip` v0.15.13 по hash; бинарник байт в байт тот
-же, что раньше лежал в `runtime/xremap/` (verify сверяет sha256):
+`xremap-linux-x86_64-gnome.zip` v0.15.13 по hash:
 
 ```text
 ~/.local/bin/xremap -> /nix/store/…-xremap-gnome-0.15.13/bin/xremap
@@ -620,11 +607,10 @@ home-manager перезапускает сервис (`--watch=config` store-ф�
 ## Apply
 
 Сочетания GNOME профиля и private chords Tiling Assistant объявлены данными
-в `keyboard/keyboard.nix` (с 2026-09-27; раньше были записаны в самих
-скриптах). `ws switch` собирает из них
+в `keyboard/keyboard.nix`. `ws switch` собирает из них
 `~/.local/share/workstation/keyboard/gnome-shortcuts.tsv` и `tiling-bindings.tsv`;
 по ним работают `ws-keyboard-apply` (preflight, backup, установка),
-`ws-tiling-apply`, verify и `ws-keyboard-status`. Это не `dconf.settings`:
+`ws-tiling-apply`, `ws-keyboard check` и `ws-keyboard-status`. Это не `dconf.settings`:
 сочетания ставятся только после preflight и запуска xremap, и
 `ws-keyboard restore` должен уметь вернуть исходные.
 
