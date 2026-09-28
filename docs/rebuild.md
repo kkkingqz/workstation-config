@@ -359,8 +359,8 @@ touchbar-build
 ```
 
 Custom HOME каждого box находится в `~/distrobox/<имя>/` и не
-удаляется `wsbox remove --force`/`recreate`.
-`distrobox rm` (его вызывают `remove --force` и `recreate`) удаляет
+удаляется `wsbox remove`/`recreate`.
+`distrobox rm` (его вызывают `remove` и `recreate`) удаляет
 экспортированные ярлыки контейнера; `recreate` экспортирует их заново, а
 если приложения ещё нет (AUR в `arch`), пишет WARN — после установки
 `wsbox apply NAME`.

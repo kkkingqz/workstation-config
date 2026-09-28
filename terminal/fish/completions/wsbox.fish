@@ -17,15 +17,6 @@ function __wsbox_needs_box
     and test "$cmd[2]" = "$argv[1]"
 end
 
-
-function __wsbox_remove_needs_box
-    set -l cmd (commandline -opc)
-
-    test (count $cmd) -eq 3
-    and test "$cmd[2]" = remove
-    and test "$cmd[3]" = --force
-end
-
 function __wsbox_managed_boxes
     # Built by home-manager from distrobox/distrobox.nix.
     set -l manifest ~/.local/share/workstation/distrobox/containers.ini
@@ -151,15 +142,6 @@ for cmd in status dry-run apply update create enter run stop remove recreate app
         -n "__wsbox_needs_box $cmd" \
         -a '(__wsbox_managed_boxes)'
 end
-
-complete -c wsbox \
-    -n '__wsbox_using_command remove' \
-    -l force \
-    -d 'Allow removal of managed container'
-
-complete -c wsbox \
-    -n '__wsbox_remove_needs_box' \
-    -a '(__wsbox_managed_boxes)'
 
 complete -c wsbox \
     -n '__wsbox_using_command export' \

@@ -92,7 +92,7 @@ wsbox create NAME
 wsbox enter NAME
 wsbox run NAME COMMAND [ARG...]
 wsbox stop NAME
-wsbox remove --force NAME
+wsbox remove NAME
 wsbox recreate NAME
 wsbox apps [NAME]
 wsbox export NAME APP
@@ -100,7 +100,7 @@ wsbox unexport NAME APP
 ```
 
 `apply` не заменяет существующий container и поэтому idempotent.
-`recreate`/`remove --force` затрагивают rootfs, но не удаляют managed definition
+`recreate`/`remove` затрагивают rootfs, но не удаляют managed definition
 и custom HOME.
 
 # 4. Declarative desktop exports
@@ -276,7 +276,7 @@ $HOME/.winbox/wine
 ~/distrobox/arch/.winbox/wine
 ```
 
-Prefix переживает `wsbox remove --force arch` и `wsbox recreate arch`.
+Prefix переживал `wsbox remove arch` и `wsbox recreate arch`.
 
 Текущий DPI baseline:
 

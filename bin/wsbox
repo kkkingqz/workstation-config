@@ -24,7 +24,7 @@ Usage:
   wsbox enter NAME
   wsbox run NAME COMMAND [ARG...]
   wsbox stop NAME
-  wsbox remove --force NAME
+  wsbox remove NAME
   wsbox recreate NAME
   wsbox apps [NAME]
   wsbox export NAME APP
@@ -716,17 +716,12 @@ cmd_stop() {
 }
 
 cmd_remove() {
-    local force=false
     local name=""
 
     while (($#)); do
         case "$1" in
-            --force)
-                force=true
-                ;;
-
             -h|--help)
-                echo "Usage: wsbox remove --force NAME"
+                echo "Usage: wsbox remove NAME"
                 return 0
                 ;;
 
@@ -746,9 +741,6 @@ cmd_remove() {
     done
 
     require_managed "$name"
-
-    [[ "$force" == true ]] \
-        || die "managed container removal requires --force"
 
     container_exists "$name" \
         || die "container does not exist: $name"

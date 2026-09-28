@@ -71,7 +71,7 @@ wswin exec [--box BOX] [--prefix NAME] [--desktop[=WxH]] PROGRAM [ARG...]
 wswin prefix [--box BOX] NAME init [--dpi N]
 wswin prefix [--box BOX] NAME winecfg|regedit|kill|path
 wswin prefix [--box BOX] NAME winetricks [ARG...]
-wswin prefix [--box BOX] NAME remove --force
+wswin prefix [--box BOX] NAME remove
 wswin shell [--box BOX] [--prefix NAME]
 wswin menu [--box BOX] [--prefix NAME] add [PROGRAM.exe [TITLE]]
 wswin menu list|sync
@@ -116,7 +116,7 @@ wswin portable --prefix tools ~/Downloads/tool.zip
 Пункт меню хранится в prefix (`PREFIX/.wswin/menu/wswin-BOX-PREFIX-NAME.desktop`
 и иконка), в `~/.local/share/applications` — ссылка на него. Запуск:
 `wswin exec --box BOX --prefix NAME …`. Удаляется вместе с prefix
-(`wswin prefix … remove --force`) или `wswin menu remove ID`; после новой
+(`wswin prefix … remove`) или `wswin menu remove ID`; после новой
 системы с сохранённым HOME — `wswin menu sync`.
 
 Программы, которые должны возвращаться вместе с репозиторием, — в
@@ -155,12 +155,12 @@ render node с драйвером `amdgpu` при каждом запуске и
 Программа или игра со своим prefix — вместе с её пунктами меню:
 
 ```console
-wswin prefix --box BOX NAME remove --force
+wswin prefix --box BOX NAME remove
 ```
 
 Контейнер целиком (навсегда):
 
-1. `wsbox remove --force BOX` — rootfs (пока контейнер ещё в `distrobox.nix`);
+1. `wsbox remove BOX` — rootfs (пока контейнер ещё в `distrobox.nix`);
 2. убрать контейнер из `distrobox/distrobox.nix` и его программы из
    `windows/apps.nix`, `ws switch`;
 3. `rm -rf ~/distrobox/BOX` — HOME: prefixes, программы, сохранения;
@@ -171,10 +171,6 @@ wswin prefix --box BOX NAME remove --force
 контейнера не теряет программ. Шаги по отдельности проверены (recreate,
 удаление prefix со ссылками, предупреждение `ws check`); цепочка целиком не
 прогонялась.
-
-`--force` у `remove` — защита от случайного удаления, а не «принудительно»:
-без него команда отказывается работать (вопросов нет, чтобы команды можно
-было вызывать из скриптов).
 
 ## Проверка
 

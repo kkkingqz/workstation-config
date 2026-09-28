@@ -31,7 +31,7 @@ Usage:
   wswin prefix [--box BOX] NAME init [--dpi N]
   wswin prefix [--box BOX] NAME winecfg|regedit|kill|path
   wswin prefix [--box BOX] NAME winetricks [ARG...]
-  wswin prefix [--box BOX] NAME remove --force
+  wswin prefix [--box BOX] NAME remove
   wswin shell [--box BOX] [--prefix NAME]
   wswin menu [--box BOX] [--prefix NAME] add [PROGRAM.exe [TITLE]]
   wswin menu list|sync
@@ -735,7 +735,6 @@ cmd_prefix() {
             fi
             ;;
         remove)
-            [[ "${1:-}" == --force ]] || die "prefix removal requires --force"
             [[ -d "$prefix" ]] || die "no prefix: $prefix"
             remove_menu_links "$prefix"
             printf 'Removing %s\n' "$prefix"
