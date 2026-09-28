@@ -8,6 +8,8 @@ cfg="${WSBOX_CONFIG:-$HOME/.local/share/workstation/distrobox}"
 manifest_source="$cfg/containers.ini"
 manifest="${XDG_RUNTIME_DIR:-/tmp}/wsbox-$(id -u)/containers.ini"
 exports_manifest="$cfg/exports.ini"
+boxes_manifest="$cfg/boxes.ini"
+bin_dir="$(dirname "$(readlink -f "$0")")"
 
 usage() {
     cat <<'USAGE'
@@ -45,6 +47,7 @@ ensure_base() {
     need distrobox-assemble
     [[ -r "$manifest_source" ]] || die "manifest not found: $manifest_source (run ws switch)"
     [[ -r "$exports_manifest" ]] || die "exports manifest not found: $exports_manifest (run ws switch)"
+    [[ -r "$boxes_manifest" ]] || die "boxes manifest not found: $boxes_manifest (run ws switch)"
     render_manifest
 }
 
@@ -202,6 +205,18 @@ image_matches() {
     id="$(podman inspect --format '{{.Image}}' "$name" 2>/dev/null)" || return 1
     podman image inspect --format '{{range .RepoDigests}}{{println .}}{{end}}' "$id" 2>/dev/null \
         | grep -Fxq -- "$expected"
+}
+
+# distrobox enter flags of a box: gpu=amd passes DRI_PRIME for the AMD card
+# when this boot has it (ws-gpu), per call, so the container itself stays
+# the same in both boots.
+enter_flags() {
+    local name="$1" prime
+
+    [[ "$(ini_value "$boxes_manifest" "$name" gpu)" == amd ]] || return 0
+    prime="$("$bin_dir/ws-gpu" env)"
+    [[ -n "$prime" ]] || return 0
+    printf '%s\n' --additional-flags "--env $prime"
 }
 
 container_exec() {
@@ -489,6 +504,12 @@ cmd_check() {
         fail "manifest missing"
     fi
 
+    if [[ -r "$boxes_manifest" ]]; then
+        pass "boxes manifest present"
+    else
+        fail "boxes manifest missing"
+    fi
+
     if [[ -r "$exports_manifest" ]]; then
         pass "exports manifest present"
 
@@ -648,8 +669,12 @@ cmd_enter() {
     container_exists "$name" \
         || die "container does not exist: $name"
 
+    local -a flags
+    mapfile -t flags < <(enter_flags "$name")
+
     exec distrobox enter \
-        --name "$name"
+        --name "$name" \
+        "${flags[@]}"
 }
 
 cmd_run() {
@@ -668,8 +693,12 @@ cmd_run() {
     (($# > 0)) \
         || die "command required"
 
+    local -a flags
+    mapfile -t flags < <(enter_flags "$name")
+
     exec distrobox enter \
         --name "$name" \
+        "${flags[@]}" \
         -- "$@"
 }
 

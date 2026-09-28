@@ -1,0 +1,21 @@
+#!/bin/sh
+# distrobox init hook of the Ubuntu wine box (root, every start): WineHQ
+# stable for the release of the container (amd64 only, WoW64), then
+# winetricks without Ubuntu's own wine.
+set -eu
+dpkg-query -W -f='${Status}' winehq-stable 2>/dev/null | grep -q 'ok installed' && exit 0
+
+. /etc/os-release
+# The key is ASCII-armored: apt reads it only with the .asc extension.
+mkdir -p /etc/apt/keyrings
+curl -fsSL https://dl.winehq.org/wine-builds/winehq.key \
+    -o /etc/apt/keyrings/winehq-archive.asc
+curl -fsSL "https://dl.winehq.org/wine-builds/ubuntu/dists/$VERSION_CODENAME/winehq-$VERSION_CODENAME.sources" \
+    | sed 's|^Signed-By:.*|Signed-By: /etc/apt/keyrings/winehq-archive.asc|' \
+    > "/etc/apt/sources.list.d/winehq-$VERSION_CODENAME.sources"
+rm -f /etc/apt/keyrings/winehq-archive.key
+
+export DEBIAN_FRONTEND=noninteractive
+apt-get update
+apt-get install -y --install-recommends winehq-stable
+apt-get install -y --no-install-recommends winetricks cabextract unzip

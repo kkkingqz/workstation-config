@@ -1,0 +1,375 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Windows programs in the Windows boxes of distrobox/distrobox.nix
+# (profile wine: wine/winetricks; profile proton: umu-run). Programs with a
+# launcher are listed in windows/apps.nix. ws switch builds both files:
+#
+#   ~/.local/share/workstation/distrobox/boxes.ini   [BOX] home profile driver dpi
+#                                                    init_overrides gpu
+#   ~/.local/share/workstation/windows/apps.ini      [wswin] default_box; [APP] ...
+#
+# Prefixes live in the container HOME (~/distrobox/BOX), survive recreate:
+#   default   $HOME/.wine
+#   NAME      $HOME/prefixes/NAME
+#
+# Commands run through `wsbox run`, which adds DRI_PRIME for gpu=amd boxes.
+
+data="${WSWIN_DATA:-$HOME/.local/share/workstation}"
+boxes_ini="$data/distrobox/boxes.ini"
+apps_ini="$data/windows/apps.ini"
+bin_dir="$(dirname "$(readlink -f "$0")")"
+
+usage() {
+    cat <<'USAGE'
+Usage:
+  wswin list
+  wswin install [--box BOX] [--prefix NAME] SETUP.exe|.msi [ARG...]
+  wswin run APP [ARG...]
+  wswin exec [--box BOX] [--prefix NAME] PROGRAM [ARG...]
+  wswin prefix [--box BOX] NAME init [--dpi N]
+  wswin prefix [--box BOX] NAME winecfg|regedit|kill|path
+  wswin prefix [--box BOX] NAME winetricks [ARG...]
+  wswin prefix [--box BOX] NAME remove --force
+  wswin shell [--box BOX] [--prefix NAME]
+
+BOX defaults to the default_box of apps.ini, NAME to "default" (the
+standard prefix $HOME/.wine of the box).
+USAGE
+}
+
+die() {
+    printf 'wswin: %s\n' "$*" >&2
+    exit 1
+}
+
+ini_value() {
+    local file="$1" section="$2" key="$3"
+
+    awk -v section="[$section]" -v key="$key" '
+        $0 == section { inside = 1; next }
+        inside && /^\[/ { exit }
+        inside {
+            k = $0
+            sub(/=.*/, "", k)
+            if (k == key) {
+                sub(/^[^=]*=/, "")
+                print
+                exit
+            }
+        }
+    ' "$file"
+}
+
+sections() {
+    sed -nE 's/^\[([^]]+)\]$/\1/p' "$1"
+}
+
+ensure_config() {
+    [[ -r "$boxes_ini" ]] || die "not found: $boxes_ini (ws switch)"
+    [[ -r "$apps_ini" ]] || die "not found: $apps_ini (ws switch)"
+}
+
+box_value() {
+    ini_value "$boxes_ini" "$1" "$2"
+}
+
+require_box() {
+    local box="$1" profile
+
+    profile="$(box_value "$box" profile)"
+    [[ -n "$profile" ]] || die "not a Windows box: $box (distrobox/distrobox.nix)"
+}
+
+default_box() {
+    ini_value "$apps_ini" wswin default_box
+}
+
+box_home() {
+    local home
+
+    home="$(box_value "$1" home)"
+    printf '%s\n' "${home//\$\{HOME\}/$HOME}"
+}
+
+prefix_path() {
+    local box="$1" name="$2"
+
+    [[ "$name" =~ ^[A-Za-z0-9._-]+$ && "$name" != . && "$name" != .. ]] \
+        || die "bad prefix name: $name"
+
+    if [[ "$name" == default ]]; then
+        printf '%s/.wine\n' "$(box_home "$box")"
+    else
+        printf '%s/prefixes/%s\n' "$(box_home "$box")" "$name"
+    fi
+}
+
+# Run a command in BOX with WINEPREFIX. For proton, GAMEID tells umu which
+# protonfixes apply (none for umu-default). With a custom HOME distrobox
+# starts in /run/host/$PWD, which the Steam Runtime (pressure-vessel)
+# refuses: start in the container HOME instead.
+in_box() {
+    local box="$1" prefix="$2"
+    shift 2
+
+    exec_box "$box" env \
+        WINEPREFIX="$prefix" \
+        GAMEID="${GAMEID:-umu-default}" \
+        WINEDEBUG="${WINEDEBUG:--all}" \
+        bash -c 'cd "$HOME" && exec "$@"' _ "$@"
+}
+
+exec_box() {
+    local box="$1"
+    shift
+
+    "$bin_dir/wsbox" run "$box" "$@"
+}
+
+# The Windows side of a box: wine PROGRAM or umu-run PROGRAM.
+runner() {
+    case "$(box_value "$1" profile)" in
+        wine) printf 'wine\n' ;;
+        proton) printf 'umu-run\n' ;;
+        *) die "unknown profile of $1" ;;
+    esac
+}
+
+# Create the prefix once: wineboot, then the graphics driver and DPI of the
+# box (or --dpi). Registry changes are flushed by waiting for wineserver.
+ensure_prefix() {
+    local box="$1" name="$2" dpi="${3:-}" prefix run driver overrides
+
+    prefix="$(prefix_path "$box" "$name")"
+    [[ -f "$prefix/system.reg" && -z "$dpi" ]] && return 0
+
+    run="$(runner "$box")"
+    driver="$(box_value "$box" driver)"
+    [[ -n "$dpi" ]] || dpi="$(box_value "$box" dpi)"
+    overrides="$(box_value "$box" init_overrides)"
+
+    printf 'wswin: prefix %s/%s: %s\n' "$box" "$name" "$prefix" >&2
+    mkdir -p "$prefix"
+
+    in_box "$box" "$prefix" bash -c '
+        set -e
+        run="$1" driver="$2" dpi="$3" overrides="$4"
+        if [[ ! -f "$WINEPREFIX/system.reg" ]]; then
+            WINEDLLOVERRIDES="${overrides:-$WINEDLLOVERRIDES}" "$run" wineboot -u
+        fi
+        if [[ -n "$driver" ]]; then
+            "$run" reg add "HKCU\\Software\\Wine\\Drivers" /v Graphics /d "$driver" /f
+        fi
+        if [[ -n "$dpi" ]]; then
+            "$run" reg add "HKCU\\Control Panel\\Desktop" /v LogPixels /t REG_DWORD /d "$dpi" /f
+        fi
+        if [[ "$run" == wine ]]; then
+            wineserver -w
+        fi
+    ' _ "$run" "$driver" "$dpi" "$overrides"
+}
+
+# --box BOX --prefix NAME; sets box, pname, rest.
+parse_target() {
+    box="$(default_box)"
+    pname=default
+    rest=()
+
+    while (($#)); do
+        case "$1" in
+            --box) box="${2:?--box needs a value}"; shift 2 ;;
+            --prefix) pname="${2:?--prefix needs a value}"; shift 2 ;;
+            --) shift; rest+=("$@"); break ;;
+            *) rest+=("$@"); break ;;
+        esac
+    done
+
+    [[ -n "$box" ]] || die "no box: default_box missing in $apps_ini"
+    require_box "$box"
+}
+
+# A host file becomes an absolute path (the host HOME, /tmp, /media and /mnt
+# are the same path inside the container); anything else is passed as is
+# (C:\..., notepad).
+host_path() {
+    if [[ -e "$1" ]]; then
+        realpath -- "$1"
+    else
+        printf '%s\n' "$1"
+    fi
+}
+
+cmd_install() {
+    local box pname rest file prefix run
+    parse_target "$@"
+    set -- "${rest[@]}"
+    (($#)) || die "installer required"
+
+    [[ -f "$1" ]] || die "not found: $1"
+    file="$(realpath -- "$1")"
+    shift
+
+    ensure_prefix "$box" "$pname"
+    prefix="$(prefix_path "$box" "$pname")"
+    run="$(runner "$box")"
+
+    case "${file,,}" in
+        *.msi) in_box "$box" "$prefix" "$run" msiexec /i "$file" "$@" ;;
+        *) in_box "$box" "$prefix" "$run" "$file" "$@" ;;
+    esac
+
+    printf '\nInstalled into %s/%s (%s).\n' "$box" "$pname" "$prefix"
+    printf 'Launcher: windows/apps.nix (exe relative to the prefix), then ws switch.\n'
+}
+
+cmd_exec() {
+    local box pname rest prefix
+    parse_target "$@"
+    set -- "${rest[@]}"
+    (($#)) || die "program required"
+
+    ensure_prefix "$box" "$pname"
+    prefix="$(prefix_path "$box" "$pname")"
+    in_box "$box" "$prefix" "$(runner "$box")" "$(host_path "$1")" "${@:2}"
+}
+
+# The program starts in its own directory, as from Explorer.
+cmd_run() {
+    local app="${1:-}" box pname exe prefix env_line args_line
+    local -a args=() envs=()
+
+    [[ -n "$app" ]] || die "app required"
+    shift
+    box="$(ini_value "$apps_ini" "$app" box)"
+    [[ -n "$box" ]] || die "unknown app: $app (windows/apps.nix)"
+    require_box "$box"
+    pname="$(ini_value "$apps_ini" "$app" prefix)"
+    exe="$(ini_value "$apps_ini" "$app" exe)"
+    prefix="$(prefix_path "$box" "$pname")"
+
+    [[ -f "$prefix/$exe" ]] \
+        || die "$app: not installed: $prefix/$exe (wswin install --box $box --prefix $pname ...)"
+
+    args_line="$(ini_value "$apps_ini" "$app" args)"
+    env_line="$(ini_value "$apps_ini" "$app" env)"
+    [[ -z "$args_line" ]] || read -ra args <<<"$args_line"
+    [[ -z "$env_line" ]] || read -ra envs <<<"$env_line"
+
+    in_box "$box" "$prefix" env "${envs[@]}" bash -c '
+        cd "$(dirname "$2")" && exec "$1" "${@:2}"
+    ' _ "$(runner "$box")" "$prefix/$exe" "${args[@]}" "$@"
+}
+
+cmd_prefix() {
+    local box pname rest prefix run action
+    parse_target "$@"
+    set -- "${rest[@]}"
+    (($# >= 2)) || die "usage: wswin prefix [--box BOX] NAME ACTION"
+    pname="$1"
+    action="$2"
+    shift 2
+    prefix="$(prefix_path "$box" "$pname")"
+    run="$(runner "$box")"
+
+    case "$action" in
+        path)
+            printf '%s\n' "$prefix"
+            ;;
+        init)
+            local dpi=""
+            if [[ "${1:-}" == --dpi ]]; then
+                dpi="${2:?--dpi needs a value}"
+                [[ "$dpi" =~ ^[0-9]+$ ]] || die "bad dpi: $dpi"
+            fi
+            ensure_prefix "$box" "$pname" "$dpi"
+            ;;
+        winecfg|regedit)
+            ensure_prefix "$box" "$pname"
+            in_box "$box" "$prefix" "$run" "$action"
+            ;;
+        winetricks)
+            ensure_prefix "$box" "$pname"
+            if [[ "$run" == wine ]]; then
+                in_box "$box" "$prefix" winetricks "$@"
+            else
+                in_box "$box" "$prefix" umu-run winetricks "$@"
+            fi
+            ;;
+        kill)
+            if [[ "$run" == wine ]]; then
+                in_box "$box" "$prefix" wineserver -k
+            else
+                in_box "$box" "$prefix" pkill -f -- "$prefix"
+            fi
+            ;;
+        remove)
+            [[ "${1:-}" == --force ]] || die "prefix removal requires --force"
+            [[ -d "$prefix" ]] || die "no prefix: $prefix"
+            printf 'Removing %s\n' "$prefix"
+            rm -rf -- "$prefix"
+            ;;
+        *)
+            die "unknown prefix action: $action"
+            ;;
+    esac
+}
+
+cmd_shell() {
+    local box pname rest prefix
+    parse_target "$@"
+    prefix="$(prefix_path "$box" "$pname")"
+    in_box "$box" "$prefix" bash -l
+}
+
+cmd_list() {
+    local app box pname exe prefix state home name
+
+    printf '%-14s %-14s %-12s %-10s %s\n' APP BOX PREFIX STATE EXE
+    while IFS= read -r app; do
+        [[ -n "$app" && "$app" != wswin ]] || continue
+        box="$(ini_value "$apps_ini" "$app" box)"
+        pname="$(ini_value "$apps_ini" "$app" prefix)"
+        exe="$(ini_value "$apps_ini" "$app" exe)"
+        prefix="$(prefix_path "$box" "$pname")"
+        if [[ -f "$prefix/$exe" ]]; then state=installed; else state=missing; fi
+        printf '%-14s %-14s %-12s %-10s %s\n' "$app" "$box" "$pname" "$state" "$exe"
+    done < <(sections "$apps_ini")
+
+    printf '\n%-14s %-8s %s\n' BOX PROFILE PREFIXES
+    while IFS= read -r box; do
+        [[ -n "$(box_value "$box" profile)" ]] || continue
+        home="$(box_home "$box")"
+        local -a names=()
+        [[ -f "$home/.wine/system.reg" ]] && names+=(default)
+        if [[ -d "$home/prefixes" ]]; then
+            for name in "$home"/prefixes/*/; do
+                [[ -d "$name" ]] && names+=("$(basename "$name")")
+            done
+        fi
+        printf '%-14s %-8s %s\n' "$box" "$(box_value "$box" profile)" "${names[*]:--}"
+    done < <(sections "$boxes_ini")
+}
+
+main() {
+    local cmd="${1:-}"
+
+    case "$cmd" in
+        ""|-h|--help|help) usage; return 0 ;;
+    esac
+
+    ensure_config
+    shift
+
+    case "$cmd" in
+        list) cmd_list "$@" ;;
+        install) cmd_install "$@" ;;
+        run) cmd_run "$@" ;;
+        exec) cmd_exec "$@" ;;
+        prefix) cmd_prefix "$@" ;;
+        shell) cmd_shell "$@" ;;
+        *) die "unknown command: $cmd" ;;
+    esac
+}
+
+main "$@"

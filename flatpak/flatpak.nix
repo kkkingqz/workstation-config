@@ -28,6 +28,8 @@ let
     "org.videolan.VLC" = "flathub";
     "com.anthropic.ClaudeDesktop" = "flatpark";
     "com.mattjakeman.ExtensionManager" = "flathub";
+    # Launcher: desktop/com.valvesoftware.Steam.desktop (AMD when present).
+    "com.valvesoftware.Steam" = "flathub";
   };
 
   # Supported: Context.filesystems (list), Environment, "Session Bus Policy"
@@ -45,8 +47,13 @@ let
     };
   };
 
-  # Full files, ours: Claude on Wayland at scale 1.5 with its URL handler.
-  desktop = [ ./desktop/com.anthropic.ClaudeDesktop.desktop ];
+  # Full files, ours: Claude on Wayland at scale 1.5 with its URL handler;
+  # Steam through ws-gpu (the AMD dGPU when the boot has it, Intel otherwise),
+  # steam:// included.
+  desktop = [
+    ./desktop/com.anthropic.ClaudeDesktop.desktop
+    ./desktop/com.valvesoftware.Steam.desktop
+  ];
 
   toIni = lib.generators.toINI {
     mkKeyValue = lib.generators.mkKeyValueDefault {

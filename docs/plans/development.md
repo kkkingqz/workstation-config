@@ -10,6 +10,11 @@ volume: User Commands
 
 Слой завершён и проверен 2026-09-26.
 
+С 2026-09-28 Wine и WinBox — отдельный слой (`helpws windows`): WinBox
+переехал из `arch` в `wine` (prefix `~/distrobox/wine/prefixes/winbox`),
+появились `wine-wayland` и `proton`, хук NTSYNC ставится и в них. Разделы 5,
+6, 8–10 ниже описывают прежнюю схему с WinBox в `arch`.
+
 Цель — держать containerized applications и toolchains вне Ubuntu host, при этом
 сохранять понятный lifecycle, отдельный HOME для каждого managed box и
 воспроизводимые desktop exports.

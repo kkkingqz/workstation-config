@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# The AMD dGPU is present only in the rEFInd "Ubuntu (AMD)" boot ("Ubuntu"
+# turns it off and removes it from PCI). Proton and Steam use it when it is
+# there, Intel otherwise. Checked on every call: the same container or
+# launcher works in both boots.
+#
+#   ws-gpu status        which GPU a DRI_PRIME caller gets
+#   ws-gpu env           DRI_PRIME=pci-... for the AMD card, or nothing
+#   ws-gpu run CMD...    CMD with DRI_PRIME set when the AMD card is there
+#
+# Present means: a DRM render node whose PCI device is bound to amdgpu (not
+# just the absence of ws.dgpu=off, amdgpu may fail to come up). Mesa
+# (GL and, through the device-select layer, Vulkan) takes DRI_PRIME.
+
+usage() {
+    echo "usage: ws-gpu status|env|run COMMAND [ARG...]" >&2
+    exit 2
+}
+
+# pci-0000_03_00_0 of the first render node driven by amdgpu.
+amd_prime() {
+    local node dev driver
+
+    for node in /sys/class/drm/renderD*; do
+        [[ -e "$node/device/driver" ]] || continue
+        driver="$(basename "$(readlink -f "$node/device/driver")")"
+        [[ "$driver" == amdgpu ]] || continue
+        dev="$(basename "$(readlink -f "$node/device")")"
+        printf 'pci-%s\n' "${dev//[:.]/_}"
+        return 0
+    done
+    return 1
+}
+
+case "${1:-}" in
+    status)
+        if prime="$(amd_prime)"; then
+            printf 'AMD      DRI_PRIME=%s\n' "$prime"
+        else
+            printf 'Intel    no AMD render node (rEFInd "Ubuntu": dGPU off)\n'
+        fi
+        ;;
+    env)
+        if prime="$(amd_prime)"; then
+            printf 'DRI_PRIME=%s\n' "$prime"
+        fi
+        ;;
+    run)
+        shift
+        (($#)) || usage
+        if prime="$(amd_prime)"; then
+            export DRI_PRIME="$prime"
+        fi
+        exec "$@"
+        ;;
+    *)
+        usage
+        ;;
+esac

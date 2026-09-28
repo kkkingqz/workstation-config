@@ -8,7 +8,15 @@ volume: User Commands
 
 ## Статус
 
-План пересмотрен 2026-09-28, выполнение не начато. Первая версия (один
+План пересмотрен 2026-09-28. Выполнено 2026-09-28: этапы 0–3, 6 (Steam
+установлен, запуск через launcher не проверен), 4 — WinBox в `wine`
+(проверка запуска и удаление `winbox3`/export из `arch` — после проверки),
+5 — umu и Steam Runtime работают внутри `proton`, игра не проверялась.
+Решено при выполнении: запуск через `wswin` идёт из HOME контейнера
+(distrobox с custom HOME отдаёт cwd как `/run/host/…`, это отвергает
+pressure-vessel). Пользовательская справка — `helpws windows`.
+
+Первая версия (один
 Distrobox на каждое приложение, `~/.local/share/winapps`) заменена схемой
 ниже.
 
@@ -37,11 +45,11 @@ proton        Arch                 umu-launcher + Proton (UMU-/GE-Proton):
 - `wine-wayland`: в реестре каждого prefix
   `HKCU\Software\Wine\Drivers Graphics=wayland`, поэтому драйвер не зависит
   от способа запуска (launcher, `wsbox enter`).
-- `wine`: пакет Wine — открытый вопрос (ниже). Образ `ubuntu:26.04`
+- `wine`: WineHQ stable (решения, ниже). Образ `ubuntu:26.04`
   заменяется на `@HOST_VERSION_ID@`, как у build-контейнеров; текущий `wine`
   пуст, пересоздание ничего не теряет.
 - `proton`: multilib и 32-битные Vulkan-драйверы (`lib32-vulkan-radeon`,
-  `lib32-vulkan-intel`) для DXVK; umu-launcher из AUR (или его zipapp).
+  `lib32-vulkan-intel`) для DXVK; umu-launcher из [multilib].
   Proton и Steam Runtime umu скачивает в HOME контейнера.
 - Хук `wsbox-host-ntsync` (NTSYNC-MODULE) переходит из `arch` в
   `wine-wayland` и `proton`.
@@ -99,7 +107,7 @@ ws-gpu env        DRI_PRIME=pci-0000_03_00_0 или пусто
 name        ключ (launcher ws-win-<name>.desktop, wswin run <name>)
 box         контейнер; по умолчанию wine-wayland
 prefix      default | <имя своего prefix>; по умолчанию default
-exe         путь внутри prefix (C:\…)
+exe         путь внутри prefix (drive_c/…)
 args, dpi   необязательно; title, icon — для launcher
 ```
 
@@ -128,7 +136,8 @@ wswin shell [--box BOX] [--prefix NAME]
 - `com.valvesoftware.Steam` в `flatpak/flatpak.nix`; на host
   `steam-devices` (udev для контроллеров) в `apt.txt`.
 - Launcher Steam заменяется своим `.desktop` (тот же id, поэтому и
-  `steam://`): `flatpak run` с `--env=DRI_PRIME=…`, если AMD доступна.
+  `steam://`): `ws-gpu run flatpak run …` — `DRI_PRIME`, если AMD доступна
+  (flatpak передаёт его в sandbox).
 - Proton в Steam — Valve Proton; GE-Proton только для конкретной
   совместимости, через `net.davidotek.pupgui2`.
 
@@ -159,14 +168,17 @@ wswin shell [--box BOX] [--prefix NAME]
    namespaces) внутри rootless podman при ограничениях AppArmor Ubuntu 26.04
    — главный риск, запасной путь — Proton без runtime. Тестовая игра: DXVK
    HUD показывает AMD в «Ubuntu (AMD)» и Intel в «Ubuntu».
-6. Steam flatpak, `steam-devices`, свой launcher; ProtonUp-Qt.
+6. Steam flatpak, `steam-devices`, свой launcher; ProtonUp-Qt — только
+   когда понадобится GE-Proton (не ставился).
 7. Проверки в `ws check`; `helpws windows`; обновить `helpws plan-dev`,
    `helpws rebuild` (WinBox, arch).
 
-## Открытые вопросы
+## Решения
 
-- Wine в контейнере `wine`: из Ubuntu (10.0, без NTSYNC) или из репозитория
-  WineHQ для resolute (stable 11.x).
+- Wine в контейнере `wine`: репозиторий WineHQ для релиза контейнера, stable
+  (11.0; в Ubuntu 26.04 — 10.0 без NTSYNC). WineHQ не пакетирует Mono/Gecko:
+  prefix создаётся с `WINEDLLOVERRIDES=mscoree,mshtml=` (без окна загрузки),
+  нужные программе — через winetricks.
 
 # DONE WHEN
 

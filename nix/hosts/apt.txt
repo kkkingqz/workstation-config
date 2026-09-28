@@ -34,6 +34,8 @@ passt
 
 # Flatpak applications (wsflatpak)
 flatpak
+# udev rules for game controllers of the Steam flatpak
+steam-devices
 
 # Btrfs subvolumes, snapshots and recovery (system-backup-snapshot)
 btrfs-progs

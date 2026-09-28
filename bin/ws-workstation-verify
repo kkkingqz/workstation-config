@@ -727,6 +727,13 @@ if [[ -r "$ntsync_pkgbuild" ]]; then
         "$ntsync_pkgbuild" \
         'provides=("NTSYNC-MODULE")' \
         "Arch host-NTSync package provides NTSYNC-MODULE"
+
+    readme_sum="$(sha256sum "${ntsync_pkgbuild%/*}/README.md" 2>/dev/null | cut -d' ' -f1)"
+    if grep -Fq "sha256sums=(\"$readme_sum\")" "$ntsync_pkgbuild"; then
+        pass "wsbox-host-ntsync PKGBUILD checksum matches README.md"
+    else
+        fail "wsbox-host-ntsync PKGBUILD sha256sums does not match README.md (makepkg fails; update it and pkgrel)"
+    fi
 fi
 ntsync_hook="distrobox/arch/wsbox-host-ntsync/install-hook"
 if [[ -e "$repo/$ntsync_hook" ]]; then
@@ -734,45 +741,52 @@ if [[ -e "$repo/$ntsync_hook" ]]; then
 else
     fail "$ntsync_hook missing"
 fi
-if grep -Fxq "init_hooks=\"$repo/$ntsync_hook\"" "$HOME/.local/share/workstation/distrobox/containers.ini" 2>/dev/null; then
-    pass "arch manifest runs $ntsync_hook at container setup"
+# Arch boxes with Wine: arch (AUR), wine-wayland, proton.
+ntsync_boxes="$(
+    awk -v hook="init_hooks=\"$repo/$ntsync_hook\"" '
+        /^\[/ { box = substr($0, 2, length($0) - 2) }
+        $0 == hook { print box }
+    ' "$HOME/.local/share/workstation/distrobox/containers.ini" 2>/dev/null
+)"
+if [[ -n "$ntsync_boxes" ]]; then
+    pass "manifest runs $ntsync_hook in: $(echo $ntsync_boxes)"
 else
-    fail "arch manifest has no init_hooks for $ntsync_hook (distrobox/distrobox.nix; ws switch)"
+    fail "no box runs $ntsync_hook (distrobox/distrobox.nix; ws switch)"
 fi
 
-if have podman && podman container exists arch >/dev/null 2>&1; then
-    arch_running="$(podman inspect -f '{{.State.Running}}' arch 2>/dev/null || true)"
-    if [[ "$arch_running" == "true" ]]; then
-        if podman exec arch pacman -Q wsbox-host-ntsync >/dev/null 2>&1; then
-            pass "arch: wsbox-host-ntsync installed"
-        else
-            fail "arch: wsbox-host-ntsync missing"
-        fi
-
-        ntsync_missing="$(
-            podman exec arch pacman -T NTSYNC-MODULE 2>/dev/null || true
-        )"
-        [[ -z "$ntsync_missing" ]] \
-            && pass "arch: NTSYNC-MODULE dependency satisfied" \
-            || fail "arch: NTSYNC-MODULE dependency unsatisfied: $ntsync_missing"
-
-        for pkg in linux mkinitcpio mkinitcpio-busybox; do
-            if podman exec arch pacman -Q "$pkg" >/dev/null 2>&1; then
-                fail "arch: container-local kernel/initramfs package should be absent: $pkg"
-            else
-                pass "arch: container-local package absent: $pkg"
-            fi
-        done
-
-        podman exec arch test -c /dev/ntsync >/dev/null 2>&1 \
-            && pass "arch: /dev/ntsync visible inside running container" \
-            || fail "arch: /dev/ntsync not visible inside running container"
-    else
-        info "arch container is not running; skipped read-only in-container NTSync checks"
+for box in $ntsync_boxes; do
+    if ! have podman || ! podman container exists "$box" >/dev/null 2>&1; then
+        info "$box container missing; wsbox check reports it"
+        continue
     fi
-else
-    info "arch container missing; wsbox layer check will report it when run"
-fi
+    if [[ "$(podman inspect -f '{{.State.Running}}' "$box" 2>/dev/null || true)" != true ]]; then
+        info "$box container is not running; skipped read-only in-container NTSync checks"
+        continue
+    fi
+
+    if podman exec "$box" pacman -Q wsbox-host-ntsync >/dev/null 2>&1; then
+        pass "$box: wsbox-host-ntsync installed"
+    else
+        fail "$box: wsbox-host-ntsync missing"
+    fi
+
+    ntsync_missing="$(podman exec "$box" pacman -T NTSYNC-MODULE 2>/dev/null || true)"
+    [[ -z "$ntsync_missing" ]] \
+        && pass "$box: NTSYNC-MODULE dependency satisfied" \
+        || fail "$box: NTSYNC-MODULE dependency unsatisfied: $ntsync_missing"
+
+    for pkg in linux mkinitcpio mkinitcpio-busybox; do
+        if podman exec "$box" pacman -Q "$pkg" >/dev/null 2>&1; then
+            fail "$box: container-local kernel/initramfs package should be absent: $pkg"
+        else
+            pass "$box: container-local package absent: $pkg"
+        fi
+    done
+
+    podman exec "$box" test -c /dev/ntsync >/dev/null 2>&1 \
+        && pass "$box: /dev/ntsync visible inside running container" \
+        || fail "$box: /dev/ntsync not visible inside running container"
+done
 
 # wsbox check uses distrobox-enter to inspect managed export sources.  To keep
 # this global verifier read-only, only aggregate it when all managed containers
@@ -814,6 +828,75 @@ else
     info "wsbox check skipped to preserve READ-ONLY mode because not all managed containers are already running"
     info "run separately when desired: wsbox check"
 fi
+
+section "5.4 Windows programs (docs/plans/windows-gaming.md)"
+
+for path in \
+    bin/wswin \
+    bin/ws-gpu \
+    windows/apps.nix \
+    distrobox/arch/pacman-install-hook \
+    distrobox/arch/multilib-hook \
+    distrobox/wine/winehq-install-hook \
+    docs/windows.md \
+    docs/plans/windows-gaming.md
+do
+    tracked "$path" "$path"
+done
+for path in bin/wswin bin/ws-gpu distrobox/arch/pacman-install-hook \
+    distrobox/arch/multilib-hook distrobox/wine/winehq-install-hook; do
+    [[ -e "$repo/$path" ]] && check_exec_tracked "$path"
+done
+
+boxes_ini="$HOME/.local/share/workstation/distrobox/boxes.ini"
+apps_ini="$HOME/.local/share/workstation/windows/apps.ini"
+for f in "$boxes_ini" "$apps_ini"; do
+    real="$(readlink -f "$f" 2>/dev/null || true)"
+    if [[ "$real" == /nix/store/* ]]; then
+        pass "from Nix: ${f#$HOME/}"
+    else
+        fail "${f#$HOME/} is not the Nix build (${real:-missing}); ws switch"
+    fi
+done
+
+win_boxes="$(awk '/^\[/ { box = substr($0, 2, length($0) - 2) } /^profile=/ { print box }' "$boxes_ini" 2>/dev/null)"
+if [[ -n "$win_boxes" ]]; then
+    pass "Windows boxes: $(echo $win_boxes)"
+else
+    fail "no Windows box in boxes.ini (distrobox/distrobox.nix)"
+fi
+
+default_box="$(sed -nE 's/^default_box=//p' "$apps_ini" 2>/dev/null)"
+if [[ -n "$default_box" ]] && grep -qxF "$default_box" <<<"$win_boxes"; then
+    pass "wswin default box is a Windows box: $default_box"
+else
+    fail "wswin default box is not a Windows box: ${default_box:-<none>}"
+fi
+
+while IFS= read -r app; do
+    [[ -n "$app" && "$app" != wswin ]] || continue
+    app_box="$(awk -v s="[$app]" '$0 == s { i = 1; next } i && /^\[/ { exit } i && /^box=/ { sub(/^box=/, ""); print; exit }' "$apps_ini")"
+    if grep -qxF "$app_box" <<<"$win_boxes"; then
+        pass "app $app: box $app_box is a Windows box"
+    else
+        fail "app $app: box ${app_box:-<none>} is not a Windows box"
+    fi
+    launcher="$HOME/.local/share/applications/ws-win-$app.desktop"
+    if [[ "$(readlink -f "$launcher" 2>/dev/null)" == /nix/store/* ]]; then
+        pass "app $app: launcher from Nix"
+    else
+        fail "app $app: launcher missing: $launcher (ws switch)"
+    fi
+done < <(sed -nE 's/^\[([^]]+)\]$/\1/p' "$apps_ini" 2>/dev/null)
+
+steam_desktop="flatpak/desktop/com.valvesoftware.Steam.desktop"
+if grep -q '^Exec=ws-gpu run ' "$repo/$steam_desktop" 2>/dev/null; then
+    pass "Steam launcher goes through ws-gpu (AMD when present)"
+else
+    fail "$steam_desktop does not start Steam through ws-gpu run"
+fi
+
+info "GPU for Proton/Steam: $("$repo/bin/ws-gpu" status 2>/dev/null || echo unknown)"
 
 section "6. Script / config syntax"
 

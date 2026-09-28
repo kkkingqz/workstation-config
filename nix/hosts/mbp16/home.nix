@@ -1,5 +1,5 @@
 # User layer of mbp16: links into the checkout and terminal CLI; layer owners
-# (wsflatpak reads flatpak/flatpak.nix; wsbox, ws-gnome, ws-keyboard*, ws-suspend) stay as they are.
+# (wsflatpak reads flatpak/flatpak.nix; wsbox, wswin, ws-gnome, ws-keyboard*, ws-suspend) stay as they are.
 { facts, ... }:
 {
   imports = [
@@ -12,6 +12,7 @@
     ../../../gnome/gnome.nix
     ../../../keyboard/keyboard.nix
     ../../../distrobox/distrobox.nix
+    ../../../windows/apps.nix
     ../../../system/kernel/t2bce/t2bce.nix
   ];
 

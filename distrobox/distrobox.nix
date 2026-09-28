@@ -4,6 +4,8 @@
 #
 #   containers.ini  manifest for `distrobox assemble` (its own format)
 #   exports.ini     [BOX] ALIAS=desktop file inside the container (wsbox)
+#   boxes.ini       [BOX] home, gpu, and for Windows boxes profile, driver,
+#                   dpi (wsbox, wswin)
 #
 # Change: edit this file, `ws switch`, then `wsbox apply NAME` (new container)
 # or `wsbox recreate NAME` (changed image or packages; rootfs is replaced,
@@ -36,6 +38,27 @@ let
   # The checkout as seen inside a container (the host HOME is mounted there).
   wsconfig = "${config.home.homeDirectory}/${facts.wsconfig}";
 
+  # Hooks run as root on every container start (init_hooks at the end of
+  # distrobox-init, pre_init_hooks before its package setup): each one
+  # returns at once when its work is done.
+  #
+  # Before any Wine package on Arch: the host kernel provides ntsync, the
+  # virtual provider keeps pacman/paru from pulling an Arch kernel.
+  ntsyncHook = "${wsconfig}/distrobox/arch/wsbox-host-ntsync/install-hook";
+  # Packages that need the provider (wine -> ntsync-autoload), so not
+  # additional_packages: those are installed before the init hooks.
+  pacmanHook = pkgs: "${wsconfig}/distrobox/arch/pacman-install-hook ${lib.concatStringsSep " " pkgs}";
+  multilibHook = "${wsconfig}/distrobox/arch/multilib-hook";
+
+  # Windows boxes (wswin, docs/plans/windows-gaming.md):
+  #   profile  wine: wine/winetricks; proton: umu-run
+  #   driver   Wine graphics driver written into every new prefix
+  #   dpi      LogPixels of a new prefix (192 = 200%)
+  #   initOverrides  WINEDLLOVERRIDES for wineboot of a new prefix
+  #   gpu      amd: DRI_PRIME to the AMD card when the boot has it (ws-gpu),
+  #            Intel otherwise
+  # A box for one program later: one more entry with the same profile.
+
   # In manifest order. HOME of every container: ~/distrobox/NAME (survives
   # recreate). The host HOME is mounted as well, at its own path: sources
   # such as ~/touchbar are reached as /home/<user>/touchbar.
@@ -53,14 +76,43 @@ let
       image = "docker.io/library/archlinux:latest";
       # base-devel: makepkg for the hook and for AUR (paru).
       packages = [ "base-devel" "git" ];
-      # Before any Wine package: the host kernel provides ntsync, the
-      # virtual provider keeps pacman/paru from pulling an Arch kernel.
-      initHooks = [ "${wsconfig}/distrobox/arch/wsbox-host-ntsync/install-hook" ];
+      initHooks = [ ntsyncHook ];
       exports.winbox3 = "/usr/share/applications/winbox3.desktop";
     }
     {
+      # Default Windows box: Wine from Arch with its native Wayland driver.
+      name = "wine-wayland";
+      image = "docker.io/library/archlinux:latest";
+      packages = [ "base-devel" "git" "mesa" "vulkan-intel" "vulkan-radeon" ];
+      initHooks = [ ntsyncHook (pacmanHook [ "wine" "wine-mono" "wine-gecko" "winetricks" ]) ];
+      windows = { profile = "wine"; driver = "wayland"; };
+    }
+    {
+      # Wine through XWayland (xwayland-native-scaling, so LogPixels 192):
+      # programs the Wayland driver does not suit. WineHQ stable, amd64 only
+      # (WoW64), from the hook.
       name = "wine";
-      image = "docker.io/library/ubuntu:26.04";
+      image = hostUbuntu;
+      packages = [ "ca-certificates" "mesa-vulkan-drivers" ];
+      initHooks = [ "${wsconfig}/distrobox/wine/winehq-install-hook" ];
+      # WineHQ has no Mono/Gecko packages: wineboot would ask to download
+      # them; winetricks adds them to a prefix that needs them.
+      windows = { profile = "wine"; driver = "x11"; dpi = 192; initOverrides = "mscoree,mshtml="; };
+    }
+    {
+      # Games and heavy 3D: umu-launcher runs Proton (UMU-Proton by default)
+      # in the Steam Runtime; both are downloaded into the container HOME.
+      # multilib: umu-launcher and the 32-bit drivers for DXVK.
+      name = "proton";
+      image = "docker.io/library/archlinux:latest";
+      packages = [
+        "base-devel" "git" "mesa" "lib32-mesa" "vulkan-intel" "lib32-vulkan-intel"
+        "vulkan-radeon" "lib32-vulkan-radeon" "vulkan-tools" "umu-launcher"
+      ];
+      preInitHooks = [ multilibHook ];
+      initHooks = [ ntsyncHook ];
+      gpu = "amd";
+      windows = { profile = "proton"; };
     }
     {
       # Manual kernel/module builds; the t2bce modules themselves are built by
@@ -98,7 +150,21 @@ let
       keyOrder
     + lib.optionalString (c ? packages)
       "additional_packages=\"${lib.concatStringsSep " " c.packages}\"\n"
+    + lib.concatMapStrings (h: "pre_init_hooks=\"${h}\"\n") (c.preInitHooks or [ ])
     + lib.concatMapStrings (h: "init_hooks=\"${h}\"\n") (c.initHooks or [ ]);
+
+  boxSection = c:
+    let
+      w = c.windows or { };
+      kv = k: v: lib.optionalString (v != null) "${k}=${toString v}\n";
+    in
+    "[${c.name}]\n"
+    + kv "home" "\${HOME}/distrobox/${c.name}"
+    + kv "gpu" (c.gpu or null)
+    + kv "profile" (w.profile or null)
+    + kv "driver" (w.driver or null)
+    + kv "dpi" (w.dpi or null)
+    + kv "init_overrides" (w.initOverrides or null);
 
   exportSection = c: ''
     [${c.name}]
@@ -111,6 +177,8 @@ let
       (lib.concatStringsSep "\n" (map containerSection containers))} $out/containers.ini
     cp ${pkgs.writeText "exports.ini"
       (lib.concatMapStrings exportSection (lib.filter (c: c ? exports) containers))} $out/exports.ini
+    cp ${pkgs.writeText "boxes.ini"
+      (lib.concatMapStringsSep "\n" boxSection containers)} $out/boxes.ini
   '';
 
   names = map (c: c.name) containers;
@@ -119,7 +187,11 @@ in
   assertions = [{
     assertion = lib.length names == lib.length (lib.unique names);
     message = "distrobox.nix: duplicate container name";
-  }];
+  }] ++ map (c: {
+    assertion = lib.elem (c.windows.profile or "wine") [ "wine" "proton" ]
+      && lib.elem (c.gpu or "amd") [ "amd" ];
+    message = "distrobox.nix: ${c.name}: profile is wine or proton, gpu is amd";
+  }) containers;
 
   xdg.dataFile."workstation/distrobox".source = distroboxConfig;
 }

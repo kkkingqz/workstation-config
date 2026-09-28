@@ -22,6 +22,7 @@ case "$topic" in
     rebuild|reinstall|install) open_md "$repo/docs/rebuild.md" ;;
     roadmap|plans) open_md "$repo/docs/roadmap.md" ;;
     distrobox|box|boxes|wsbox) open_md "$repo/docs/plans/development.md" ;;
+    windows|wine|wswin|steam|proton) open_md "$repo/docs/windows.md" ;;
     plan-t2) open_md "$repo/docs/plans/t2-optional.md" ;;
     plan-gnome) open_md "$repo/docs/plans/gnome.md" ;;
     plan-flatpak) open_md "$repo/docs/plans/flatpak.md" ;;
@@ -51,6 +52,7 @@ Core:
   rebuild          Reinstall to current baseline
   roadmap          Remaining workstation roadmap
   distrobox        Managed Distrobox / Podman layer
+  windows          Windows programs, Wine, Proton, Steam (wswin)
 
 Plans:
   plan-t2          T2 optional / power / auth

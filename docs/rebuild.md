@@ -267,8 +267,8 @@ Flatpak, Distrobox или Wine.
 Display scale после reinstall выбирается штатно через `Settings -> Displays`;
 текущий рабочий checkpoint — logical scale `1.5`.
 
-Wine не устанавливать на host. Его application layer относится к
-`plan-windows` и будет жить в отдельном Distrobox.
+Wine не устанавливать на host: Windows-программы живут в контейнерах
+`wine-wayland`, `wine`, `proton` (`helpws windows`).
 
 
 
@@ -351,7 +351,9 @@ Managed set:
 ```text
 ubuntu
 arch
+wine-wayland
 wine
+proton
 t2bce-build
 touchbar-build
 ```
@@ -374,7 +376,7 @@ Virtual provider host NTSync (`wsbox-host-ntsync`, `NTSYNC-MODULE`) Arch
 wsbox run arch pacman -Qi wsbox-host-ntsync
 ```
 
-Если `paru` ещё не установлен:
+AUR-пакеты в `arch` — через `paru`; если он ещё не установлен:
 
 ```fish
 set tmp (mktemp -d)
@@ -385,24 +387,11 @@ cd
 rm -rf "$tmp"
 ```
 
-Затем внутри `arch`:
+Проверить, что Arch-контейнеры (`arch`, `wine-wayland`, `proton`) не
+содержат собственного kernel/initramfs stack:
 
 ```console
-paru -S winbox3
-exit
-```
-
-Восстановить managed export:
-
-```console
-wsbox apply arch
-wsbox apps arch
-```
-
-Проверить, что Arch не содержит собственного kernel/initramfs stack:
-
-```console
-wsbox run arch bash -lc '
+wsbox run wine-wayland bash -lc '
 pacman -Q wsbox-host-ntsync wine ntsync-autoload
 for p in linux mkinitcpio mkinitcpio-busybox
 do
@@ -413,27 +402,21 @@ pacman -Dk
 '
 ```
 
-Если WinBox prefix новый, выставить текущий baseline 200%:
+Windows-контейнеры (`wine-wayland`, `wine`, `proton`) ставят Wine, WineHQ
+и umu сами при создании (хуки в `distrobox.nix`, `helpws windows`).
+Prefixes лежат в их HOME и переживают recreate. WinBox — prefix
+`~/distrobox/wine/prefixes/winbox` (`LogPixels=192`), launcher
+`ws-win-winbox.desktop` из `windows/apps.nix`. Если prefix потерян:
 
 ```console
-wsbox run arch bash -lc '
-export WINEPREFIX="$HOME/.winbox/wine"
-export WINEARCH=win64
-wineboot -u
-wine reg add \
-    "HKEY_CURRENT_USER\Control Panel\Desktop" \
-    /v LogPixels \
-    /t REG_DWORD \
-    /d 192 \
-    /f
-wineserver -k 2>/dev/null || true
-'
+wswin prefix --box wine winbox init
 ```
 
-Существующий prefix в custom HOME сохраняется вместе с `LogPixels=0xc0`.
+и положить `winbox.exe` (WinBox 3.x, mikrotik.com) в
+`~/distrobox/wine/prefixes/winbox/drive_c/Program Files/WinBox/`.
 
-Контейнер `wine` сейчас должен оставаться чистым Ubuntu 26.04 base; полный Wine
-application layer относится к `plan-windows`.
+Steam — flatpak (`wsflatpak apply`), udev-правила контроллеров — `steam-devices`
+из `nix/hosts/apt.txt` (`ws apply apt`).
 
 Проверка:
 

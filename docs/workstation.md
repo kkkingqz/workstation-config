@@ -460,8 +460,10 @@ Source of truth:
 ```text
 distrobox/distrobox.nix                контейнеры и экспорты
 system/files/modules-load.d/ntsync.conf         ставит ws system apply
-distrobox/arch/wsbox-host-ntsync/  PKGBUILD для arch
-bin/wsbox
+distrobox/arch/wsbox-host-ntsync/  PKGBUILD NTSYNC-MODULE для Arch-контейнеров
+distrobox/arch/*-hook, wine/       хуки установки Windows-контейнеров
+windows/apps.nix                   Windows-программы с launcher (helpws windows)
+bin/wsbox, bin/wswin, bin/ws-gpu
 ```
 
 С 2026-09-27 контейнеры объявлены в `distrobox/distrobox.nix` (общие
@@ -475,8 +477,10 @@ Managed containers:
 
 ```text
 ubuntu   Ubuntu 26.04 base / compatibility
-arch     Arch rolling (archlinux:latest) / AUR applications; WinBox 3.x
-wine     Ubuntu 26.04 empty base reserved for plan-windows
+arch     Arch rolling (archlinux:latest) / AUR applications
+wine-wayland  Arch, Wine с Wayland-драйвером: Windows-программы по умолчанию
+wine     Ubuntu релиза хоста, WineHQ stable, XWayland; WinBox 3.x
+proton   Arch, umu-launcher + Proton: игры, AMD при наличии (helpws windows)
 t2bce-build     Ubuntu релиза хоста, сборка ядра/модулей вручную (kernel headers с хоста)
 touchbar-build  Ubuntu релиза хоста, порт Touch Bar (~/touchbar): dev-пакеты DRM/Wayland,
                 Rust (rustup) в HOME контейнера: ~/.rustup, ~/.cargo
@@ -497,9 +501,10 @@ HOME остаётся, пакеты из AUR в `arch` ставятся зано
 Ubuntu `wsbox check` покажет image drift — `wsbox recreate NAME`. Закрепить
 образ: `repo@sha256:…` в `distrobox.nix`, `wsbox check` сверит repo digest.
 
-`arch` использует NTSync из host T2 kernel. Host загружает `ntsync`, а
-`wsbox-host-ntsync` внутри Arch только удовлетворяет virtual dependency
-`NTSYNC-MODULE`, поэтому container-local `linux`/`mkinitcpio` не нужны.
+Arch-контейнеры (`arch`, `wine-wayland`, `proton`) используют NTSync из host
+T2 kernel. Host загружает `ntsync`, а `wsbox-host-ntsync` внутри Arch только
+удовлетворяет virtual dependency `NTSYNC-MODULE`, поэтому container-local
+`linux`/`mkinitcpio` не нужны.
 
 Управление и проверка:
 
@@ -510,10 +515,11 @@ wsbox check
 wsbox apply [NAME]
 ```
 
-WinBox prefix хранится в custom HOME и переживает destructive rebuild:
+Windows-программы, prefixes, `wswin`, Steam: `helpws windows`. WinBox —
+prefix `winbox` в `wine` (переживает destructive rebuild):
 
 ```text
-~/distrobox/arch/.winbox/wine
+~/distrobox/wine/prefixes/winbox
 LogPixels = 0xc0 = 192 DPI = 200%
 ```
 
@@ -787,7 +793,8 @@ wsconfig/
 ├── keyboard/             keyboard.nix, xremap.nix, xremap.yml
 ├── terminal/             fish/, ghostty/, micro-help/, xdg-terminals/
 ├── flatpak/              flatpak.nix, desktop/
-├── distrobox/            distrobox.nix, arch/wsbox-host-ntsync/
+├── distrobox/            distrobox.nix, arch/ (wsbox-host-ntsync, хуки), wine/
+├── windows/              apps.nix (Windows-программы с launcher)
 ├── bin/
 │   ├── ws                switch, diff, apply, update, check, system, baseline
 │   ├── dotgit
@@ -807,7 +814,10 @@ wsconfig/
 │   ├── ws-nautilus-current
 │   ├── ws-input-source
 │   ├── ws-caps-led
-│   └── ws-tiling-apply
+│   ├── ws-tiling-apply
+│   ├── wsbox, wsflatpak
+│   ├── wswin             Windows-программы: install, run, prefixes
+│   └── ws-gpu            AMD для Proton/Steam, если она есть
 └── docs/
 ```
 
