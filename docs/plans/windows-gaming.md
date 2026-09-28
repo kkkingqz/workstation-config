@@ -8,27 +8,33 @@ volume: User Commands
 
 ## Статус
 
-План пересмотрен 2026-09-28. Выполнено 2026-09-28: этапы 0–4, 6 (Steam
-запускается), 5 — umu и Steam Runtime работают внутри `proton`; IXION (GOG) проверен:
-AMD (RADV NAVI14) в «Ubuntu (AMD)», Intel UHD 630 в «Ubuntu»; игра из Steam
-(Total Factory, Proton Experimental) — тоже на AMD и на Intel.
-WinBox из `wine` проверен пользователем; `winbox3` и export удалены из
-`arch`, старый prefix `~/distrobox/arch/.winbox` ещё на месте. Steam
-запустился (первый старт долгий: докачка клиента).
-Решено при выполнении: запуск через `wswin` идёт из HOME контейнера
-(distrobox с custom HOME отдаёт cwd как `/run/host/…`, это отвергает
-pressure-vessel). Пользовательская справка — `helpws windows`. WinBox проверен в
-`wine-wayland` и перенесён туда (prefix `winbox`, `LogPixels=144`).
+**DONE 2026-09-28.** Первая версия плана (один Distrobox на каждое
+приложение, `~/.local/share/winapps`) заменена схемой ниже. Пользовательская
+справка — `helpws windows`.
 
-Добавлено 2026-09-28 (решение пользователя): `wswin install` после
-установки спрашивает про каждый новый пункт меню Wine, добавить ли его на
-host; portable-программы — `wswin portable`. Пункты хранятся в prefix,
-на host — ссылки (`helpws windows`, «Меню GNOME»). `wine-wayland`:
-`LogPixels=144` (проверено на Notepad++).
+Проверено:
+- `wswin install` в `wine-wayland`: стандартный и свой prefix (Notepad++),
+  вопросы про пункты меню по ярлыкам `.lnk`, запуск из меню, удаление
+  prefix вместе с пунктами меню;
+- WinBox: из `arch` (AUR) в `wine`, затем в `wine-wayland` (prefix
+  `winbox`, `LogPixels=144`); `arch` без Wine, старые prefixes удалены;
+- `proton`: umu и Steam Runtime внутри rootless podman; IXION (GOG) на AMD
+  (RADV NAVI14) в «Ubuntu (AMD)» и на Intel UHD 630 в «Ubuntu»;
+- Steam (flatpak): Total Factory (Proton Experimental) на AMD и на Intel.
 
-Первая версия (один
-Distrobox на каждое приложение, `~/.local/share/winapps`) заменена схемой
-ниже.
+Решено при выполнении:
+- Wine в `wine` — WineHQ stable (без Mono/Gecko: prefix без их запроса);
+- `wswin` запускает из HOME контейнера или каталога программы (distrobox с
+  custom HOME отдаёт cwd как `/run/host/…`, это отвергает pressure-vessel);
+- пункты меню — по ярлыкам `.lnk` prefix с вопросом про каждый (решение
+  пользователя), portable-программы — `wswin portable`; пункты хранятся в
+  prefix, на host — ссылки;
+- `LogPixels=144` в `wine-wayland` и `proton` (масштаб экрана 1.5);
+- `LC_CTYPE=ru_RU.UTF-8` (cp1251 для не-Unicode программ) и
+  `LC_MESSAGES=en_US.UTF-8`;
+- `--desktop`: установщики, забирающие фокус под X11 (GOG в Proton);
+- полное удаление контейнера — порядок в `helpws windows` («Удаление»),
+  целиком не прогонялось (решение пользователя).
 
 ## Цель
 
@@ -192,11 +198,13 @@ wswin shell [--box BOX] [--prefix NAME]
 
 # DONE WHEN
 
-- программа ставится `wswin install` в `wine-wayland` (стандартный prefix) и
+- [x] программа ставится `wswin install` в `wine-wayland` (стандартный prefix) и
   в свой prefix; запускается из меню GNOME;
-- WinBox работает из `wine` со своим prefix и 200% scale; `arch` без Wine;
-- prefix и контейнер удаляются без следов на host;
-- Proton-игра запускается в `proton`: на AMD в «Ubuntu (AMD)», на Intel в
+- [x] WinBox работает со своим prefix (с 2026-09-28 в `wine-wayland`, 150%);
+  `arch` без Wine;
+- [x] prefix удаляется без следов на host; контейнер — по порядку из
+  `helpws windows` («Удаление»);
+- [x] Proton-игра запускается в `proton`: на AMD в «Ubuntu (AMD)», на Intel в
   «Ubuntu»;
-- Steam запускается так же;
-- Wine/Steam не загрязняют host и development boxes.
+- [x] Steam запускается так же;
+- [x] Wine/Steam не загрязняют host и development boxes.

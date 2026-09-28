@@ -56,9 +56,10 @@ volume: User Commands
    declarative `containers.ini`/`exports.ini`, `wsbox`, custom HOME,
    WinBox export, destructive recovery и host NTSync provider проверены.
 
-5. `helpws plan-windows`
-   Контейнеры wine-wayland/wine/proton, `wswin`, launchers, Steam flatpak;
-   Proton и Steam на AMD, если она доступна.
+5. `helpws plan-windows` — **DONE**
+   Windows layer завершён 2026-09-28: контейнеры wine-wayland/wine/proton,
+   `wswin` (install, portable, пункты меню по ярлыкам, prefixes), Steam
+   flatpak; Proton и Steam на AMD, если она доступна, иначе на Intel.
 
 6. `helpws plan-virt`
    KVM/libvirt/virt-manager и user-managed Unreal Engine.

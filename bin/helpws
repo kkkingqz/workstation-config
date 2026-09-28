@@ -59,7 +59,7 @@ Plans:
   plan-gnome       GNOME visual / input / portals
   plan-flatpak     Flatpak desktop apps
   plan-dev         Distrobox / Podman managed layer (completed)
-  plan-windows     Wine / Steam / Proton
+  plan-windows     Wine / Steam / Proton (completed)
   plan-virt        KVM / libvirt / Unreal Engine
   plan-final       Backup / inventory / finalization
   plan-nix         Nix + home-manager migration

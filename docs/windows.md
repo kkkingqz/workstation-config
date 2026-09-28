@@ -150,6 +150,32 @@ render node с драйвером `amdgpu` при каждом запуске и
 `LogPixels=144`, без Mono (`WINEDLLOVERRIDES=mscoree=`). До 2026-09-28 был в
 `wine` (XWayland, `LogPixels=192`).
 
+## Удаление
+
+Программа или игра со своим prefix — вместе с её пунктами меню:
+
+```console
+wswin prefix --box BOX NAME remove --force
+```
+
+Контейнер целиком (навсегда):
+
+1. `wsbox remove --force BOX` — rootfs (пока контейнер ещё в `distrobox.nix`);
+2. убрать контейнер из `distrobox/distrobox.nix` и его программы из
+   `windows/apps.nix`, `ws switch`;
+3. `rm -rf ~/distrobox/BOX` — HOME: prefixes, программы, сохранения;
+4. `wswin menu sync` — убрать ссылки меню, ставшие битыми (`ws check`
+   предупреждает о них).
+
+`wsbox remove`/`recreate` HOME не трогают намеренно: пересоздание
+контейнера не теряет программ. Шаги по отдельности проверены (recreate,
+удаление prefix со ссылками, предупреждение `ws check`); цепочка целиком не
+прогонялась.
+
+`--force` у `remove` — защита от случайного удаления, а не «принудительно»:
+без него команда отказывается работать (вопросов нет, чтобы команды можно
+было вызывать из скриптов).
+
 ## Проверка
 
 ```console
