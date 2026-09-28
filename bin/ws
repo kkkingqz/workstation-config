@@ -17,6 +17,7 @@ Usage:
   ws check [-v] | ws check apt
   ws system diff|check|apply|manifest|tree
   ws baseline capture|diff|list ...
+  ws checkpoint create|list|show|diff|remove ...
   ws host
   ws news
 
@@ -67,7 +68,12 @@ system    build the host system file tree (system) and compare it
           files it depends on without installing them); tree prints the
           built tree (files/, esp/, manifest); both are what ws-baseline
           and the checks read
+          apply records the tree it installed in
+          ~/.local/state/workstation/system (applied: link and GC root,
+          history: date, commit, tree, result)
 baseline  functional baseline, see ws-baseline --help
+checkpoint  which commit matched which working state (home-manager
+          generation, system tree, kernel, baseline), see ws-checkpoint --help
 host      print the flake host name used for this machine
 USAGE
 }
@@ -434,6 +440,18 @@ tiny_dfr_installed() {
     dpkg-query -W -f='${Status}' tiny-dfr 2>/dev/null | grep -q 'install ok installed'
 }
 
+# The tree ws system apply installed: a link that is also a GC root, and one
+# history line per apply (date, commit, dirty files, tree, result).
+system_record() {
+    local tree="$1" rc="$2" dir="${XDG_STATE_HOME:-$HOME/.local/state}/workstation/system"
+    mkdir -p "$dir"
+    "$(nix_bin)" build --out-link "$dir/applied" "$tree"
+    printf '%s\t%s\t%s\t%s\t%s\n' "$(date --iso-8601=seconds)" \
+        "$(git -C "$repo" rev-parse --short HEAD 2>/dev/null || echo '?')" \
+        "dirty=$(git -C "$repo" status --porcelain 2>/dev/null | wc -l)" \
+        "$tree" "$([[ "$rc" == 0 ]] && echo ok || echo problems)" >> "$dir/history"
+}
+
 # One owner of the system files (phase 4 of docs/plans/nix-migration.md):
 # what ws-keyboard-system-apply and ws-suspend apply did, for the whole tree.
 # Only files that differ are backed up and replaced; the ESP is not touched,
@@ -611,6 +629,8 @@ PY
         done
     fi
 
+    system_record "$tree" "$rc"
+
     echo
     echo "$changed file(s) changed."
     [[ "$refind" == true ]] && echo "refind_linux.conf changed: the kernel command line applies on the next boot."
@@ -725,6 +745,7 @@ case "${1:-}" in
     update) shift; cmd_update "$@" ;;
     system) shift; cmd_system "$@" ;;
     baseline) shift; exec "$repo/bin/ws-baseline" "$@" ;;
+    checkpoint) shift; exec "$repo/bin/ws-checkpoint" "$@" ;;
     host) host ;;
     -h|--help|help) usage ;;
     "") usage; exit 1 ;;

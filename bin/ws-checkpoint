@@ -1,0 +1,252 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Workstation checkpoint: which Git commit matched which working state.
+# bin/, fish and Ghostty are links into the checkout (nix/home/links.nix), so a
+# home-manager generation alone is no rollback of the user layer; the commit is
+# the key, the generation and the system tree are what it built.
+
+repo="${WSCONFIG:-$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)}"
+state="${XDG_STATE_HOME:-$HOME/.local/state}/workstation"
+root="$state/checkpoints"
+
+usage() {
+    cat <<'USAGE'
+Usage:
+  ws checkpoint create NAME
+  ws checkpoint list
+  ws checkpoint show NAME
+  ws checkpoint diff NAME [--baseline]
+  ws checkpoint remove NAME
+
+create    record the working state of the current commit: needs a clean
+          checkout, the active home-manager generation built from it (ws
+          switch) and a live system that matches its system tree (ws system
+          check); then tags checkpoint/NAME (local, not pushed), keeps the
+          generation and the system tree from garbage collection and runs
+          ws-baseline capture checkpoint-NAME --no-boxes; no sudo
+list      checkpoints: date, commit, home-manager generation, kernel
+show      what NAME recorded and the commands that return to it (printed,
+          not run)
+diff      what changed since NAME: commits and files, packages of the
+          home-manager generation (nvd), the system tree (manifest and
+          files) and the kernel; --baseline also captures a baseline now
+          and compares it with the one of NAME
+remove    delete the tag, the record, its GC roots and its baseline
+USAGE
+}
+
+die() {
+    echo "ws checkpoint: $*" >&2
+    exit 1
+}
+
+nix_bin() {
+    command -v nix 2>/dev/null || die "nix not found"
+}
+
+check_name() {
+    [[ "$1" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] || die "invalid NAME: '$1' (letters, digits, . _ -)"
+}
+
+dir_of() {
+    check_name "$1"
+    [[ -f "$root/$1/meta.txt" ]] || die "no checkpoint $1 (ws checkpoint list)"
+    echo "$root/$1"
+}
+
+meta() {
+    sed -n "s/^$2: //p" "$1/meta.txt"
+}
+
+hm_profile() {
+    local p
+    for p in "${XDG_STATE_HOME:-$HOME/.local/state}/nix/profiles/home-manager" \
+        "/nix/var/nix/profiles/per-user/$(id -un)/home-manager"; do
+        [[ -e "$p" ]] && { echo "$p"; return; }
+    done
+    die "no home-manager generation (ws switch)"
+}
+
+home_built() {
+    local nix="$1"
+    "$nix" build --no-link --print-out-paths \
+        "$repo#homeConfigurations.\"$(id -un)@$("$repo/bin/ws" host)\".activationPackage"
+}
+
+cmd_create() {
+    local name="${1:-}" nix dir profile gen gen_link home tree out
+    [[ $# -eq 1 ]] || die "usage: ws checkpoint create NAME"
+    check_name "$name"
+    dir="$root/$name"
+    [[ ! -e "$dir" ]] || die "checkpoint exists: $name"
+    git -C "$repo" rev-parse -q --verify "refs/tags/checkpoint/$name" >/dev/null \
+        && die "tag checkpoint/$name exists"
+    [[ ! -e "$state/baseline/checkpoint-$name" ]] || die "baseline checkpoint-$name exists"
+    nix="$(nix_bin)"
+
+    echo "== checkout"
+    [[ -z "$(git -C "$repo" status --porcelain)" ]] \
+        || die "checkout has uncommitted or untracked files; commit them first"
+    echo "clean: $(git -C "$repo" log -1 --format='%h %s')"
+
+    echo "== home-manager"
+    profile="$(hm_profile)"
+    gen_link="$(readlink "$profile")"
+    gen="$(readlink -f "$profile")"
+    home="$(home_built "$nix")"
+    [[ "$home" == "$gen" ]] \
+        || die "the active generation ($gen_link) is not built from this commit; ws switch first"
+    echo "$gen_link = this commit"
+
+    echo "== system"
+    tree="$("$repo/bin/ws" system tree)"
+    out="$("$repo/bin/ws" system check)" || {
+        grep -vE '^(OK|SKIP) ' <<<"$out" >&2
+        die "the live system differs from the system tree of this commit; ws system apply first"
+    }
+    echo "live system = ${tree#/nix/store/}"
+
+    mkdir -p "$dir"
+    {
+        echo "name: $name"
+        echo "date: $(date --iso-8601=seconds)"
+        echo "host: $(hostname)"
+        echo "commit: $(git -C "$repo" rev-parse HEAD)"
+        echo "subject: $(git -C "$repo" log -1 --format=%s)"
+        echo "home-generation: ${gen_link%-link}"
+        echo "home: $gen"
+        echo "system: $tree"
+        echo "kernel: $(uname -r)"
+        echo "kernels: $(cd /boot && ls vmlinuz-* 2>/dev/null | sed 's/^vmlinuz-//' | paste -sd' ')"
+        echo "held: $(apt-mark showhold 2>/dev/null | paste -sd' ')"
+        echo "baseline: checkpoint-$name"
+    } > "$dir/meta.txt"
+    # Indirect GC roots: the generation and the tree stay in the store as long
+    # as the checkpoint exists.
+    "$nix" build --out-link "$dir/home" "$gen"
+    "$nix" build --out-link "$dir/system" "$tree"
+    git -C "$repo" tag -a -m "ws checkpoint $name" "checkpoint/$name"
+
+    echo "== baseline"
+    "$repo/bin/ws-baseline" capture "checkpoint-$name" --no-boxes \
+        || die "ws-baseline capture failed; the checkpoint is recorded without a complete baseline"
+
+    echo
+    echo "checkpoint $name: $(git -C "$repo" rev-parse --short HEAD), ${gen_link%-link}, $(uname -r)"
+}
+
+cmd_list() {
+    local d
+    [[ -d "$root" ]] || return 0
+    for d in "$root"/*/; do
+        [[ -f "$d/meta.txt" ]] || continue
+        printf '%-20s %s  %s  %s  %s\n' "$(meta "$d" name)" \
+            "$(meta "$d" date | cut -c1-16)" "$(meta "$d" commit | cut -c1-7)" \
+            "$(meta "$d" home-generation)" "$(meta "$d" kernel)"
+    done
+}
+
+cmd_show() {
+    local dir name kernel
+    [[ $# -eq 1 ]] || die "usage: ws checkpoint show NAME"
+    dir="$(dir_of "$1")"
+    name="$1"
+    kernel="$(meta "$dir" kernel)"
+    cat "$dir/meta.txt"
+    cat <<EOF
+
+Return to it (by hand; the commands are not run):
+  git -C $repo switch --detach checkpoint/$name
+  ws switch                 # home-manager generation of that commit (built from flake.lock)
+  ws system apply           # its system files (sudo)
+EOF
+    [[ "$kernel" == "$(uname -r)" ]] \
+        || echo "  boot kernel $kernel (rEFInd); installed now: $(cd /boot && ls vmlinuz-* 2>/dev/null | sed 's/^vmlinuz-//' | paste -sd' ')"
+    cat <<EOF
+Back to the latest state:
+  git -C $repo switch main && ws switch && ws system apply
+EOF
+}
+
+cmd_diff() {
+    local name="" baseline=false dir nix old_home cur_home old_tree new_tree now
+    while (($#)); do
+        case "$1" in
+            --baseline) baseline=true ;;
+            -*) die "unknown option: $1" ;;
+            *) [[ -z "$name" ]] || die "only one NAME"; name="$1" ;;
+        esac
+        shift
+    done
+    [[ -n "$name" ]] || die "usage: ws checkpoint diff NAME [--baseline]"
+    dir="$(dir_of "$name")"
+    nix="$(nix_bin)"
+
+    echo "== Git: checkpoint/$name ($(meta "$dir" commit | cut -c1-7)) .. HEAD"
+    git -C "$repo" log --oneline "checkpoint/$name..HEAD"
+    git -C "$repo" diff --stat "checkpoint/$name"
+    [[ -z "$(git -C "$repo" status --porcelain)" ]] || echo "(the checkout has uncommitted changes, included above)"
+
+    echo
+    echo "== home-manager"
+    old_home="$(meta "$dir" home)"
+    cur_home="$(readlink -f "$(hm_profile)")"
+    if [[ "$old_home" == "$cur_home" ]]; then
+        echo "same generation: $(meta "$dir" home-generation)"
+    else
+        echo "$(meta "$dir" home-generation) -> $(readlink "$(hm_profile)" | sed 's/-link$//')"
+        "$nix" run "$repo#nvd" -- diff "$old_home" "$cur_home"
+    fi
+
+    echo
+    echo "== system tree"
+    old_tree="$(meta "$dir" system)"
+    new_tree="$("$repo/bin/ws" system tree)"
+    if [[ "$old_tree" == "$new_tree" ]]; then
+        echo "same tree: ${new_tree#/nix/store/}"
+    else
+        diff -u --label "manifest ($name)" --label "manifest (now)" \
+            "$old_tree/manifest" "$new_tree/manifest" || true
+        diff -rq "$old_tree" "$new_tree" | grep -v ' manifest ' \
+            | sed -e "s|$old_tree/||g" -e "s|$new_tree/||g" || true
+        echo "(the live system is compared with the current tree by ws system check)"
+    fi
+
+    echo
+    echo "== kernel"
+    if [[ "$(meta "$dir" kernel)" == "$(uname -r)" ]]; then
+        echo "same kernel: $(uname -r)"
+    else
+        echo "$(meta "$dir" kernel) -> $(uname -r)"
+    fi
+
+    if [[ "$baseline" == true ]]; then
+        now="checkpoint-$name-now-$(date +%Y%m%d-%H%M%S)"
+        echo
+        echo "== baseline checkpoint-$name .. now"
+        "$repo/bin/ws-baseline" capture "$now" --no-boxes > /dev/null
+        "$repo/bin/ws-baseline" diff "checkpoint-$name" "$now" || true
+        rm -rf -- "${state:?}/baseline/$now"
+    fi
+}
+
+cmd_remove() {
+    local dir
+    [[ $# -eq 1 ]] || die "usage: ws checkpoint remove NAME"
+    dir="$(dir_of "$1")"
+    git -C "$repo" tag -d "checkpoint/$1" 2>/dev/null || echo "no tag checkpoint/$1"
+    rm -rf -- "$dir" "${state:?}/baseline/checkpoint-$1"
+    echo "removed checkpoint $1 (the store paths go with the next nix-collect-garbage)"
+}
+
+case "${1:-}" in
+    create) shift; cmd_create "$@" ;;
+    list) cmd_list ;;
+    show) shift; cmd_show "$@" ;;
+    diff) shift; cmd_diff "$@" ;;
+    remove) shift; cmd_remove "$@" ;;
+    -h|--help|help) usage ;;
+    "") usage >&2; exit 64 ;;
+    *) usage >&2; exit 64 ;;
+esac

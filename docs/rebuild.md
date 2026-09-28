@@ -233,6 +233,32 @@ xremap (`nix/pkgs/xremap.nix`), расширения с `pin`, образы по
 news`; `ws switch` о них не уведомляет (`news.display = "silent"`), а
 `home-manager news` без `--flake` конфигурацию не находит.
 
+Checkpoint — какой коммит соответствовал какому рабочему состоянию.
+`bin/`, fish и Ghostty — ссылки в checkout (`nix/home/links.nix`), поэтому
+откат поколения home-manager не откатывает пользовательский слой: ключ —
+коммит, поколение и системное дерево — то, что из него собрано.
+
+```console
+ws checkpoint create before-update   # тег checkpoint/before-update (локальный)
+ws checkpoint list
+ws checkpoint diff before-update     # коммиты, пакеты (nvd), системное дерево, ядро
+ws checkpoint diff before-update --baseline
+ws checkpoint show before-update     # что записано и команды возврата
+ws checkpoint remove before-update
+```
+
+`create` без sudo и только для согласованного состояния: checkout без
+изменений, активное поколение собрано из этого коммита (иначе `ws switch`),
+`ws system check` без различий (иначе `ws system apply`). Записывает в
+`~/.local/state/workstation/checkpoints/NAME/` коммит, поколение, системное
+дерево, ядро, установленные ядра и held-пакеты, держит поколение и дерево
+GC roots и снимает `ws baseline capture checkpoint-NAME --no-boxes`.
+Сам ничего не откатывает; `show` печатает шаги: `git switch --detach
+checkpoint/NAME`, `ws switch`, `ws system apply`, загрузка записанного ядра.
+`ws system apply` дополнительно пишет в `~/.local/state/workstation/system/`
+ссылку `applied` на поставленное дерево и строку в `history` (дата, коммит,
+дерево, результат).
+
 Flatpak: remotes и overrides объявлены в `flatpak/flatpak.nix`, приложения —
 в `flatpak/apps.txt` (`wsflatpak install` дописывает туда сам, `ws switch` коммитит); `ws switch` собирает из них
 `~/.local/share/workstation/flatpak/` и ставит `.desktop` Claude, шаг `flatpak`
