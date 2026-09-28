@@ -166,6 +166,27 @@ EN <- RU <- UA <- EN
 
 Порядок не зависит от MRU GNOME.
 
+### Overview / поиск
+
+Command/Win+Space (и любой другой вход в Overview: Control+Up, hot corner,
+кнопка Activities) включает EN, чтобы запрос в поиске набирался латиницей:
+
+```text
+RU/UA -> Overview -> EN -> закрытие Overview -> RU/UA
+EN    -> Overview -> EN (ничего не меняется)
+```
+
+- Это временный EN, как на lock screen: `caps-binary-state` не меняется,
+  LED гаснет на время Overview и возвращается вместе с раскладкой.
+- Ручное переключение внутри Overview (CapsLock, Fn/Option+CapsLock,
+  Control+Space, меню раскладок в панели) отменяет возврат: остаётся
+  выбранная раскладка.
+- Блокировка экрана при открытом Overview тоже отменяет возврат.
+
+Реализация — сигналы `Main.overview` `showing`/`hidden` в
+`workstation-input-source@local`. Правка `extension.js` применяется после
+logout/login.
+
 ### Caps LED
 
 ```text
@@ -173,6 +194,7 @@ EN       LED off
 RU       LED on
 UA       LED on
 lock     LED off
+overview LED off (временный EN)
 ```
 
 Внутренний helper:

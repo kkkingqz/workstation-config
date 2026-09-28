@@ -219,7 +219,7 @@ Apple Control = PC Ctrl = Ctrl
 ```text
 GNOME/Mutter                    system shortcuts
 xremap                          application/Fn/Nautilus mappings
-workstation-input-source@local  EN/RU/UA + Caps + unlock-dialog EN
+workstation-input-source@local  EN/RU/UA + Caps + unlock-dialog/overview EN
 workstation-smart-popup@local   Smart Tiling Popup
 Window Control                  application/window actions
 Tiling Assistant                tiling backend

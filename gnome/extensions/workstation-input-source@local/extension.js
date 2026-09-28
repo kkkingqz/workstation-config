@@ -50,6 +50,18 @@ export default class WorkstationInputSourceExtension extends Extension {
             () => this._onCurrentSourceChanged()
         );
 
+        // Overview search (Command/Win+Space and every other way in) is
+        // typed in English; the previous source comes back on close.
+        this._overviewRestore = null;
+        this._overviewShowingId = Main.overview.connect(
+            'showing',
+            () => this._onOverviewShowing()
+        );
+        this._overviewHiddenId = Main.overview.connect(
+            'hidden',
+            () => this._onOverviewHidden()
+        );
+
         this._dbus = Gio.DBusExportedObject.wrapJSObject(DBUS_XML, this);
         this._dbus.export(
             Gio.DBus.session,
@@ -75,6 +87,18 @@ export default class WorkstationInputSourceExtension extends Extension {
             this._manager.disconnect(this._sourceChangedId);
             this._sourceChangedId = 0;
         }
+
+        if (this._overviewShowingId) {
+            Main.overview.disconnect(this._overviewShowingId);
+            this._overviewShowingId = 0;
+        }
+
+        if (this._overviewHiddenId) {
+            Main.overview.disconnect(this._overviewHiddenId);
+            this._overviewHiddenId = 0;
+        }
+
+        this._overviewRestore = null;
 
         this._dbus?.flush();
         this._dbus?.unexport();
@@ -142,13 +166,17 @@ export default class WorkstationInputSourceExtension extends Extension {
 
     _onSessionModeUpdated() {
         if (this._isUnlockDialog()) {
+            // Locked with the overview open: the lock screen owns the
+            // source now, nothing is restored afterwards.
+            this._overviewRestore = null;
             this._syncLockScreenEnglish();
             return;
         }
 
         // Back in the normal user session. Re-sync logical Caps state
-        // and LED from the input source GNOME restored.
-        this._syncFromCurrent();
+        // and LED from the input source GNOME restored (unless it is the
+        // temporary overview EN).
+        this._onCurrentSourceChanged();
     }
 
     _onCurrentSourceChanged() {
@@ -159,7 +187,46 @@ export default class WorkstationInputSourceExtension extends Extension {
             return;
         }
 
+        if (this._overviewRestore) {
+            const current = this._token(this._manager.currentSource);
+
+            // The temporary overview EN: keep the remembered EN/RU state.
+            if (current === 'en') {
+                this._setLed('en');
+                return;
+            }
+
+            // Switched by hand while the overview is open (panel menu or
+            // anything else): that choice stays.
+            this._overviewRestore = null;
+        }
+
         this._syncFromCurrent();
+    }
+
+    _onOverviewShowing() {
+        if (this._isUnlockDialog())
+            return;
+
+        const current = this._token(this._manager.currentSource);
+        if (current !== 'ru' && current !== 'ua')
+            return;
+
+        // Like the lock screen: EN without touching caps-binary-state.
+        this._overviewRestore = current;
+        this._setLed('en');
+        this._activate('en');
+    }
+
+    _onOverviewHidden() {
+        const target = this._overviewRestore;
+        this._overviewRestore = null;
+
+        if (!target || this._isUnlockDialog())
+            return;
+
+        if (this._token(this._manager.currentSource) === 'en')
+            this._activate(target);
     }
 
     _syncLockScreenEnglish() {
@@ -215,6 +282,8 @@ export default class WorkstationInputSourceExtension extends Extension {
     }
 
     ToggleCaps() {
+        this._overviewRestore = null;
+
         const current = this._token(this._manager.currentSource);
 
         let target;
@@ -236,6 +305,8 @@ export default class WorkstationInputSourceExtension extends Extension {
 
 
     Cycle(direction) {
+        this._overviewRestore = null;
+
         direction = String(direction).toLowerCase();
 
         if (!['next', 'prev'].includes(direction))
@@ -255,6 +326,8 @@ export default class WorkstationInputSourceExtension extends Extension {
     }
 
     Select(target) {
+        this._overviewRestore = null;
+
         target = String(target).toLowerCase();
 
         if (!['en', 'ru', 'ua'].includes(target))
