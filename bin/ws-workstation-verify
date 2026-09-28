@@ -324,30 +324,6 @@ else
     printf '%s\n' "$status_porcelain" | sed 's/^/        /'
 fi
 
-upstream="$(git -C "$repo" rev-parse '@{u}' 2>/dev/null || true)"
-if [[ -n "$upstream" ]]; then
-    if [[ "$head" == "$upstream" ]]; then
-        pass "HEAD matches local upstream-tracking ref"
-    else
-        local_counts="$(git -C "$repo" rev-list --left-right --count HEAD...@{u} 2>/dev/null || echo '? ?')"
-        warn "HEAD differs from local upstream-tracking ref (HEAD...upstream = $local_counts)"
-    fi
-else
-    warn "branch has no upstream-tracking ref"
-fi
-
-if [[ -n "$origin" && "$branch" == "main" ]] && have timeout; then
-    remote_head="$(timeout 10 git -C "$repo" ls-remote --heads origin refs/heads/main 2>/dev/null | awk 'NR==1{print $1}')"
-    if [[ -n "$remote_head" ]]; then
-        info "origin/main live SHA: $remote_head"
-        [[ "$remote_head" == "$head" ]] \
-            && pass "local HEAD exactly matches live origin/main" \
-            || warn "local HEAD does not exactly match live origin/main"
-    else
-        warn "could not query live origin/main (network/auth unavailable?)"
-    fi
-fi
-
 section "3. Repository hygiene / junk detection"
 
 weird_found=false

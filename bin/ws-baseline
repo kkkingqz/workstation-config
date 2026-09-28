@@ -236,7 +236,7 @@ normalize_check() {
 }
 
 # verify without what depends on the moment, not on the workstation:
-# - Git state of the checkout (clean tree, pushed or not);
+# - Git state of the checkout (clean tree);
 # - `wsbox check` and in-container NTSync checks, which verify embeds only
 #   when the containers happen to be running (wsbox-check.txt has them
 #   in every baseline).
@@ -245,7 +245,7 @@ normalize_verify() {
     boxes="$(normalize_check "$base/checks/wsbox-check.txt" 2>/dev/null \
         | grep -E '^(PASS|WARN|FAIL) ' || true)"
     normalize_check "$base/checks/ws-workstation-verify.txt" \
-        | grep -vE '^(PASS|WARN|FAIL) (working tree|HEAD |local HEAD|wsbox check:|arch: )' \
+        | grep -vE '^(PASS|WARN|FAIL) (working tree|wsbox check:|arch: )' \
         | grep -vxF -e "${boxes:-@@none@@}" \
         | sed -E "s/^(PASS ws-input-source status works: ).*/\1<layout>/"
 }
