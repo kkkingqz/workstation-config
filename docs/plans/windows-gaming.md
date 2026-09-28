@@ -17,7 +17,8 @@ WinBox из `wine` проверен пользователем; `winbox3` и exp
 запустился (первый старт долгий: докачка клиента).
 Решено при выполнении: запуск через `wswin` идёт из HOME контейнера
 (distrobox с custom HOME отдаёт cwd как `/run/host/…`, это отвергает
-pressure-vessel). Пользовательская справка — `helpws windows`.
+pressure-vessel). Пользовательская справка — `helpws windows`. WinBox проверен в
+`wine-wayland` и перенесён туда (prefix `winbox`, `LogPixels=144`).
 
 Добавлено 2026-09-28 (решение пользователя): `wswin install` после
 установки спрашивает про каждый новый пункт меню Wine, добавить ли его на

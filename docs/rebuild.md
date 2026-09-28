@@ -405,15 +405,15 @@ pacman -Dk
 Windows-контейнеры (`wine-wayland`, `wine`, `proton`) ставят Wine, WineHQ
 и umu сами при создании (хуки в `distrobox.nix`, `helpws windows`).
 Prefixes лежат в их HOME и переживают recreate. WinBox — prefix
-`~/distrobox/wine/prefixes/winbox` (`LogPixels=192`), launcher
+`~/distrobox/wine-wayland/prefixes/winbox` (`LogPixels=144`), launcher
 `ws-win-winbox.desktop` из `windows/apps.nix`. Если prefix потерян:
 
 ```console
-wswin prefix --box wine winbox init
+wswin prefix --box wine-wayland winbox init
 ```
 
 и положить `winbox.exe` (WinBox 3.x, mikrotik.com) в
-`~/distrobox/wine/prefixes/winbox/drive_c/Program Files/WinBox/`.
+`~/distrobox/wine-wayland/prefixes/winbox/drive_c/Program Files/WinBox/`.
 
 Steam — flatpak (`wsflatpak apply`), udev-правила контроллеров — `steam-devices`
 из `nix/hosts/apt.txt` (`sudo apt install steam-devices`; `ws check apt` сверяет список).

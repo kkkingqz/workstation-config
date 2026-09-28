@@ -478,8 +478,8 @@ Managed containers:
 ```text
 ubuntu   Ubuntu 26.04 base / compatibility
 arch     Arch rolling (archlinux:latest) / AUR applications
-wine-wayland  Arch, Wine с Wayland-драйвером: Windows-программы по умолчанию
-wine     Ubuntu релиза хоста, WineHQ stable, XWayland; WinBox 3.x
+wine-wayland  Arch, Wine с Wayland-драйвером: Windows-программы по умолчанию; WinBox 3.x
+wine     Ubuntu релиза хоста, WineHQ stable, XWayland
 proton   Arch, umu-launcher + Proton: игры, AMD при наличии (helpws windows)
 t2bce-build     Ubuntu релиза хоста, сборка ядра/модулей вручную (kernel headers с хоста)
 touchbar-build  Ubuntu релиза хоста, порт Touch Bar (~/touchbar): dev-пакеты DRM/Wayland,
@@ -516,11 +516,11 @@ wsbox apply [NAME]
 ```
 
 Windows-программы, prefixes, `wswin`, Steam: `helpws windows`. WinBox —
-prefix `winbox` в `wine` (переживает destructive rebuild):
+prefix `winbox` в `wine-wayland` (переживает destructive rebuild):
 
 ```text
-~/distrobox/wine/prefixes/winbox
-LogPixels = 0xc0 = 192 DPI = 200%
+~/distrobox/wine-wayland/prefixes/winbox
+LogPixels = 0x90 = 144 DPI = 150%
 ```
 
 Подробности:

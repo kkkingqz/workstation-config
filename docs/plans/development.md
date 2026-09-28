@@ -11,7 +11,8 @@ volume: User Commands
 Слой завершён и проверен 2026-09-26.
 
 С 2026-09-28 Wine и WinBox — отдельный слой (`helpws windows`): WinBox
-переехал из `arch` в `wine` (prefix `~/distrobox/wine/prefixes/winbox`),
+переехал из `arch` в `wine`, затем в `wine-wayland` (prefix
+`~/distrobox/wine-wayland/prefixes/winbox`),
 появились `wine-wayland` и `proton`, хук NTSYNC ставится и в них. Разделы 5,
 6, 8–10 ниже описывают прежнюю схему с WinBox в `arch`.
 

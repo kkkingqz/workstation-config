@@ -31,7 +31,8 @@ let
   apps = {
     winbox = {
       title = "WinBox 3";
-      box = "wine";
+      # Native Wayland since 2026-09-28 (was wine/XWayland, LogPixels 192).
+      box = "wine-wayland";
       prefix = "winbox";
       exe = "drive_c/Program Files/WinBox/winbox.exe";
       # No Mono prompt: WinBox does not use .NET.

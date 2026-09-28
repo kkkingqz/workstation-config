@@ -92,8 +92,8 @@ let
     }
     {
       # Wine through XWayland (xwayland-native-scaling, so LogPixels 192):
-      # programs the Wayland driver does not suit. WineHQ stable, amd64 only
-      # (WoW64), from the hook.
+      # programs the Wayland driver does not suit (none yet). WineHQ stable,
+      # amd64 only (WoW64), from the hook.
       name = "wine";
       image = hostUbuntu;
       packages = [ "ca-certificates" "icoutils" "mesa-vulkan-drivers" ];

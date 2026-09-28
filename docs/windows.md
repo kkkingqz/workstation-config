@@ -14,7 +14,7 @@ volume: User Commands
 wine-wayland  Arch                 Wine из Arch, родной Wayland-драйвер;
                                    контейнер по умолчанию
 wine          Ubuntu релиза host   WineHQ stable, XWayland: программы, которым
-                                   Wayland-драйвер не подходит; WinBox
+                                   Wayland-драйвер не подходит
 proton        Arch                 umu-launcher + Proton: игры, тяжёлое 3D
 ```
 
@@ -146,8 +146,9 @@ render node с драйвером `amdgpu` при каждом запуске и
 
 ## WinBox
 
-`wine`, свой prefix `winbox`, `drive_c/Program Files/WinBox/winbox.exe`,
-`LogPixels=192`, без Mono (`WINEDLLOVERRIDES=mscoree=`).
+`wine-wayland`, свой prefix `winbox`, `drive_c/Program Files/WinBox/winbox.exe`,
+`LogPixels=144`, без Mono (`WINEDLLOVERRIDES=mscoree=`). До 2026-09-28 был в
+`wine` (XWayland, `LogPixels=192`).
 
 ## Проверка
 
