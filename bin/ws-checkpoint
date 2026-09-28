@@ -208,8 +208,12 @@ cmd_diff() {
     else
         diff -u --label "manifest ($name)" --label "manifest (now)" \
             "$old_tree/manifest" "$new_tree/manifest" || true
-        diff -rq "$old_tree" "$new_tree" | grep -v ' manifest ' \
-            | sed -e "s|$old_tree/||g" -e "s|$new_tree/||g" || true
+        diff -rq "$old_tree" "$new_tree" | sed -E \
+            -e "\\|^Files $old_tree/manifest and |d" \
+            -e "s|^Files $old_tree/(.*) and .* differ\$|changed:  \\1|" \
+            -e "s|^Only in $old_tree/?(.*): (.*)\$|only $name: \\1/\\2|" \
+            -e "s|^Only in $new_tree/?(.*): (.*)\$|only now: \\1/\\2|" \
+            -e "s|: /|: |" || true
         echo "(the live system is compared with the current tree by ws system check)"
     fi
 
