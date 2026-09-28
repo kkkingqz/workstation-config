@@ -1,134 +1,180 @@
 title: ws-plan-windows
 section: 1
-date: 2026-09-21
+date: 2026-09-28
 source: Workstation
 volume: User Commands
 
 # PLAN — WINDOWS APPS / WINE / STEAM / PROTON
 
+## Статус
+
+План пересмотрен 2026-09-28, выполнение не начато. Первая версия (один
+Distrobox на каждое приложение, `~/.local/share/winapps`) заменена схемой
+ниже.
+
 ## Цель
 
-Разделить Windows desktop apps и gaming, не превращая host в общий Wine prefix.
+Windows-программы и игры живут в трёх managed Distrobox, а не на host и не в
+development boxes. Каждая программа ставится либо в стандартный prefix
+контейнера, либо в свой. Отдельный контейнер под одну программу схема
+поддерживает, но сейчас такие контейнеры не создаются.
 
-## A. Windows desktop applications
+## 1. Контейнеры
 
-### 1. Правило
-
-```text
-одно Windows desktop app
-        ↓
-отдельный Distrobox
-        ↓
-отдельный HOME
-        ↓
-отдельный Wine prefix/state
-```
-
-Это даёт понятное удаление и разные версии/configs для разных приложений.
-
-### 2. Шаблон environment
-
-```bash
-mkdir -p ~/.local/share/winapps/foo/home
-
-distrobox create \
-  --name win-foo \
-  --image docker.io/library/ubuntu:26.04 \
-  --home "$HOME/.local/share/winapps/foo/home"
-```
-
-Внутри:
-
-```bash
-sudo dpkg --add-architecture i386
-sudo apt update
-sudo apt install wine wine64 wine32:i386 winetricks cabextract
-wineboot
-winecfg
-```
-
-### 3. Scaling
-
-DPI задавать per-prefix, а не глобально для GNOME.
-
-Пример 150%:
-
-```bash
-wine reg add 'HKCU\Control Panel\Desktop' \
-  /v LogPixels /t REG_DWORD /d 144 /f
-```
-
-### 4. Host launcher
-
-Для каждого приложения сделать отдельный launcher в `~/.local/bin` и `.desktop` entry.
-
-### 5. Wayland
-
-Сначала использовать рабочий Wine/XWayland путь.
-
-Native Wine Wayland тестировать отдельно per-app; не мигрировать working prefix только ради архитектурной чистоты.
-
----
-
-## B. Steam / gaming
-
-### 1. Steam
-
-Предпочтительный desktop-layer вариант:
-
-```bash
-flatpak install --user flathub com.valvesoftware.Steam
-sudo apt install steam-devices
-```
-
-### 2. Proton
-
-Сначала:
+Все три описаны в `distrobox/distrobox.nix` через профиль (`wine` или
+`proton`): контейнер под одну программу позже — ещё одна запись с тем же
+профилем, `wswin` не знает имён контейнеров.
 
 ```text
-Valve Proton
+wine-wayland  Arch                 Wine из Arch, родной Wayland-драйвер;
+                                   контейнер по умолчанию
+wine          Ubuntu релиза host   Wine через XWayland: программы, которым
+              (@HOST_VERSION_ID@)  Wayland-драйвер не подходит; WinBox
+proton        Arch                 umu-launcher + Proton (UMU-/GE-Proton):
+                                   игры и тяжёлое 3D (DXVK/VKD3D)
 ```
 
-GE-Proton добавлять только для конкретной совместимости.
+- `wine-wayland`: в реестре каждого prefix
+  `HKCU\Software\Wine\Drivers Graphics=wayland`, поэтому драйвер не зависит
+  от способа запуска (launcher, `wsbox enter`).
+- `wine`: пакет Wine — открытый вопрос (ниже). Образ `ubuntu:26.04`
+  заменяется на `@HOST_VERSION_ID@`, как у build-контейнеров; текущий `wine`
+  пуст, пересоздание ничего не теряет.
+- `proton`: multilib и 32-битные Vulkan-драйверы (`lib32-vulkan-radeon`,
+  `lib32-vulkan-intel`) для DXVK; umu-launcher из AUR (или его zipapp).
+  Proton и Steam Runtime umu скачивает в HOME контейнера.
+- Хук `wsbox-host-ntsync` (NTSYNC-MODULE) переходит из `arch` в
+  `wine-wayland` и `proton`.
+- `arch` остаётся коробкой для AUR без Wine: `winbox3` и export
+  `arch/winbox3` убираются после переезда WinBox.
 
-При необходимости:
+## 2. GPU: AMD, если доступна
 
-```bash
-flatpak install --user flathub net.davidotek.pupgui2
-```
+`proton` и Steam (flatpak) запускаются на AMD, если система загружена с ней
+(rEFInd «Ubuntu (AMD)»), иначе — на Intel. Остальные контейнеры GPU не
+выбирают (Intel по умолчанию).
 
-### 3. GPU
-
-Игры/тяжёлые 3D приложения — основной кандидат для AMD offload.
-
-Для каждой игры проверить:
-
-- какой GPU реально используется;
-- Vulkan;
-- fullscreen;
-- frame pacing;
-- suspend/resume после выхода из игры.
-
----
-
-## C. Storage
-
-Разнести данные логически:
+`bin/ws-gpu`:
 
 ```text
-~/Games
-~/.local/share/winapps/<app>
+ws-gpu status     какая GPU будет выбрана и почему
+ws-gpu env        DRI_PRIME=pci-0000_03_00_0 или пусто
 ```
 
-Game library при необходимости можно вынести на отдельный filesystem/storage позже, не меняя Wine architecture.
+- AMD доступна, если на PCI есть видеоустройство с драйвером `amdgpu` и
+  render node; не по одному `ws.dgpu=off` в cmdline (amdgpu может не
+  подняться).
+- `DRI_PRIME` передаётся явно только когда AMD есть: Mesa, не найдя
+  указанную GPU, сама ушла бы на Intel, но предупреждение в логе вместо
+  понятного выбора не нужно.
+- `wsbox enter/run proton` и `wswin` для `proton` добавляют env на каждый
+  запуск (`distrobox enter --additional-flags "--env …"`), а не при создании
+  контейнера: одна и та же коробка работает в обеих загрузках.
+- В `distrobox.nix` у контейнера признак `gpu = "amd"` (предпочтение, не
+  требование); wsbox читает его из собранного файла рядом с
+  `containers.ini`.
 
----
+## 3. Prefixes
+
+Внутри каждого контейнера:
+
+```text
+стандартный   $HOME/.wine             ~/distrobox/<box>/.wine
+свой          $HOME/prefixes/<name>   ~/distrobox/<box>/prefixes/<name>
+```
+
+- Оба в HOME контейнера и переживают `wsbox recreate`.
+- `wswin prefix … init` создаёт prefix и задаёт DPI (`LogPixels`, 192 =
+  200%) и, в `wine-wayland`, драйвер Wayland. Настройки стандартного prefix
+  общие для всех программ в нём.
+- В `proton` тот же `WINEPREFIX` передаётся umu (`umu-run`).
+- Пункты меню и ассоциации, которые создаёт сам Wine, остаются в HOME
+  контейнера и в меню host не попадают.
+
+## 4. Программы и launchers
+
+Список программ — `windows/apps.nix`:
+
+```text
+name        ключ (launcher ws-win-<name>.desktop, wswin run <name>)
+box         контейнер; по умолчанию wine-wayland
+prefix      default | <имя своего prefix>; по умолчанию default
+exe         путь внутри prefix (C:\…)
+args, dpi   необязательно; title, icon — для launcher
+```
+
+`ws switch` собирает из него `~/.local/share/workstation/windows/apps.ini`
+для `wswin` и launchers в `~/.local/share/applications/`.
+
+## 5. wswin
+
+```text
+wswin list
+wswin install [--box BOX] [--prefix NAME] SETUP.exe [ARGS]
+wswin run APP [ARGS]
+wswin exec [--box BOX] [--prefix NAME] PROGRAM.exe [ARGS]
+wswin prefix [--box BOX] NAME init|winecfg|regedit|winetricks …|path|remove
+wswin shell [--box BOX] [--prefix NAME]
+```
+
+- `install`: по умолчанию `--box wine-wayland` и стандартный prefix;
+  `--prefix NAME` — свой prefix (создаётся, если нет).
+- Для `proton` команды идут через `umu-run`, для остальных — через `wine`.
+- После установки программа попадает в меню через запись в
+  `windows/apps.nix` и `ws switch`.
+
+## 6. Steam
+
+- `com.valvesoftware.Steam` в `flatpak/flatpak.nix`; на host
+  `steam-devices` (udev для контроллеров) в `apt.txt`.
+- Launcher Steam заменяется своим `.desktop` (тот же id, поэтому и
+  `steam://`): `flatpak run` с `--env=DRI_PRIME=…`, если AMD доступна.
+- Proton в Steam — Valve Proton; GE-Proton только для конкретной
+  совместимости, через `net.davidotek.pupgui2`.
+
+## 7. Хранение
+
+```text
+~/distrobox/wine-wayland/{.wine,prefixes/}
+~/distrobox/wine/{.wine,prefixes/}
+~/distrobox/proton/{.wine,prefixes/,Games/}   umu, Proton, Steam Runtime — тоже здесь
+~/.var/app/com.valvesoftware.Steam             библиотека Steam
+```
+
+Библиотеку игр можно позже вынести на отдельный filesystem, схема не
+меняется.
+
+## 8. Этапы
+
+0. Проверить «Ubuntu (AMD)»: dGPU включена, `vulkaninfo`/offload, S3.
+1. `ws-gpu`, признак `gpu` в `distrobox.nix`, env в `wsbox`.
+2. Профили в `distrobox.nix`; пересоздать `wine`, создать `wine-wayland` и
+   `proton`; хук NTSYNC в Arch-боксах.
+3. `wswin`, `windows/apps.nix`, launchers.
+4. WinBox → `wine`, свой prefix `winbox` (копия
+   `~/distrobox/arch/.winbox/wine` с `LogPixels=192`; старый удаляется после
+   проверки). Отдельно попробовать WinBox в `wine-wayland`. Убрать `winbox3`
+   и export из `arch`.
+5. `proton`: umu; проверить Steam Runtime (pressure-vessel, вложенные user
+   namespaces) внутри rootless podman при ограничениях AppArmor Ubuntu 26.04
+   — главный риск, запасной путь — Proton без runtime. Тестовая игра: DXVK
+   HUD показывает AMD в «Ubuntu (AMD)» и Intel в «Ubuntu».
+6. Steam flatpak, `steam-devices`, свой launcher; ProtonUp-Qt.
+7. Проверки в `ws check`; `helpws windows`; обновить `helpws plan-dev`,
+   `helpws rebuild` (WinBox, arch).
+
+## Открытые вопросы
+
+- Wine в контейнере `wine`: из Ubuntu (10.0, без NTSYNC) или из репозитория
+  WineHQ для resolute (stable 11.x).
 
 # DONE WHEN
 
-- хотя бы один Windows desktop app работает в отдельном box;
-- его можно удалить вместе с HOME/prefix;
-- Steam запускается;
-- Proton game запускается;
-- AMD offload реально используется там, где требуется;
-- Wine/Steam не загрязняют development box.
+- программа ставится `wswin install` в `wine-wayland` (стандартный prefix) и
+  в свой prefix; запускается из меню GNOME;
+- WinBox работает из `wine` со своим prefix и 200% scale; `arch` без Wine;
+- prefix и контейнер удаляются без следов на host;
+- Proton-игра запускается в `proton`: на AMD в «Ubuntu (AMD)», на Intel в
+  «Ubuntu»;
+- Steam запускается так же;
+- Wine/Steam не загрязняют host и development boxes.

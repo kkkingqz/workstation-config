@@ -57,7 +57,8 @@ volume: User Commands
    WinBox export, destructive recovery и host NTSync provider проверены.
 
 5. `helpws plan-windows`
-   Per-app Wine environments, launchers, Steam/Proton, optional GE-Proton.
+   Контейнеры wine-wayland/wine/proton, `wswin`, launchers, Steam flatpak;
+   Proton и Steam на AMD, если она доступна.
 
 6. `helpws plan-virt`
    KVM/libvirt/virt-manager и user-managed Unreal Engine.
