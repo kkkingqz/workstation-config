@@ -27,8 +27,9 @@ laptop before reinstalling.
               macOS by get-apple-firmware); --no-firmware skips them
   state/      ~/.local/state/workstation without baseline/ (keyboard backup,
               checkpoints)
-  virt/       libvirt definitions (virsh dumpxml of VMs, networks, pools);
-              the disk images in /var/lib/libvirt/images are not copied
+  virt/       libvirt definitions (virsh dumpxml of VMs, networks, pools)
+              and UEFI variables (nvram/); the disk images in
+              /var/lib/libvirt/images are not copied
 USAGE
 }
 
@@ -129,6 +130,9 @@ if command -v virsh >/dev/null 2>&1; then
         [[ -n "$vm" ]] || continue
         "${v[@]}" dumpxml "$vm" > "$dir/virt/domain-$vm.xml"
     done < <("${v[@]}" list --all --name)
+    # UEFI variables of each VM (boot entries, Secure Boot state).
+    sudo sh -c 'cp -a /var/lib/libvirt/qemu/nvram "$1"/ 2>/dev/null; chown -R "$2" "$1"/nvram 2>/dev/null' \
+        sh "$dir/virt" "$(id -u):$(id -g)" || true
     while IFS= read -r net; do
         [[ -n "$net" ]] || continue
         "${v[@]}" net-dumpxml "$net" > "$dir/virt/network-$net.xml"

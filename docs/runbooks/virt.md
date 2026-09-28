@@ -24,14 +24,20 @@ bin/ws-check-virt           ws check virt
                             root:libvirt 2775, пул libvirt «default»
 ~/VMs                       ссылка туда же
 /etc/libvirt/qemu/*.xml     описания VM (libvirt, на @)
+/var/lib/libvirt/qemu/nvram переменные UEFI каждой VM (на @)
 virbr0, 192.168.122.0/24    NAT-сеть «default»
 ```
 
 `@vms` не входит в snapshots `@`: откат `@` не трогает диски, snapshots не
 раздуваются. Без copy-on-write у образов нет контрольных сумм Btrfs и
 сжатия — обычная цена за qcow2 без фрагментации. Описания VM лежат на `@`;
-их сохраняет `ws collect` (`virt/domain-*.xml`), вернуть —
-`virsh -c qemu:///system define FILE`.
+их и NVRAM сохраняет `ws collect` (`virt/domain-*.xml`, `virt/nvram/`),
+вернуть — `virsh -c qemu:///system define FILE` и NVRAM на прежний путь.
+
+`~/VMs` — только для рук: класть ISO, смотреть файлы. VM должна получать
+пути пула (`/var/lib/libvirt/images/…`, в virt-manager — «Browse» → пул
+`default`): путь через `~/VMs` qemu не откроет (у него нет доступа в HOME,
+AppArmor разрешает пути пула).
 
 ## Сеть
 
@@ -41,19 +47,31 @@ virbr0, 192.168.122.0/24    NAT-сеть «default»
 
 ## Создать VM
 
-`virt-manager` → «Create a new virtual machine»: ISO из `~/VMs/iso/`
-(каталог создаётся руками), диск — в пуле `default`. Настройки для Linux
-(virt-manager 5 сам ставит UEFI, host-passthrough и SPICE; размеры —
-наши):
+`virt-manager` → «Create a new virtual machine»: ISO из пула `default`
+(`iso/`, кладётся через `~/VMs/iso/`), диск — в пуле `default`. То же
+командой (так создана `ubuntu-test`):
+
+```console
+virt-install --connect qemu:///system --name NAME --osinfo ubuntu25.10 \
+  --memory 8192 --vcpus 4 --cpu host-passthrough --boot uefi \
+  --disk size=40,format=qcow2,bus=virtio,pool=default \
+  --network network=default,model=virtio --graphics spice --video virtio \
+  --cdrom /var/lib/libvirt/images/iso/FILE.iso --noautoconsole
+```
+
+Получается:
 
 ```text
-chipset / firmware   Q35, UEFI (OVMF_CODE_4M)
-CPU                  host-passthrough, 4 vCPU
-память               8 ГБ (host: 32 ГБ)
-диск                 qcow2, virtio
-сеть                 default (NAT), virtio
-экран                SPICE, virtio-gpu
+машина      q35, host-passthrough
+прошивка    OVMF Secure Boot с ключами Microsoft (OVMF_CODE_4M.ms.fd) и TPM
+            (tpm-crb, swtpm): osinfo Ubuntu выбирает их сам
+диск        qcow2 virtio, разреженный, без CoW (атрибут C от каталога)
+сеть        default (NAT), virtio
+экран       SPICE, virtio-gpu, канал spice-vdagent
 ```
+
+В osinfo Ubuntu 26.04 пока нет — ближайший `ubuntu25.10`. Размеры (4 vCPU,
+8 ГБ, 40 ГБ) — наши; host: 12 потоков, 32 ГБ.
 
 Общая папка с host — virtiofs («Add Hardware → Filesystem», в госте
 `mount -t virtiofs TAG /mnt`); нужна «Shared memory» в памяти VM.

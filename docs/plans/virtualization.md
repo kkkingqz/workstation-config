@@ -45,15 +45,19 @@ GUI выбран `virt-manager`: GNOME Boxes работает только с
    сеть `default`), группа `libvirt`, `virt/virt.nix` (`~/VMs`),
    `ws check virt` в `ws check`, `virt/` в `ws collect`, проверка в
    `ws baseline`, `helpws virt`.
-2. Пользователь: `~/wsconfig/bootstrap.sh` (sudo), logout/login,
-   `ws switch`, `ws check`.
-3. GUI: `virt-manager` подключается к `qemu:///system` сам; окно и консоль
-   на масштабе 1.5 без размытия; буфер обмена и подгонка разрешения гостя
-   (spice-vdagent в госте). Настройки `virt-manager`, которые понадобится
-   закрепить, — в `virt/virt.nix` (`dconf.settings`), ключи сверить с его
-   схемой после установки.
-4. Тестовая VM: Ubuntu 26.04 desktop, UEFI, 4 vCPU, 8 ГБ, 40 ГБ qcow2,
-   virtio, SPICE. Проверить:
+2. **Сделано (2026-09-28).** `bootstrap.sh`, logout/login, `ws check` без
+   WARN. По ходу: проверка состояния `virsh` через `grep -q` ломалась от
+   SIGPIPE при `pipefail`; `sg` в 26.04 — в `util-linux-extra` (добавлен в
+   apt-список).
+3. GUI: **сделано (2026-09-28)** — `virt-manager` подключается к
+   `qemu:///system` сам, на масштабе 1.5 выглядит нормально. Остаётся с
+   гостем: буфер обмена и подгонка разрешения (spice-vdagent). Настройки
+   `virt-manager`, если понадобится закрепить, — в `virt/virt.nix`
+   (`dconf.settings`).
+4. Тестовая VM `ubuntu-test` создана (2026-09-28, `virt-install`, mini ISO
+   26.04): q35, OVMF Secure Boot + TPM, 4 vCPU, 8 ГБ, 40 ГБ qcow2 без CoW,
+   virtio, SPICE. Найдено: путь через `~/VMs` qemu не открывает — только
+   пути пула; NVRAM лежит на `@` — добавлен в `ws collect`. Проверить:
    - установка и загрузка, сеть через NAT, SSH с host на гостя;
    - snapshot работающей и выключенной VM и откат к нему (UEFI-прошивка и
      внутренние snapshots qcow2 в libvirt исторически несовместимы —
