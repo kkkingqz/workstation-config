@@ -47,6 +47,9 @@ Proton и Steam Runtime umu скачивает при первом запуск�
 200% при `xwayland-native-scaling`). Настройки стандартного prefix общие для
 всех программ в нём.
 
+`wine-wayland`: `LogPixels=144` (150%, масштаб экрана 1.5) — Wayland-драйвер
+сам не масштабирует окна (проверено на Notepad++ 2026-09-28).
+
 ## wswin
 
 ```console

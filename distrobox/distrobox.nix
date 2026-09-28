@@ -86,7 +86,8 @@ let
       image = "docker.io/library/archlinux:latest";
       packages = [ "base-devel" "git" "mesa" "vulkan-intel" "vulkan-radeon" ];
       initHooks = [ ntsyncHook (pacmanHook [ "wine" "wine-mono" "wine-gecko" "winetricks" ]) ];
-      windows = { profile = "wine"; driver = "wayland"; };
+      # LogPixels 144: the Wayland driver does not scale (display scale 1.5).
+      windows = { profile = "wine"; driver = "wayland"; dpi = 144; };
     }
     {
       # Wine through XWayland (xwayland-native-scaling, so LogPixels 192):
