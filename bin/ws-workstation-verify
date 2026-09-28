@@ -865,6 +865,21 @@ while IFS= read -r app; do
     fi
 done < <(sed -nE 's/^\[([^]]+)\]$/\1/p' "$apps_ini" 2>/dev/null)
 
+exe_desktop="$HOME/.local/share/applications/ws-win-exe.desktop"
+if [[ "$(readlink -f "$exe_desktop" 2>/dev/null)" == /nix/store/* ]]; then
+    pass ".exe handler ws-win-exe.desktop from Nix"
+else
+    fail ".exe handler missing: $exe_desktop (ws switch)"
+fi
+if have xdg-mime; then
+    exe_default="$(xdg-mime query default application/vnd.microsoft.portable-executable 2>/dev/null)"
+    if [[ "$exe_default" == ws-win-exe.desktop ]]; then
+        pass ".exe opens with ws-win-exe.desktop (wine-wayland, standard prefix)"
+    else
+        warn ".exe opens with ${exe_default:-nothing}, not ws-win-exe.desktop (ws switch)"
+    fi
+fi
+
 steam_desktop="flatpak/desktop/com.valvesoftware.Steam.desktop"
 if grep -q '^Exec=ws-gpu run ' "$repo/$steam_desktop" 2>/dev/null; then
     pass "Steam launcher goes through ws-gpu (AMD when present)"
