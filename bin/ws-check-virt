@@ -1,0 +1,114 @@
+#!/usr/bin/env bash
+set -u
+set -o pipefail
+
+# Virtual machines (helpws virt): KVM, libvirt qemu:///system, the VM storage
+# @vms that bootstrap.sh sets up, the NAT network, UEFI and TPM for guests.
+# Read-only. ws check virt; ws check runs it with --json (lib/check.bash).
+
+repo="${WSCONFIG:-$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)}"
+# shellcheck source=../lib/check.bash
+. "$repo/lib/check.bash"
+
+case "${1:-}" in
+    --json) check_json_mode ;;
+    "") ;;
+    -h|--help) echo "Usage: ws-check-virt [--json]  (ws check virt)"; exit 0 ;;
+    *) echo "ws-check-virt: unknown argument: $1" >&2; exit 64 ;;
+esac
+
+images=/var/lib/libvirt/images
+user="$(id -un)"
+
+section "1. Host"
+
+grep -Eq '\b(vmx|svm)\b' /proc/cpuinfo \
+    && pass "CPU virtualization extensions" \
+    || fail "no vmx/svm in /proc/cpuinfo (virtualization off in firmware?)"
+[[ -c /dev/kvm ]] && pass "/dev/kvm present" || fail "/dev/kvm missing (kvm_intel not loaded)"
+if have virt-host-validate; then
+    # Its WARNs name hardware features this host does not have (secure
+    # guests); only FAIL means KVM cannot work.
+    while IFS= read -r line; do
+        case "$line" in
+            *": FAIL"*) fail "virt-host-validate: $(sed -E 's/ +: FAIL/: FAIL/' <<<"$line")" ;;
+            *": WARN"*) info "virt-host-validate: $(sed -E 's/ +: WARN/: WARN/' <<<"$line")" ;;
+        esac
+    done < <(virt-host-validate qemu 2>/dev/null)
+    pass "virt-host-validate qemu: no FAIL"
+else
+    fail "virt-host-validate missing (libvirt-clients; bootstrap.sh)"
+fi
+
+section "2. Access"
+
+if getent group libvirt | cut -d: -f4 | tr ',' '\n' | grep -qx "$user"; then
+    pass "$user is in group libvirt"
+else
+    fail "$user is not in group libvirt (bootstrap.sh)"
+fi
+virsh=(virsh -q -c qemu:///system)
+if ! id -nG | tr ' ' '\n' | grep -qx libvirt; then
+    warn "session is not in group libvirt yet (log out and in); libvirt state not checked"
+    check_finish
+    exit
+fi
+if "${virsh[@]}" uri >/dev/null 2>&1; then
+    pass "qemu:///system reachable as $user"
+else
+    fail "qemu:///system not reachable (libvirtd.socket?)"
+    check_finish
+    exit
+fi
+
+section "3. Storage"
+
+if findmnt -no OPTIONS "$images" 2>/dev/null | tr ',' '\n' | grep -qx 'subvol=/@vms'; then
+    pass "$images is subvolume @vms"
+else
+    fail "$images is not mounted from @vms (bootstrap.sh)"
+fi
+lsattr -d "$images" 2>/dev/null | cut -d' ' -f1 | grep -q C \
+    && pass "$images without copy-on-write (+C)" \
+    || fail "$images has copy-on-write; qcow2 images fragment (sudo chattr +C, then copy images anew)"
+[[ "$(stat -c '%U:%G %a' "$images" 2>/dev/null)" == "root:libvirt 2775" ]] \
+    && pass "$images root:libvirt 2775" \
+    || warn "$images is $(stat -c '%U:%G %a' "$images" 2>/dev/null), want root:libvirt 2775 (bootstrap.sh)"
+pool="$("${virsh[@]}" pool-dumpxml default 2>/dev/null | sed -n 's|.*<path>\(.*\)</path>.*|\1|p')"
+[[ "$pool" == "$images" ]] \
+    && pass "pool default -> $images" \
+    || fail "pool default is ${pool:-missing}, want $images (bootstrap.sh)"
+pool_info="$("${virsh[@]}" pool-info default 2>/dev/null)"
+grep -Eq '^State:[[:space:]]+running' <<<"$pool_info" \
+    && grep -Eq '^Autostart:[[:space:]]+yes' <<<"$pool_info" \
+    && pass "pool default running, autostart" \
+    || fail "pool default not running or not autostarted (bootstrap.sh)"
+
+section "4. Network"
+
+net_info="$("${virsh[@]}" net-info default 2>/dev/null)"
+grep -Eq '^Active:[[:space:]]+yes' <<<"$net_info" \
+    && grep -Eq '^Autostart:[[:space:]]+yes' <<<"$net_info" \
+    && pass "network default (NAT) active, autostart" \
+    || fail "network default not active or not autostarted (bootstrap.sh)"
+
+section "5. Guest firmware"
+
+[[ -r /usr/share/OVMF/OVMF_CODE_4M.fd ]] \
+    && pass "UEFI firmware (OVMF)" \
+    || fail "OVMF missing (ovmf)"
+[[ -r /usr/share/OVMF/OVMF_CODE_4M.secboot.fd && -r /usr/share/OVMF/OVMF_VARS_4M.ms.fd ]] \
+    && pass "UEFI Secure Boot firmware with Microsoft keys (Windows 11)" \
+    || warn "OVMF Secure Boot variant missing: Windows 11 guests need it"
+have swtpm_setup \
+    && pass "swtpm: TPM for guests (Windows 11)" \
+    || warn "swtpm_setup missing (swtpm-tools): Windows 11 guests need a TPM"
+
+section "6. Machines"
+
+while IFS= read -r vm; do
+    [[ -n "$vm" ]] || continue
+    info "VM $vm: $("${virsh[@]}" domstate "$vm" 2>/dev/null)"
+done < <("${virsh[@]}" list --all --name 2>/dev/null)
+
+check_finish

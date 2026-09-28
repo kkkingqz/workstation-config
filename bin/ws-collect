@@ -27,6 +27,8 @@ laptop before reinstalling.
               macOS by get-apple-firmware); --no-firmware skips them
   state/      ~/.local/state/workstation without baseline/ (keyboard backup,
               checkpoints)
+  virt/       libvirt definitions (virsh dumpxml of VMs, networks, pools);
+              the disk images in /var/lib/libvirt/images are not copied
 USAGE
 }
 
@@ -55,7 +57,7 @@ archive="${archive:-$PWD/$name.tar.gz}"
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 dir="$work/$name"
-mkdir -p "$dir"/{meta,boot,apt,firmware,state}
+mkdir -p "$dir"/{meta,boot,apt,firmware,state,virt}
 
 run_to() {
     local out="$1"
@@ -114,6 +116,27 @@ if [[ "$firmware" == true ]]; then
         n=$((n + 1))
     done < <(find /lib/firmware/brcm -maxdepth 1 \( -type f -o -type l \) -print0)
     echo "$n files"
+fi
+
+if command -v virsh >/dev/null 2>&1; then
+    echo "== virt"
+    # On @ (/etc/libvirt), unlike the images on @vms: a new install or a
+    # rollback of @ loses them. virsh define FILE brings a VM back.
+    v=(sudo virsh -q -c qemu:///system)
+    run_to "$dir/virt/list.txt" "${v[@]}" list --all
+    run_to "$dir/virt/images.txt" ls -la /var/lib/libvirt/images
+    while IFS= read -r vm; do
+        [[ -n "$vm" ]] || continue
+        "${v[@]}" dumpxml "$vm" > "$dir/virt/domain-$vm.xml"
+    done < <("${v[@]}" list --all --name)
+    while IFS= read -r net; do
+        [[ -n "$net" ]] || continue
+        "${v[@]}" net-dumpxml "$net" > "$dir/virt/network-$net.xml"
+    done < <("${v[@]}" net-list --all --name)
+    while IFS= read -r pool; do
+        [[ -n "$pool" ]] || continue
+        "${v[@]}" pool-dumpxml "$pool" > "$dir/virt/pool-$pool.xml"
+    done < <("${v[@]}" pool-list --all --name)
 fi
 
 echo "== state"

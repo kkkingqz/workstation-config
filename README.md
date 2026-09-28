@@ -14,7 +14,7 @@ home-manager доставляют конфигурацию поверх неё, 
 ```console
 sudo apt install git
 git clone https://github.com/kkkingqz/wsconfig.git ~/wsconfig
-~/wsconfig/bootstrap.sh     # @nix, apt-списки, nix-users, fish, первый ws switch
+~/wsconfig/bootstrap.sh     # @nix, apt-списки, @vms и libvirt, группы, fish, первый ws switch
 # logout/login
 ws system apply             # системные файлы (sudo)
 ws apply                    # расширения → tiling → клавиатура → Flatpak → Distrobox
@@ -36,6 +36,7 @@ terminal/       Ghostty, fish, micro, xdg-terminal-exec
 flatpak/        приложения (apps.txt), remotes и overrides (wsflatpak)
 distrobox/      контейнеры Distrobox и их hooks (wsbox)
 windows/        Windows-программы в контейнерах Wine/Proton (wswin)
+virt/           виртуальные машины: KVM, libvirt, virt-manager (ссылка ~/VMs)
 bin/            команды; ссылками в ~/.local/bin
 lib/check.bash  общий формат проверок (--json для ws check)
 docs/           документация, из неё собираются man-страницы
@@ -51,7 +52,7 @@ docs/           документация, из неё собираются man-�
 ```text
 docs/architecture/   layers (слои и правила), checks, workstation (подробно)
 docs/runbooks/       rebuild, keyboard, gnome, terminal, suspend, touchbar,
-                     flatpak, distrobox, windows
+                     flatpak, distrobox, windows, virt
 docs/plans/          roadmap и незавершённые планы
 docs/history/        как строились завершённые слои
 ```

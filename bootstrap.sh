@@ -3,7 +3,8 @@ set -euo pipefail
 
 # First steps on a fresh Ubuntu (helpws rebuild, helpws history-nix):
 # @nix subvolume at /nix → apt packages (nix/hosts/apt.txt, nix/hosts/<host>/apt.txt)
-# → nix-users → fish as login shell → first `ws switch`.
+# → VM storage @vms at /var/lib/libvirt/images, pool and network → groups
+# nix-users, libvirt → fish as login shell → first `ws switch`.
 #
 # Runs as the desktop user from the checkout at ~/<wsconfig of
 # nix/hosts/<host>/facts.nix> and calls sudo itself. Every step checks
@@ -62,42 +63,49 @@ apt_lines() {
     return 0
 }
 
-echo
-echo "== 1. /nix on subvolume @nix"
 root_dev="$(findmnt -no SOURCE / | sed 's/\[.*$//')"
 root_uuid="$(findmnt -no UUID /)"
 [[ -n "$root_uuid" ]] || die "cannot determine the UUID of /"
-if findmnt -no OPTIONS /nix 2>/dev/null | tr ',' '\n' | grep -qx 'subvol=/@nix'; then
-    echo "/nix is mounted from @nix"
-else
-    if [[ -e /nix ]] && [[ -n "$(find /nix -mindepth 1 -maxdepth 1 -print -quit 2>/dev/null)" ]]; then
-        die "/nix exists, is not empty and is not @nix; move it away first"
+
+# Subvolume NAME of the root filesystem mounted at DIR by an fstab line with
+# OPTIONS. DIR must not hold data yet: it would be hidden by the mount.
+subvolume_mount() {
+    local name="$1" dir="$2" options="$3" top=/run/btrfs-top line
+    if findmnt -no OPTIONS "$dir" 2>/dev/null | tr ',' '\n' | grep -qx "subvol=/$name"; then
+        echo "$dir is mounted from $name"
+        return
     fi
-    top=/run/btrfs-top
+    if [[ -e "$dir" ]] && [[ -n "$(sudo find "$dir" -mindepth 1 -maxdepth 1 -print -quit 2>/dev/null)" ]]; then
+        die "$dir exists, is not empty and is not $name; move its content away first"
+    fi
     run sudo install -d "$top"
     run sudo mount -o subvolid=5 "$root_dev" "$top"
-    if [[ "$dry_run" == false ]] && sudo btrfs subvolume show "$top/@nix" >/dev/null 2>&1; then
-        echo "@nix already exists"
+    if [[ "$dry_run" == false ]] && sudo btrfs subvolume show "$top/$name" >/dev/null 2>&1; then
+        echo "$name already exists"
     else
-        run sudo btrfs subvolume create "$top/@nix"
+        run sudo btrfs subvolume create "$top/$name"
     fi
     run sudo umount "$top"
     run sudo rmdir "$top"
-    if grep -Eq '^[^#]*[[:space:]]/nix[[:space:]]' /etc/fstab; then
-        echo "/nix already in fstab"
+    if grep -Eq "^[^#]*[[:space:]]$dir[[:space:]]" /etc/fstab; then
+        echo "$dir already in fstab"
     else
-        line="UUID=$root_uuid  /nix  btrfs  subvol=@nix,noatime,compress=zstd:1  0 0"
+        line="UUID=$root_uuid  $dir  btrfs  subvol=$name,$options  0 0"
         if [[ "$dry_run" == true ]]; then
             echo "would append to /etc/fstab: $line"
         else
-            sudo cp -a /etc/fstab "/etc/fstab.before-nix-$(date +%Y%m%d-%H%M%S)"
+            sudo cp -a /etc/fstab "/etc/fstab.before-$name-$(date +%Y%m%d-%H%M%S)"
             printf '%s\n' "$line" | sudo tee -a /etc/fstab >/dev/null
         fi
     fi
-    run sudo install -d -m0755 /nix
+    run sudo install -d -m0755 "$dir"
     run sudo systemctl daemon-reload
-    run sudo mount /nix
-fi
+    run sudo mount "$dir"
+}
+
+echo
+echo "== 1. /nix on subvolume @nix"
+subvolume_mount @nix /nix noatime,compress=zstd:1
 
 echo
 echo "== 2. apt"
@@ -127,7 +135,54 @@ else
 fi
 
 echo
-echo "== 3. Nix daemon and nix-users"
+echo "== 3. VM storage and libvirt (helpws virt)"
+# Disk images on their own subvolume: outside the snapshots of @ (a rollback
+# of @ leaves the VMs alone), without copy-on-write (qcow2 on CoW Btrfs
+# fragments). The directory is libvirt's default pool; the libvirt group
+# may add images and ISOs there (~/VMs links to it).
+images=/var/lib/libvirt/images
+subvolume_mount @vms "$images" noatime
+if [[ "$dry_run" == false ]] && lsattr -d "$images" 2>/dev/null | cut -d' ' -f1 | grep -q C; then
+    echo "$images: no copy-on-write"
+else
+    run sudo chattr +C "$images"
+fi
+if [[ "$(stat -c '%U:%G %a' "$images" 2>/dev/null)" == "root:libvirt 2775" ]]; then
+    echo "$images: root:libvirt 2775"
+else
+    run sudo chown root:libvirt "$images"
+    run sudo chmod 2775 "$images"
+fi
+virsh=(sudo virsh -q -c qemu:///system)
+if [[ "$dry_run" == false ]] && "${virsh[@]}" pool-info default >/dev/null 2>&1; then
+    echo "pool default defined"
+else
+    run "${virsh[@]}" pool-define-as default dir --target "$images"
+fi
+if [[ "$dry_run" == false ]] && "${virsh[@]}" pool-info default 2>/dev/null | grep -Eq '^Autostart:[[:space:]]+yes'; then
+    echo "pool default autostarts"
+else
+    run "${virsh[@]}" pool-autostart default
+fi
+if [[ "$dry_run" == false ]] && "${virsh[@]}" pool-info default 2>/dev/null | grep -Eq '^State:[[:space:]]+running'; then
+    echo "pool default running"
+else
+    run "${virsh[@]}" pool-start default
+fi
+# NAT network of the package (virbr0); Wi-Fi cannot be bridged.
+if [[ "$dry_run" == false ]] && "${virsh[@]}" net-info default 2>/dev/null | grep -Eq '^Autostart:[[:space:]]+yes'; then
+    echo "network default autostarts"
+else
+    run "${virsh[@]}" net-autostart default
+fi
+if [[ "$dry_run" == false ]] && "${virsh[@]}" net-info default 2>/dev/null | grep -Eq '^Active:[[:space:]]+yes'; then
+    echo "network default active"
+else
+    run "${virsh[@]}" net-start default
+fi
+
+echo
+echo "== 4. Nix daemon and groups"
 if systemctl is-enabled --quiet nix-daemon.socket 2>/dev/null \
     && systemctl is-active --quiet nix-daemon.socket; then
     echo "nix-daemon.socket enabled and active"
@@ -135,14 +190,16 @@ else
     run sudo systemctl enable --now nix-daemon.socket
 fi
 user="$(id -un)"
-if getent group nix-users | cut -d: -f4 | tr ',' '\n' | grep -qx "$user"; then
-    echo "$user is in nix-users"
-else
-    run sudo usermod -aG nix-users "$user"
-fi
+for group in nix-users libvirt; do
+    if getent group "$group" | cut -d: -f4 | tr ',' '\n' | grep -qx "$user"; then
+        echo "$user is in $group"
+    else
+        run sudo usermod -aG "$group" "$user"
+    fi
+done
 
 echo
-echo "== 4. Login shell"
+echo "== 5. Login shell"
 if [[ "$(getent passwd "$user" | cut -d: -f7)" == /usr/bin/fish ]]; then
     echo "login shell is fish"
 else
@@ -150,7 +207,7 @@ else
 fi
 
 echo
-echo "== 5. First ws switch"
+echo "== 6. First ws switch"
 # Before the first switch there is no ~/.config/nix/nix.conf yet, and the
 # nix-users membership applies only to new logins: sg runs the switch with it.
 # Files home-manager would replace are kept as *.pre-hm.
@@ -161,7 +218,7 @@ else
 fi
 
 echo
-echo "Done. Log out and in (nix-users, PATH from 00-nix.fish), then:"
+echo "Done. Log out and in (nix-users, libvirt, PATH from 00-nix.fish), then:"
 echo "  ws system apply     # system files (sudo)"
 echo "  ws apply            # user layer; log out and in; ws apply again"
 echo "  ws check"

@@ -13,6 +13,7 @@
     ../../../keyboard/keyboard.nix
     ../../../distrobox/distrobox.nix
     ../../../windows/apps.nix
+    ../../../virt/virt.nix
     ../../../system/kernel/t2bce/t2bce.nix
   ];
 

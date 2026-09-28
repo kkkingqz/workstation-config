@@ -41,6 +41,7 @@ Root работает на **Btrfs**.
 @tmp
 @log
 @nix          /nix: Nix store, отдельно от @ (откат @ не трогает /nix)
+@vms          /var/lib/libvirt/images: диски VM, без CoW, вне snapshots @
 .snapshots
 ```
 
@@ -781,7 +782,7 @@ Shebang:
 
 ```text
 wsconfig/
-├── bootstrap.sh          новая машина: @nix → apt → nix-users → fish → ws switch
+├── bootstrap.sh          новая машина: @nix → apt → @vms/libvirt → группы → fish → ws switch
 ├── flake.nix, flake.lock nixpkgs 26.05 + home-manager, обновляет ws update nix
 ├── nix/
 │   ├── hosts/            apt.txt всех хостов; <host>/facts.nix, home.nix, apt.txt

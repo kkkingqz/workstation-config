@@ -29,6 +29,7 @@ case "$topic" in
     distrobox|box|boxes|wsbox) open_title ws-distrobox ;;
     flatpak|wsflatpak) open_title ws-flatpak ;;
     windows|wine|wswin|steam|proton) open_title ws-windows ;;
+    virt|vm|vms|libvirt|kvm) open_title ws-virt ;;
     roadmap|plans) open_title ws-roadmap ;;
     plan-t2) open_title ws-plan-t2 ;;
     plan-virt) open_title ws-plan-virt ;;
@@ -66,6 +67,7 @@ Runbooks (docs/runbooks):
   flatpak          Flatpak applications (wsflatpak)
   distrobox        Managed Distrobox / Podman containers (wsbox)
   windows          Windows programs, Wine, Proton, Steam (wswin)
+  virt             Virtual machines: KVM, libvirt, virt-manager
 
 Plans (docs/plans):
   roadmap          What is left

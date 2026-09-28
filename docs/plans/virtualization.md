@@ -1,6 +1,6 @@
 title: ws-plan-virt
 section: 1
-date: 2026-09-21
+date: 2026-09-28
 source: Workstation
 volume: User Commands
 
@@ -8,73 +8,68 @@ volume: User Commands
 
 ## Цель
 
-Получить штатную host-level virtualization. В отличие от development SDK, KVM/libvirt остаются на host, потому что тесно связаны с kernel, devices и networking.
+Штатная виртуализация на host: KVM/QEMU, libvirt `qemu:///system`, удобный
+GUI для управления VM. В отличие от toolchains, виртуализация остаётся на
+host: она связана с ядром, устройствами и сетью. Как пользоваться —
+`helpws virt`.
 
-### 1. Установка
+После плана — фаза 6 (`helpws history-nix`): первая VM этого плана —
+чистая Ubuntu 26.04 для неё.
 
-```bash
-sudo apt install \
-  qemu-system-x86 qemu-utils \
-  libvirt-daemon-system libvirt-clients \
-  virt-manager virt-viewer ovmf swtpm
-```
-
-Добавить пользователя:
-
-```bash
-sudo usermod -aG libvirt,kvm "$USER"
-```
-
-После logout/login:
-
-```bash
-ls -l /dev/kvm
-sudo virt-host-validate
-virsh -c qemu:///system list --all
-```
-
-### 2. Storage
-
-Базовый каталог пользовательских VM:
+## Решения
 
 ```text
-~/VMs
+пакеты         nix/hosts/apt.txt (ставит bootstrap.sh, сверяет ws check apt)
+подключение    qemu:///system; группа libvirt (bootstrap.sh), kvm не нужна
+GUI            virt-manager: мастер создания, консоль SPICE (буфер обмена,
+               подгонка экрана, USB redirect), snapshots, настройки VM
+хранение       subvolume @vms в /var/lib/libvirt/images (пул default), без CoW,
+               вне snapshots @; ~/VMs — ссылка (virt/virt.nix)
+сеть           NAT default (virbr0); bridge нет: Wi-Fi не мостится
+описания VM    состояние libvirt, не в репозитории; ws collect сохраняет XML
+проверка       ws check virt
+Windows        заложено на host (OVMF Secure Boot + ключи Microsoft, swtpm),
+               сама VM вне плана
+проброс GPU    нет (AMD не возвращается в D0 после выключения)
 ```
 
-Перед созданием больших images определить:
+GUI выбран `virt-manager`: GNOME Boxes работает только с
+`qemu:///session` (без NAT-сети libvirt и общего пула), Cockpit — веб-консоль
+с отдельным сервисом. Если `virt-manager` окажется неудобен на масштабе 1.5
+или Wayland — вернуться к выбору.
 
-- snapshot policy;
-- backup policy;
-- исключаются ли VM images из обычных root snapshots.
+## Шаги
 
-### 3. Firmware/security
-
-Проверить:
-
-- UEFI/OVMF;
-- TPM через `swtpm`, если нужен Windows 11;
-- NAT network;
-- bridge — только если реально нужен L2 доступ.
-
-### 4. GUI
-
-Основной GUI:
-
-```text
-virt-manager
-```
-
-Проверить:
-
-- create/start/stop VM;
-- console;
-- snapshots;
-- USB passthrough;
-- shared folders/network access по необходимости.
+1. **Сделано (2026-09-28).** Репозиторий: пакеты в `nix/hosts/apt.txt`,
+   шаг 3 `bootstrap.sh` (`@vms`, `chattr +C`, `root:libvirt 2775`, пул и
+   сеть `default`), группа `libvirt`, `virt/virt.nix` (`~/VMs`),
+   `ws check virt` в `ws check`, `virt/` в `ws collect`, проверка в
+   `ws baseline`, `helpws virt`.
+2. Пользователь: `~/wsconfig/bootstrap.sh` (sudo), logout/login,
+   `ws switch`, `ws check`.
+3. GUI: `virt-manager` подключается к `qemu:///system` сам; окно и консоль
+   на масштабе 1.5 без размытия; буфер обмена и подгонка разрешения гостя
+   (spice-vdagent в госте). Настройки `virt-manager`, которые понадобится
+   закрепить, — в `virt/virt.nix` (`dconf.settings`), ключи сверить с его
+   схемой после установки.
+4. Тестовая VM: Ubuntu 26.04 desktop, UEFI, 4 vCPU, 8 ГБ, 40 ГБ qcow2,
+   virtio, SPICE. Проверить:
+   - установка и загрузка, сеть через NAT, SSH с host на гостя;
+   - snapshot работающей и выключенной VM и откат к нему (UEFI-прошивка и
+     внутренние snapshots qcow2 в libvirt исторически несовместимы —
+     проверить, что умеет libvirt 12; запасной путь — копия диска
+     выключенной VM);
+   - USB redirect (флешка), virtiofs-папка;
+   - suspend host с запущенной VM и resume (T2: `helpws suspend`);
+   - перезагрузка host: пул и сеть поднимаются сами.
+5. Документация по итогам: `helpws virt` — проверенные настройки и
+   ограничения; план — в `history/`.
 
 ## DONE WHEN
 
-- `virt-host-validate` без критических проблем;
-- `virt-manager` подключается к `qemu:///system`;
-- тестовая UEFI VM загружается;
-- понятно, где хранятся и как backup'ятся VM.
+- `ws check virt` без FAIL и WARN;
+- `virt-manager` открывается и управляет VM без ручной настройки;
+- тестовая UEFI VM ставится, загружается, откатывается к snapshot;
+- suspend host с работающей VM проходит;
+- `ws collect` сохраняет описания VM, а их диски лежат в `@vms` вне
+  snapshots `@`.
