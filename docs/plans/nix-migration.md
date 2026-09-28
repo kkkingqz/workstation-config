@@ -263,7 +263,8 @@ ws-baseline diff A B       → различия, без изменчивых с�
 Что снимает `capture`:
 
 ```text
-Проверки владельцев   ws-workstation-verify --strict, wsflatpak check,
+Проверки владельцев   ws-workstation-verify --strict, ws system check,
+                      wsflatpak check,
                       wsbox check, ws-gnome check, ws-gnome test (автоматическая
                       часть), ws-suspend status, ws-keyboard-status,
                       ws-input-source status
@@ -277,11 +278,13 @@ Distrobox             podman ps -a (имя, образ, ID), distrobox list
                       sha256 содержимого; systemctl --user list-unit-files
                       --state=enabled; systemctl --user show-environment;
                       *xdg-terminals.list (без ~/.config/autostart/)
-Система               sha256 файлов из описи системного слоя, включённые
-                      system unit'ы, /proc/cmdline, lsmod (t2bce, appletb,
-                      ntsync, apple-gmux), /sys/power/mem_sleep
-Инструменты           command -v и --version: xremap, fzf, zoxide, eza,
-                      lowdown, micro, fish, ghostty
+Система               копия `ws system manifest`; sha256 его файлов (file и
+                      watch), включённые system unit'ы, /proc/cmdline,
+                      модули из его modules-load.d/modprobe.d (загружен
+                      или нет), /sys/power/mem_sleep
+Пакеты                версии пакетов nix/hosts/*apt.txt и команды профиля
+                      Nix (packages.txt; до 2026-09-28 — tools.txt со своим
+                      списком команд)
 ```
 
 `wsbox check` запускает контейнеры (distrobox enter), поэтому `capture` не
@@ -1105,6 +1108,30 @@ PASS, `ws baseline diff` пуст»:
      `exports.ini` совпали с прежними (без комментариев, они — в
      `distrobox.nix`); `wsbox check` FAIL 0 WARN 0, `ws system diff` пуст.
      `wsbox check` проверяет только наличие команд, пакеты — `ws check apt`.
+  5. **Сделано (2026-09-28).** Проверки и baseline читают списки владельцев,
+     а не держат свои. Владелец выдаёт машиночитаемый список: системный слой
+     — `ws system manifest` (файлы, файлы ESP, units, restart и `watch` —
+     файлы, от которых слой зависит, не ставя их: `/etc/default/keyboard`,
+     `/etc/fstab`, `/etc/default/grub`); пользовательский — активное
+     поколение home-manager (`home-files`, `home-path/bin`); Distrobox —
+     `containers.ini`; apt — `nix/hosts/*apt.txt`; расширения —
+     `~/.local/share/workstation/gnome/extensions`.
+     - `ws-baseline`: системные файлы и контрольные суммы ESP — по manifest
+       (ручной список пропускал `ws-dgpu-off`, `ws-boot-links` и его хуки,
+       `grub.d`); копия manifest сохраняется в baseline; добавлен
+       `ws system check`; модули — названные в `modules-load.d`/`modprobe.d`
+       manifest; `tools.txt` заменён `packages.txt` (apt-список и профиль Nix).
+     - verify: сравнение системных файлов и состояний units убрано (это
+       `ws system check`); ссылки home-manager — одна проверка по поколению
+       (каждый файл совпадает, цели в checkout отслеживаются git, в `bin/`
+       исполняемые) вместо ручных списков `tracked`/«points into repo»/
+       «from Nix»; hooks контейнеров — по `containers.ini` (ручной список
+       пропускал `locale-hook`); синтаксис Python и udev — по всем файлам.
+     - `ws-suspend status` показывает `ws system check`, а не свою выборку.
+     - Параметры ядра «Ubuntu (AMD)» в `refind.conf` собираются из
+       `facts.nix`, как `refind_linux.conf` и GRUB; устаревшие копии
+       `system/files/boot/refind_linux.conf` и `10-workstation-cmdline.cfg`
+       удалены.
 - **Последние версии вместо закреплённых** (2026-09-27, решение
   пользователя). Конкретная версия нужна только ядру: на него сделан патч
   t2bce. Всё остальное берёт штатную последнюю версию своего источника;

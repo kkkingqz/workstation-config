@@ -32,7 +32,6 @@ die() {
     exit 1
 }
 
-have() { command -v "$1" >/dev/null 2>&1; }
 
 # path -> resolved target and content hash, for every entry under the given
 # locations (symlinks are listed with their final target).
@@ -161,8 +160,20 @@ cmd_capture() {
     run_to "$dir/system/units-enabled.txt" systemctl list-unit-files --state=enabled --no-legend
     tr ' ' '\n' < /proc/cmdline | grep -v '^initrd=' > "$dir/system/cmdline.txt"
     cat /sys/power/mem_sleep > "$dir/system/mem_sleep.txt"
-    lsmod | awk 'NR > 1 && $1 ~ /^(t2bce|appletb|hid_appletb|ntsync|apple_gmux|brcmfmac|apfs)/ { print $1 }' \
-        | sort > "$dir/system/modules.txt"
+    # Modules the manifest's modules-load.d and modprobe.d files name:
+    # loaded or not (a blacklisted one must stay unloaded).
+    local tree mod
+    tree="$("$repo/bin/ws" system tree 2>/dev/null)" || die "ws system tree failed"
+    for mod in $(cat "$tree"/files/etc/modules-load.d/*.conf "$tree"/files/etc/modprobe.d/*.conf 2>/dev/null \
+        | awk '/^[[:space:]]*#/ || NF == 0 { next }
+               $1 == "options" || $1 == "blacklist" || $1 == "install" { print $2; next }
+               NF == 1 { print $1 }' | tr - _ | sort -u); do
+        if [[ -d "/sys/module/$mod" ]]; then
+            printf '%s\tloaded\n' "$mod"
+        else
+            printf '%s\tnot loaded\n' "$mod"
+        fi
+    done > "$dir/system/modules.txt"
     {
         cat /sys/module/t2bce_core/version 2>/dev/null || echo "t2bce_core: not loaded"
         apt-mark showhold 2>/dev/null
@@ -170,16 +181,24 @@ cmd_capture() {
     findmnt -rno TARGET,SOURCE,FSTYPE,OPTIONS / /home /nix /.snapshots 2>/dev/null \
         > "$dir/system/mounts.txt" || true
 
-    echo "== tools"
-    local tool
-    for tool in xremap fzf zoxide eza lowdown micro fish ghostty nix home-manager; do
-        if have "$tool"; then
-            printf '%s\t%s\t%s\n' "$tool" "$(readlink -f "$(command -v "$tool")")" \
-                "$("$tool" --version 2>/dev/null | head -n1 || echo '?')"
-        else
-            printf '%s\tMISSING\n' "$tool"
-        fi
-    done > "$dir/tools.txt"
+    echo "== packages"
+    # The owners' package lists: apt (nix/hosts/*apt.txt, as ws check apt)
+    # and the Nix profile (home.packages) of the active generation.
+    local h pkg hm
+    h="$("$repo/bin/ws" host)"
+    {
+        cat "$repo/nix/hosts/apt.txt" "$repo/nix/hosts/$h/apt.txt" 2>/dev/null \
+            | sed -e 's/#.*//' -e 's/[[:space:]]//g' -e '/^$/d' -e '/^ppa:/d' | sort -u \
+            | while read -r pkg; do
+                printf 'apt\t%s\t%s\n' "$pkg" \
+                    "$(dpkg-query -W -f='${Version}' "$pkg" 2>/dev/null || echo MISSING)"
+            done
+        hm="$(readlink -f "${XDG_STATE_HOME:-$HOME/.local/state}/nix/profiles/home-manager" 2>/dev/null)"
+        for pkg in "$hm"/home-path/bin/*; do
+            [[ -e "$pkg" ]] || continue
+            printf 'nix\t%s\t%s\n' "${pkg##*/}" "$(readlink -f "$pkg")"
+        done
+    } > "$dir/packages.txt"
 
     if [[ "$with_sudo" == true ]]; then
         echo "== sudo"

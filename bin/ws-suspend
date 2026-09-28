@@ -8,16 +8,6 @@ repo="${WSCONFIG:-$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)}"
 # Build results (sources, modules per kernel): generated, not edited.
 cache="$HOME/.local/share/workstation/t2bce"
 
-# Suspend-layer files compared by status (installed by ws system apply):
-# repo source : runtime destination : mode
-files=(
-    "system/files/sleep.conf.d/80-deep-only.conf:/etc/systemd/sleep.conf.d/80-deep-only.conf:0644"
-    "system/files/udev/70-bcm4364-no-d3cold.rules:/etc/udev/rules.d/70-bcm4364-no-d3cold.rules:0644"
-    "system/files/usr/local/sbin/broadcom-aspm-suspend-guard:/usr/local/sbin/broadcom-aspm-suspend-guard:0755"
-    "system/files/usr/lib/systemd/system-sleep/80-broadcom-aspm:/usr/lib/systemd/system-sleep/80-broadcom-aspm:0755"
-    "system/files/systemd/system/broadcom-aspm-restore.service:/etc/systemd/system/broadcom-aspm-restore.service:0644"
-)
-
 t2bce_modules=(t2bce_dma t2bce_core t2bce_vhci t2bce_audio t2bce_ave)
 t2bce_patch="$repo/system/kernel/t2bce/nostate-fix.patch"
 # Kernel release -> linux-t2-patches commit, from system/kernel/t2bce/t2bce.nix.
@@ -51,7 +41,7 @@ t2bce_commit() {
 }
 
 cmd_status() {
-    local kver pair src dst mode ver param
+    local kver ver param
     kver="$(uname -r)"
 
     echo "== Sleep =="
@@ -72,17 +62,10 @@ cmd_status() {
     fi
 
     echo
-    echo "== Runtime files =="
-    for pair in "${files[@]}"; do
-        IFS=: read -r src dst mode <<<"$pair"
-        if cmp -s "$repo/$src" "$dst"; then
-            printf 'OK      %s\n' "$dst"
-        elif [[ -e "$dst" ]]; then
-            printf 'DIFFERS %s\n' "$dst"
-        else
-            printf 'MISSING %s\n' "$dst"
-        fi
-    done
+    # The suspend files are part of the system layer (system/hardware/*.nix);
+    # its manifest check covers them with the rest.
+    echo "== System files (ws system check) =="
+    "$repo/bin/ws" system check 2>/dev/null | grep -vE '^(OK|SKIP) |^$' || true
 }
 
 # Since phase 4 of docs/plans/nix-migration.md one owner installs all system

@@ -66,7 +66,6 @@ info_n=0
 cleanup_n=0
 
 declare -a cleanup_items=()
-declare -a git_add_candidates=()
 declare -a git_remove_candidates=()
 
 pass() { ((pass_n++)); printf '  PASS  %s\n' "$*"; }
@@ -118,50 +117,6 @@ is_tracked() {
     git -C "$repo" ls-files --error-unmatch -- "$1" >/dev/null 2>&1
 }
 
-tracked() {
-    local path="$1" label="${2:-$1}"
-    if is_tracked "$path"; then
-        pass "tracked: $label"
-    elif [[ -e "$repo/$path" || -L "$repo/$path" ]]; then
-        warn "exists locally but is NOT tracked: $label"
-        git_add_candidates+=("$path")
-    else
-        fail "missing from repo: $label"
-    fi
-}
-
-check_exec_tracked() {
-    local path="$1"
-    if [[ -e "$repo/$path" ]]; then
-        [[ -x "$repo/$path" ]] \
-            && pass "executable bit present: $path" \
-            || fail "not executable: $path"
-    fi
-    if is_tracked "$path"; then
-        local mode
-        mode="$(git -C "$repo" ls-files -s -- "$path" | awk 'NR==1{print $1}')"
-        [[ "$mode" == "100755" ]] \
-            && pass "Git executable mode 100755: $path" \
-            || fail "Git mode for $path is ${mode:-unknown}, expected 100755"
-    fi
-}
-
-check_symlink_target() {
-    local link="$1" expected="$2" label="$3"
-    if [[ -L "$link" ]]; then
-        local got exp
-        got="$(readlink -f -- "$link" 2>/dev/null || true)"
-        exp="$(readlink -f -- "$expected" 2>/dev/null || true)"
-        [[ -n "$got" && -n "$exp" && "$got" == "$exp" ]] \
-            && pass "$label" \
-            || fail "$label — got $(q "$got"), expected $(q "$exp")"
-    elif [[ -e "$link" ]]; then
-        fail "$label — path exists but is not a symlink"
-    else
-        fail "$label — missing"
-    fi
-}
-
 gget() {
     gsettings get "$1" "$2" 2>/dev/null || true
 }
@@ -205,25 +160,6 @@ locale1_prop() {
         org.freedesktop.locale1 \
         "$1" 2>/dev/null \
       | sed -E 's/^s "(.*)"$/\1/'
-}
-
-check_runtime_helper() {
-    local name="$1"
-    local source="$repo/bin/$name"
-    local runtime="$HOME/.local/bin/$name"
-
-    tracked "bin/$name" "bin/$name"
-    [[ -e "$source" ]] && check_exec_tracked "bin/$name"
-
-    if have "$name"; then
-        pass "runtime helper resolves: $name -> $(command -v "$name")"
-    else
-        fail "runtime helper missing from PATH: $name"
-    fi
-
-    if [[ -e "$source" ]]; then
-        check_symlink_target "$runtime" "$source" "~/.local/bin/$name points into repo"
-    fi
 }
 
 compare_file() {
@@ -386,7 +322,10 @@ for p in state runtime; do
 done
 [[ "$runtime_tracked" == false ]] && pass "runtime/generated directories are not tracked"
 
-for ignored in runtime/probe gnome/extensions/workstation-input-source@local/schemas/gschemas.compiled gnome/extensions/workstation-smart-popup@local/schemas/gschemas.compiled; do
+for ignored in runtime/probe $(for uuid in $(ext_list local); do
+    [[ -d "$repo/gnome/extensions/$uuid/schemas" ]] \
+        && echo "gnome/extensions/$uuid/schemas/gschemas.compiled"
+done); do
     if git -C "$repo" check-ignore -q -- "$ignored"; then
         pass ".gitignore covers: $ignored"
     else
@@ -496,76 +435,42 @@ while IFS= read -r -d '' path; do
 done < <(git -C "$repo" ls-files -z)
 [[ "$crlf_found" == false ]] && pass "no CRLF in tracked config/script/docs files"
 
-section "4. Required source-of-truth / reproducibility"
+section "4. home-manager files / checkout"
 
-for path in \
-    .gitignore \
-    keyboard/xremap.yml \
-    terminal/ghostty/config.ghostty \
-    terminal/ghostty/keybinds.ghostty \
-    terminal/ghostty/shell-keys.ghostty \
-    bin/ws-keyboard \
-    bin/ws-keyboard-apply \
-    bin/ws-keyboard-status \
-    bin/ws-xremap \
-    docs/keyboard.md \
-    docs/touchbar.md
-do
-    tracked "$path" "$path"
-done
-
-for name in ws-keyboard ws-keyboard-apply ws-keyboard-status ws-xremap; do
-    [[ -e "$repo/bin/$name" ]] && check_exec_tracked "bin/$name"
-done
-
-# These were added during the final macOS-style workstation work and must be
-# source-controlled for a clean-clone rebuild to be complete.
-for path in \
-    bin/ws-window \
-    bin/ws-nautilus-current \
-    bin/ws-input-source \
-    bin/ws-caps-led \
-    bin/ws-tiling-apply \
-    bin/ws-keyboard-install-extensions \
-    bin/ws-keyboard-system-apply \
-    bin/ws-workstation-verify \
-    bin/ws-gnome \
-    bin/ws-gnome-check \
-    bin/ws-gnome-status \
-    bin/ws-gnome-test \
-    terminal/fish/completions/ws-gnome-test.fish \
-    terminal/fish/completions/ws-gnome.fish \
-    docs/gnome.md \
-    system/kernel/t2bce/nostate-fix.patch \
-    system/kernel/t2bce/t2bce.nix \
-    docs/suspend.md \
-    gnome/extensions/workstation-smart-popup@local/metadata.json \
-    gnome/extensions/workstation-smart-popup@local/extension.js \
-    gnome/extensions/workstation-dock-spring@local/metadata.json \
-    gnome/extensions/workstation-dock-spring@local/extension.js \
-    gnome/extensions/workstation-smart-popup@local/schemas/org.gnome.shell.extensions.workstation-smart-popup.gschema.xml \
-    gnome/extensions/workstation-input-source@local/metadata.json \
-    gnome/extensions/workstation-input-source@local/extension.js \
-    gnome/extensions/workstation-input-source@local/schemas/org.gnome.shell.extensions.workstation-input-source.gschema.xml
-do
-    tracked "$path" "$path"
-done
-
-
-# GNOME desktop helpers are part of the reproducible user runtime layer.
-for name in ws-gnome ws-gnome-check ws-gnome-status ws-gnome-test; do
-    check_runtime_helper "$name"
-done
-
-tracked "terminal/fish/completions/ws-gnome.fish" "GNOME Fish completion"
-tracked "docs/plans/gnome.md" "GNOME implementation plan"
-
-# Suspend / T2 power layer helper.
-check_runtime_helper ws-suspend
-
-# Functional baseline / regression gate of the Nix migration.
-check_runtime_helper ws-baseline
-check_runtime_helper ws
+# The active home-manager generation is the list of the user layer: every
+# file it links (bin/, fish, ghostty, configs built from Nix) must resolve to
+# the same target from $HOME. Targets in the checkout must be tracked, and
+# those in bin/ executable in Git (they are run through the link).
+hm_gen="$(readlink -f "${XDG_STATE_HOME:-$HOME/.local/state}/nix/profiles/home-manager" 2>/dev/null || true)"
+hm_files="$(readlink -f "$hm_gen/home-files" 2>/dev/null || true)"
+if [[ -n "$hm_gen" && -e "$hm_gen/activate" && -d "$hm_files" ]]; then
+    pass "home-manager generation active: ${hm_gen#/nix/store/}"
+    hm_ok=0
+    hm_repo=0
+    while IFS= read -r -d '' entry; do
+        rel="${entry#"$hm_files"/}"
+        want="$(readlink -f -- "$entry" 2>/dev/null || true)"
+        got="$(readlink -f -- "$HOME/$rel" 2>/dev/null || true)"
+        if [[ -z "$want" || "$got" != "$want" ]]; then
+            fail "~/$rel is not the generation's (${got:-missing}, want ${want:-broken}); ws switch"
+            continue
+        fi
+        hm_ok=$((hm_ok + 1))
+        [[ "$want" == "$repo"/* && -f "$want" ]] || continue
+        hm_repo=$((hm_repo + 1))
+        path="${want#"$repo"/}"
+        if ! is_tracked "$path"; then
+            fail "~/$rel links to untracked $path"
+        elif [[ "$path" == bin/* ]]; then
+            mode="$(git -C "$repo" ls-files -s -- "$path" | awk 'NR==1{print $1}')"
+            [[ "$mode" == 100755 && -x "$want" ]] \
+                || fail "$path linked into ~/.local/bin but not executable (Git mode ${mode:-?})"
+        fi
+    done < <(find "$hm_files" -mindepth 1 \( -type l -o -type f \) -print0 2>/dev/null)
+    pass "home-manager files match the generation: $hm_ok ($hm_repo into the checkout)"
+else
+    fail "no active home-manager generation (ws switch)"
+fi
 
 section "5. Apply reproducibility"
 
@@ -590,13 +495,6 @@ section "5.1 GNOME managed appearance"
 # Declared in gnome/gnome.nix (dconf.settings, written by ws switch);
 # the Nix module asserts that it does not overlap the keyboard, tiling,
 # extension and display owners.
-gnome_profile="$(readlink -f "$HOME/.local/share/workstation/gnome/settings.conf" 2>/dev/null || true)"
-if [[ "$gnome_profile" == /nix/store/*-gnome-settings.conf ]]; then
-    pass "GNOME check profile from Nix: ${gnome_profile#/nix/store/}"
-else
-    fail "~/.local/share/workstation/gnome/settings.conf is not the Nix build (${gnome_profile:-missing}); ws switch"
-fi
-
 if [[ -x "$repo/bin/ws-gnome-check" ]]; then
     if "$repo/bin/ws-gnome-check" --quiet >/dev/null 2>&1; then
         pass "GNOME managed appearance/Dock profile is in sync"
@@ -633,33 +531,6 @@ done
 
 section "5.3 Managed Distrobox / Podman layer"
 
-for path in \
-    bin/wsbox \
-    terminal/fish/completions/wsbox.fish \
-    distrobox/arch/wsbox-host-ntsync/PKGBUILD \
-    distrobox/arch/wsbox-host-ntsync/README.md \
-    distrobox/arch/wsbox-host-ntsync/install-hook \
-    docs/plans/development.md
-do
-    tracked "$path" "$path"
-done
-
-[[ -e "$repo/bin/wsbox" ]] && check_exec_tracked "bin/wsbox"
-
-if [[ -e "$repo/bin/wsbox" ]]; then
-    check_symlink_target \
-        "$HOME/.local/bin/wsbox" \
-        "$repo/bin/wsbox" \
-        "~/.local/bin/wsbox points into repo"
-fi
-
-if [[ -e "$repo/terminal/fish/completions/wsbox.fish" ]]; then
-    check_symlink_target \
-        "$HOME/.config/fish/completions/wsbox.fish" \
-        "$repo/terminal/fish/completions/wsbox.fish" \
-        "Fish wsbox completion points into repo"
-fi
-
 if lsmod 2>/dev/null | awk '$1 == "ntsync" { found=1 } END { exit !found }'; then
     pass "host ntsync module loaded"
 else
@@ -691,12 +562,22 @@ if [[ -r "$ntsync_pkgbuild" ]]; then
     fi
 fi
 ntsync_hook="distrobox/arch/wsbox-host-ntsync/install-hook"
-if [[ -e "$repo/$ntsync_hook" ]]; then
-    check_exec_tracked "$ntsync_hook"
-else
-    fail "$ntsync_hook missing"
-fi
-# Arch boxes with Wine: arch (AUR), wine-wayland, proton.
+# Every hook the manifest runs: in the checkout, tracked, executable.
+while IFS= read -r hook; do
+    path="${hook#"$repo"/}"
+    if [[ "$hook" != "$repo"/* ]]; then
+        fail "hook outside the checkout: $hook"
+    elif ! is_tracked "$path"; then
+        fail "hook not tracked: $path"
+    elif [[ "$(git -C "$repo" ls-files -s -- "$path" | awk 'NR==1{print $1}')" != 100755 || ! -x "$hook" ]]; then
+        fail "hook not executable (file and Git mode 100755): $path"
+    else
+        pass "hook executable and tracked: $path"
+    fi
+done < <(sed -nE 's/^(pre_)?init_hooks="([^ "]+).*/\2/p' \
+    "$HOME/.local/share/workstation/distrobox/containers.ini" 2>/dev/null | sort -u)
+
+# Boxes whose manifest entry runs the NTSync hook.
 ntsync_boxes="$(
     awk -v hook="init_hooks=\"$repo/$ntsync_hook\"" '
         /^\[/ { box = substr($0, 2, length($0) - 2) }
@@ -749,12 +630,6 @@ done
 wsbox_all_running=true
 wsbox_box_count=0
 wsbox_manifest="$HOME/.local/share/workstation/distrobox/containers.ini"
-wsbox_manifest_real="$(readlink -f "$wsbox_manifest" 2>/dev/null || true)"
-if [[ "$wsbox_manifest_real" == /nix/store/*-workstation-distrobox-config/containers.ini ]]; then
-    pass "Distrobox manifest from Nix: ${wsbox_manifest_real#/nix/store/}"
-else
-    fail "$wsbox_manifest is not the Nix build (${wsbox_manifest_real:-missing}); ws switch"
-fi
 if [[ -r "$wsbox_manifest" ]] && have podman; then
     while IFS= read -r box; do
         [[ -n "$box" ]] || continue
@@ -786,34 +661,9 @@ fi
 
 section "5.4 Windows programs (docs/plans/windows-gaming.md)"
 
-for path in \
-    bin/wswin \
-    bin/ws-gpu \
-    windows/apps.nix \
-    distrobox/arch/pacman-install-hook \
-    distrobox/arch/multilib-hook \
-    distrobox/wine/winehq-install-hook \
-    docs/windows.md \
-    docs/plans/windows-gaming.md
-do
-    tracked "$path" "$path"
-done
-for path in bin/wswin bin/ws-gpu distrobox/arch/pacman-install-hook \
-    distrobox/arch/multilib-hook distrobox/wine/winehq-install-hook; do
-    [[ -e "$repo/$path" ]] && check_exec_tracked "$path"
-done
-
 boxes_ini="$HOME/.local/share/workstation/distrobox/boxes.ini"
 apps_ini="$HOME/.local/share/workstation/windows/apps.ini"
-for f in "$boxes_ini" "$apps_ini"; do
-    real="$(readlink -f "$f" 2>/dev/null || true)"
-    if [[ "$real" == /nix/store/* ]]; then
-        pass "from Nix: ${f#$HOME/}"
-    else
-        fail "${f#$HOME/} is not the Nix build (${real:-missing}); ws switch"
-    fi
-done
-
+# The ini files and launchers are home-manager files (section 4).
 win_boxes="$(awk '/^\[/ { box = substr($0, 2, length($0) - 2) } /^profile=/ { print box }' "$boxes_ini" 2>/dev/null)"
 if [[ -n "$win_boxes" ]]; then
     pass "Windows boxes: $(echo $win_boxes)"
@@ -836,20 +686,8 @@ while IFS= read -r app; do
     else
         fail "app $app: box ${app_box:-<none>} is not a Windows box"
     fi
-    launcher="$HOME/.local/share/applications/ws-win-$app.desktop"
-    if [[ "$(readlink -f "$launcher" 2>/dev/null)" == /nix/store/* ]]; then
-        pass "app $app: launcher from Nix"
-    else
-        fail "app $app: launcher missing: $launcher (ws switch)"
-    fi
 done < <(sed -nE 's/^\[([^]]+)\]$/\1/p' "$apps_ini" 2>/dev/null)
 
-exe_desktop="$HOME/.local/share/applications/ws-win-exe.desktop"
-if [[ "$(readlink -f "$exe_desktop" 2>/dev/null)" == /nix/store/* ]]; then
-    pass ".exe handler ws-win-exe.desktop from Nix"
-else
-    fail ".exe handler missing: $exe_desktop (ws switch)"
-fi
 if have xdg-mime; then
     exe_default="$(xdg-mime query default application/vnd.microsoft.portable-executable 2>/dev/null)"
     if [[ "$exe_default" == ws-win-exe.desktop ]]; then
@@ -975,18 +813,8 @@ else
     fail "xremap binary missing"
 fi
 
-# nix/pkgs/xremap.nix: upstream xremap-linux-x86_64-gnome.zip v0.15.13 by hash;
-# the binary must stay byte-identical to the pre-migration one.
-xremap_sha256=3da5ec8a619a326f35a72e952abe84b14053732ff895bfefe7a043714fab227e
+# ~/.local/bin/xremap: nix/pkgs/xremap.nix, pinned by hash (section 4).
 xremap_real="$(readlink -f "$HOME/.local/bin/xremap" 2>/dev/null || true)"
-if [[ "$xremap_real" == /nix/store/*-xremap-gnome-*/bin/xremap ]]; then
-    pass "~/.local/bin/xremap comes from Nix: ${xremap_real#/nix/store/}"
-else
-    warn "~/.local/bin/xremap is not the Nix package (${xremap_real:-missing})"
-fi
-[[ -n "$xremap_real" && "$(sha256sum "$xremap_real" 2>/dev/null | cut -d' ' -f1)" == "$xremap_sha256" ]] \
-    && pass "xremap binary sha256 matches v0.15.13 gnome build" \
-    || fail "xremap binary sha256 differs from the pinned v0.15.13 gnome build"
 
 id -nG | tr ' ' '\n' | grep -Fxq input \
     && pass "user belongs to input group" \
@@ -1002,10 +830,6 @@ systemctl --user is-active --quiet xremap.service 2>/dev/null \
 
 # keyboard/xremap.nix: home-manager owns the unit and its wants link;
 # `ws-keyboard restore` switches xremap off with a ConditionPathExists flag.
-xremap_unit="$(readlink -f "$HOME/.config/systemd/user/xremap.service" 2>/dev/null || true)"
-[[ "$xremap_unit" == /nix/store/* ]] \
-    && pass "xremap.service unit comes from home-manager: ${xremap_unit#/nix/store/}" \
-    || fail "xremap.service unit is not from home-manager (${xremap_unit:-missing}); run ws switch"
 [[ -L "$HOME/.config/systemd/user/graphical-session.target.wants/xremap.service" ]] \
     && pass "xremap.service wanted by graphical-session.target" \
     || fail "xremap.service wants link missing; run ws switch"
@@ -1019,40 +843,10 @@ xremap_unit="$(readlink -f "$HOME/.config/systemd/user/xremap.service" 2>/dev/nu
     && pass "xremap.service runs the same binary as ~/.local/bin/xremap" \
     || fail "xremap.service XREMAP_BIN ${xremap_env_bin:-unset} differs from ~/.local/bin/xremap"
 
-for name in ws-keyboard ws-keyboard-apply ws-keyboard-status ws-xremap; do
-    [[ -e "$repo/bin/$name" ]] && check_symlink_target \
-        "$HOME/.local/bin/$name" "$repo/bin/$name" \
-        "~/.local/bin/$name points into repo"
-done
-
-if [[ -e "$repo/bin/ws-workstation-verify" ]]; then
-    check_symlink_target \
-        "$HOME/.local/bin/ws-workstation-verify" \
-        "$repo/bin/ws-workstation-verify" \
-        "~/.local/bin/ws-workstation-verify points into repo"
-fi
-
-if [[ -e "$repo/bin/ws-keyboard-install-extensions" ]]; then
-    check_symlink_target \
-        "$HOME/.local/bin/ws-keyboard-install-extensions" \
-        "$repo/bin/ws-keyboard-install-extensions" \
-        "~/.local/bin/ws-keyboard-install-extensions points into repo"
-fi
-
-if [[ -e "$repo/bin/ws-keyboard-system-apply" ]]; then
-    check_symlink_target \
-        "$HOME/.local/bin/ws-keyboard-system-apply" \
-        "$repo/bin/ws-keyboard-system-apply" \
-        "~/.local/bin/ws-keyboard-system-apply points into repo"
-fi
-
-for name in ws-window ws-nautilus-current ws-input-source ws-tiling-apply; do
-    check_runtime_helper "$name"
-done
-
-tracked "bin/ws-caps-led" "bin/ws-caps-led"
+# Links of bin/ into ~/.local/bin: section 4. ws-caps-led is not linked
+# (binExcluded in nix/home/links.nix); the input-source extension runs it
+# from the checkout.
 if [[ -x "$repo/bin/ws-caps-led" ]]; then
-    check_exec_tracked "bin/ws-caps-led"
     pass "ws-caps-led is an internal executable helper (PATH symlink not required)"
 else
     fail "internal Caps LED helper missing/not executable: bin/ws-caps-led"
@@ -1124,12 +918,6 @@ section "9. GNOME core bindings"
 
 # The profile of keyboard/keyboard.nix, set by ws-keyboard-apply.
 kb_dir="$HOME/.local/share/workstation/keyboard"
-kb_real="$(readlink -f "$kb_dir/gnome-shortcuts.tsv" 2>/dev/null || true)"
-if [[ "$kb_real" == /nix/store/* ]]; then
-    pass "keyboard shortcut data from Nix: ${kb_real#/nix/store/}"
-else
-    fail "$kb_dir/gnome-shortcuts.tsv is not the Nix build (${kb_real:-missing}); ws switch"
-fi
 
 if have gsettings && [[ -r "$kb_dir/gnome-shortcuts.tsv" ]]; then
     kb_total=0
@@ -1228,12 +1016,6 @@ PY
 section "10.1 GNOME extension policy"
 
 # Every extension of gnome/gnome-extensions.nix is required.
-ext_list_real="$(readlink -f "$ext_list_file" 2>/dev/null || true)"
-if [[ "$ext_list_real" == /nix/store/* ]]; then
-    pass "extension list from Nix: ${ext_list_real#/nix/store/}"
-else
-    fail "~/.local/share/workstation/gnome/extensions is not the Nix build (${ext_list_real:-missing}); ws switch"
-fi
 mapfile -t required_gnome_extensions < <(ext_list)
 
 # enabled-extensions = ego + local extensions, in list order (ws switch).
@@ -1515,12 +1297,6 @@ else
 fi
 
 t2bce_sources="$HOME/.local/share/workstation/t2bce/sources"
-t2bce_sources_real="$(readlink -f "$t2bce_sources" 2>/dev/null || true)"
-if [[ "$t2bce_sources_real" == /nix/store/* ]]; then
-    pass "t2bce sources from Nix: ${t2bce_sources_real#/nix/store/}"
-else
-    fail "~/.local/share/workstation/t2bce/sources is not the Nix build (${t2bce_sources_real:-missing}); ws switch"
-fi
 if awk -v k="$(uname -r)" '!/^#/ && $1 == k { found = 1 } END { exit !found }' "$t2bce_sources" 2>/dev/null; then
     pass "system/kernel/t2bce/t2bce.nix pins sources for $(uname -r)"
 else
@@ -1557,44 +1333,16 @@ fi
 
 section "14.3 Default terminal (xdg-terminal-exec)"
 
+# The lists and the .desktop are home-manager links (section 4).
 for name in xdg-terminals.list ubuntu-xdg-terminals.list; do
-    tracked "terminal/xdg-terminals/$name" "terminal/xdg-terminals/$name"
-    check_symlink_target "$HOME/.config/$name" "$repo/terminal/xdg-terminals/$name" \
-        "~/.config/$name points into repo"
     if grep -Fxq 'ghostty-open-here.desktop' "$HOME/.config/$name" 2>/dev/null; then
         pass "$name selects ghostty-open-here.desktop"
     else
         fail "$name does not select ghostty-open-here.desktop"
     fi
 done
-tracked "terminal/xdg-terminals/ghostty-open-here.desktop" "terminal/xdg-terminals/ghostty-open-here.desktop"
-check_symlink_target "$HOME/.local/share/applications/ghostty-open-here.desktop" \
-    "$repo/terminal/xdg-terminals/ghostty-open-here.desktop" \
-    "ghostty-open-here.desktop points into repo"
-
 section "14.4 Nix layer (docs/plans/nix-migration.md)"
 
-for path in flake.nix nix/hosts/mbp16/facts.nix nix/hosts/mbp16/home.nix \
-    nix/home/links.nix nix/home/cli.nix keyboard/xremap.nix nix/pkgs/xremap.nix \
-    nix/home/man.nix nix/pkgs/man.nix \
-    gnome/gnome-extensions.nix nix/pkgs/gnome-extensions.nix \
-    flatpak/flatpak.nix gnome/gnome.nix \
-    keyboard/keyboard.nix distrobox/distrobox.nix \
-    system/default.nix system/common.nix \
-    system/boot/refind-grub-recovery.nix system/hardware/t2-mbp16.nix \
-    terminal/fish/conf.d/00-nix.fish nix/nix.conf .github/workflows/check.yml; do
-    tracked "$path" "$path"
-done
-check_symlink_target "$HOME/.config/fish/conf.d/00-nix.fish" \
-    "$repo/terminal/fish/conf.d/00-nix.fish" "~/.config/fish/conf.d/00-nix.fish points into repo"
-check_symlink_target "$HOME/.config/nix/nix.conf" \
-    "$repo/nix/nix.conf" "~/.config/nix/nix.conf points into repo"
-flatpak_cfg="$(readlink -f "$HOME/.local/share/workstation/flatpak" 2>/dev/null || true)"
-if [[ "$flatpak_cfg" == /nix/store/*-workstation-flatpak-config ]]; then
-    pass "wsflatpak config from Nix: ${flatpak_cfg#/nix/store/}"
-else
-    fail "~/.local/share/workstation/flatpak is not the Nix build (${flatpak_cfg:-missing}); ws switch"
-fi
 if compgen -G "$repo/flatpak/overrides/*.conf" >/dev/null; then
     fail "flatpak/overrides/*.conf is ignored; declare overrides in flatpak/flatpak.nix"
 fi
@@ -1631,35 +1379,22 @@ if [[ -d /nix/var/nix ]]; then
     else
         fail "nix-bin installed but nix not in PATH"
     fi
-    tracked flake.lock flake.lock
 
-    # Phase 1: links into the checkout are owned by home-manager, terminal
-    # CLI come from Nix.
-    hm_gen="$(readlink -f "${XDG_STATE_HOME:-$HOME/.local/state}/nix/profiles/home-manager" 2>/dev/null || true)"
-    [[ -n "$hm_gen" && -e "$hm_gen/activate" ]] \
-        && pass "home-manager generation active: ${hm_gen#/nix/store/}" \
-        || fail "no active home-manager generation (ws switch)"
-    [[ "$(readlink "$HOME/.local/bin/ws" 2>/dev/null)" == /nix/store/*-home-manager-files/* ]] \
-        && pass "~/.local/bin links are owned by home-manager" \
-        || warn "~/.local/bin/ws is not a home-manager link (ws switch)"
-    for tool in fzf zoxide eza micro nvd; do
+    # Commands of the Nix profile (home.packages): each resolves to the
+    # profile; a copy in /usr/bin (apt) would shadow it for sudo and
+    # non-fish shells.
+    for tool_path in "$hm_gen"/home-path/bin/*; do
+        [[ -x "$tool_path" ]] || continue
+        tool="${tool_path##*/}"
         [[ "$(command -v "$tool" 2>/dev/null)" == "$HOME/.nix-profile/bin/$tool" ]] \
             && pass "$tool from Nix profile" \
             || warn "$tool does not resolve to ~/.nix-profile/bin ($(command -v "$tool" 2>/dev/null || echo missing))"
-    done
-    # Removed from apt in phase 5: a second copy would shadow Nix for sudo and
-    # non-fish shells, and its fish vendor files would load too.
-    for pkg in fzf zoxide eza micro; do
-        dpkg-query -W -f='${Status}' "$pkg" 2>/dev/null | grep -q ' ok installed$' \
-            && warn "apt package $pkg still installed; Nix provides it (sudo apt remove $pkg)" \
-            || pass "apt package $pkg not installed (Nix provides it)"
+        [[ -e "/usr/bin/$tool" ]] \
+            && warn "/usr/bin/$tool exists too; Nix provides $tool (sudo apt remove the package)"
     done
     [[ -r "$repo/bootstrap.sh" && -x "$repo/bootstrap.sh" ]] \
         && pass "bootstrap.sh present and executable" \
         || fail "bootstrap.sh missing or not executable"
-    for path in bootstrap.sh nix/hosts/apt.txt nix/hosts/mbp16/apt.txt; do
-        tracked "$path" "$path"
-    done
 else
     warn "Nix not installed yet (phase 0 of docs/plans/nix-migration.md)"
 fi
@@ -1774,28 +1509,16 @@ for doc in docs/keyboard.md docs/workstation.md docs/rebuild.md docs/roadmap.md;
     fi
 done
 
-grep -Fqi 'workstation-input-source@local' "$repo/docs/workstation.md" \
-    && pass "docs/workstation.md includes final input-source extension" \
-    || fail "docs/workstation.md misses final input-source extension"
-
-grep -Fqi 'workstation-smart-popup@local' "$repo/docs/workstation.md" \
-    && pass "docs/workstation.md includes Smart Popup extension" \
-    || fail "docs/workstation.md misses Smart Popup extension"
-
-
-grep -Fqi 'workstation-dock-spring@local' "$repo/docs/workstation.md" \
-    && pass "docs/workstation.md includes Dock Spring extension" \
-    || fail "docs/workstation.md misses Dock Spring extension"
+for uuid in $(ext_list local); do
+    grep -Fqi "$uuid" "$repo/docs/workstation.md" \
+        && pass "docs/workstation.md documents local extension $uuid" \
+        || fail "docs/workstation.md misses local extension $uuid"
+done
 
 if [[ -r "$repo/docs/plans/gnome.md" ]]; then
     grep -Fqi 'Keyboard layer **завершён и является частью baseline**' "$repo/docs/plans/gnome.md" \
         && pass "docs/plans/gnome.md marks keyboard layer as completed baseline" \
         || fail "docs/plans/gnome.md still treats keyboard shortcuts as unfinished"
-
-    grep -Fqi 'workstation-input-source@local' "$repo/docs/plans/gnome.md" \
-        && grep -Fqi 'workstation-smart-popup@local' "$repo/docs/plans/gnome.md" \
-        && pass "docs/plans/gnome.md lists current local extensions" \
-        || fail "docs/plans/gnome.md does not list current local extensions"
 else
     fail "docs/plans/gnome.md missing"
 fi
@@ -1947,17 +1670,6 @@ while IFS= read -r line; do
 done <<<"$status_porcelain"
 
 section "19. Safe Git plan (NO commands executed)"
-
-if ((${#git_add_candidates[@]})); then
-    # Deduplicate while preserving user-readable order.
-    mapfile -t git_add_candidates < <(printf '%s\n' "${git_add_candidates[@]}" | awk '!seen[$0]++')
-    echo "  Files that exist locally but are missing from Git and belong to the source-of-truth:"
-    for p in "${git_add_candidates[@]}"; do printf '        %q\n' "$p"; done
-    echo
-    print_cmd_array "git -C $(q "$repo") add --" "${git_add_candidates[@]}"
-else
-    pass "no required source files are waiting to be added"
-fi
 
 if ((${#git_remove_candidates[@]})); then
     mapfile -t git_remove_candidates < <(printf '%s\n' "${git_remove_candidates[@]}" | awk '!seen[$0]++')
