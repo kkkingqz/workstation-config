@@ -848,6 +848,16 @@ case "${1:-}" in
     checkpoint) shift; exec "$repo/bin/ws-checkpoint" "$@" ;;
     collect) shift; exec "$repo/bin/ws-collect" "$@" ;;
     host) host ;;
+    # Step names of apply, update and check, one per line: the fish
+    # completion reads them from here instead of keeping its own list.
+    steps)
+        case "${2:-}" in
+            apply) printf '%s\n' "${apply_steps[@]%% *}" ;;
+            update) printf '%s\n' "${update_steps[@]%% *}" ;;
+            check) printf '%s\n' "${check_steps[@]%% *}" ;;
+            *) die "usage: ws steps apply|update|check" ;;
+        esac
+        ;;
     -h|--help|help) usage ;;
     "") usage; exit 1 ;;
     *) usage >&2; exit 1 ;;

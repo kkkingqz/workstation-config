@@ -515,7 +515,7 @@ man ws-workstation
 ~/.config/fish/config.fish
 ~/.config/fish/conf.d/        00-nix, eza, fzf-options, git-prompt, user-bin
 ~/.config/fish/functions/     prompt, title, fzf_cd_browser
-~/.config/fish/completions/   helpws, wsbox, wsflatpak, wswin, ws-gnome
+~/.config/fish/completions/   ws, helpws, wsbox, wsflatpak, wswin, ws-gnome
 ```
 
 Все файлы из `terminal/fish/` (и `terminal/ghostty/*.ghostty`, команды `bin/`)
