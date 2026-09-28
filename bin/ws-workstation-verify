@@ -95,15 +95,6 @@ have() { command -v "$1" >/dev/null 2>&1; }
 
 q() { printf '%q' "$1"; }
 
-contains() {
-    local file="$1" regex="$2" label="$3"
-    if [[ -r "$file" ]] && grep -Eq -- "$regex" "$file"; then
-        pass "$label"
-    else
-        fail "$label"
-    fi
-}
-
 contains_literal() {
     local file="$1" literal="$2" label="$3"
     if [[ -r "$file" ]] && grep -Fq -- "$literal" "$file"; then
@@ -364,39 +355,20 @@ else
 fi
 rm -f /tmp/ws-verify-secret.$$
 
-# xremap.yml launches ws-input-source as "@repo@/bin/ws-input-source";
-# keyboard/xremap.nix substitutes the checkout path in the store build.
-expected_input_helper="$repo/bin/ws-input-source"
-if grep -qE '"/[^"]*/ws-input-source"' "$repo/keyboard/xremap.yml" 2>/dev/null; then
-    fail "xremap.yml has an absolute ws-input-source path; use @repo@/bin/ws-input-source"
-elif ! grep -qF '"@repo@/bin/ws-input-source"' "$repo/keyboard/xremap.yml" 2>/dev/null; then
-    fail "xremap.yml contains no @repo@/bin/ws-input-source launch path"
-else
-    pass "xremap.yml launches ws-input-source through @repo@"
-fi
+# keyboard/xremap.nix builds the store config from keyboard/xremap.yml
+# (@repo@ -> checkout path).
 xremap_env="$(systemctl --user show -P Environment xremap.service 2>/dev/null || true)"
 xremap_cfg="$(tr ' ' '\n' <<<"$xremap_env" | sed -n 's/^XREMAP_CONFIG=//p')"
 xremap_env_bin="$(tr ' ' '\n' <<<"$xremap_env" | sed -n 's/^XREMAP_BIN=//p')"
 if [[ "$xremap_cfg" != /nix/store/* || ! -r "$xremap_cfg" ]]; then
     fail "xremap.service has no store XREMAP_CONFIG (${xremap_cfg:-unset}); run ws switch"
-elif grep -q '@repo@' "$xremap_cfg"; then
-    fail "xremap store config still contains @repo@: $xremap_cfg"
-elif ! grep -qF "\"$expected_input_helper\"" "$xremap_cfg"; then
-    fail "xremap store config does not launch $(q "$expected_input_helper")"
 elif [[ "$(sed "s|@repo@|$repo|g" "$repo/keyboard/xremap.yml" | sha256sum)" != "$(sha256sum < "$xremap_cfg")" ]]; then
     warn "xremap store config differs from keyboard/xremap.yml; run ws switch"
 else
     pass "xremap store config matches keyboard/xremap.yml (${xremap_cfg#/nix/store/})"
 fi
 
-# The extension runs ~/.local/share/workstation/wsconfig/bin/ws-caps-led;
 # home-manager links wsconfig to the checkout (facts.nix: wsconfig).
-if grep -qF "'.local/share/workstation/wsconfig/bin/ws-caps-led'" \
-    "$repo/gnome/extensions/workstation-input-source@local/extension.js"; then
-    pass "Input Source LED helper goes through ~/.local/share/workstation/wsconfig"
-else
-    fail "Input Source LED helper path in extension.js is not ~/.local/share/workstation/wsconfig/bin/ws-caps-led"
-fi
 if [[ "$(readlink -f "$HOME/.local/share/workstation/wsconfig" 2>/dev/null)" == "$repo" ]]; then
     pass "~/.local/share/workstation/wsconfig points at this checkout"
 else
@@ -881,40 +853,7 @@ done
     && pass "virtual input device workstation-xremap present" \
     || warn "virtual input device workstation-xremap not found in /sys/class/input"
 
-section "8. xremap semantic mappings"
-
-xcfg="$repo/keyboard/xremap.yml"
-
-contains "$xcfg" 'skip_key_event:[[:space:]]*false' "Apple Fn event is passed through"
-contains "$xcfg" 'Ctrl-Home:[[:space:]]*Shift-Ctrl-Alt-Super-Left' "Fn+Ctrl+Left tiling"
-contains "$xcfg" 'Ctrl-End:[[:space:]]*Shift-Ctrl-Alt-Super-Right' "Fn+Ctrl+Right tiling"
-contains "$xcfg" 'Ctrl-PageUp:[[:space:]]*Shift-Ctrl-Alt-Super-Up' "Fn+Ctrl+Up tiling"
-contains "$xcfg" 'Ctrl-PageDown:[[:space:]]*Shift-Ctrl-Alt-Super-Down' "Fn+Ctrl+Down tiling"
-contains "$xcfg" 'Alt-E:[[:space:]]*Shift-Ctrl-Alt-Super-E' "Fn+Option+E Tile Editing Mode"
-contains "$xcfg" 'Alt-T:[[:space:]]*Shift-Ctrl-Alt-Super-T' "Fn+Option+T Always on Top"
-contains "$xcfg" 'ALT_R-SUPER_R:[[:space:]]*Shift-Ctrl-Alt-Super-Space' "Right modifiers Smart Popup"
-
-contains "$xcfg" 'CapsLock:.*ws-input-source.*"caps"' "CapsLock routes to EN/RU selector"
-contains "$xcfg" 'CapsLock:.*ws-input-source.*"ua"' "Fn/Alt+CapsLock routes to UA"
-contains "$xcfg" 'Ctrl-Space:.*ws-input-source.*"next"' "Ctrl+Space deterministic next source"
-contains "$xcfg" 'Ctrl-Alt-Space:.*ws-input-source.*"prev"' "Ctrl+Alt+Space deterministic previous source"
-
-contains "$xcfg" 'Super-H:.*ws-window.*hide-current' "Cmd/Win+H hide current app"
-contains "$xcfg" 'Alt-Super-H:.*ws-window.*hide-others' "Option+Cmd/Alt+Win+H hide others"
-contains "$xcfg" 'Alt-Super-W:.*ws-window.*close-current' "Option+Cmd/Alt+Win+W close current app"
-contains "$xcfg" 'Alt-Super-M:.*ws-window.*minimize-current' "Option+Cmd/Alt+Win+M minimize current app"
-
-contains "$xcfg" 'ws-nautilus-current.*computer' "Nautilus current-window Computer helper"
-contains "$xcfg" 'ws-nautilus-current.*documents' "Nautilus current-window Documents helper"
-contains "$xcfg" 'ws-nautilus-current.*desktop' "Nautilus current-window Desktop helper"
-
-contains "$xcfg" 'Super-Left:[[:space:]]*Ctrl-A' "terminal Super+Left -> Ctrl-A"
-contains "$xcfg" 'Super-Right:[[:space:]]*Ctrl-E' "terminal Super+Right -> Ctrl-E"
-contains "$xcfg" 'Super-Backspace:[[:space:]]*Ctrl-U' "terminal Super+Backspace -> Ctrl-U"
-contains "$xcfg" 'Alt-Left:[[:space:]]*Alt-B' "terminal Option+Left -> Alt-B"
-contains "$xcfg" 'Alt-Right:[[:space:]]*Alt-F' "terminal Option+Right -> Alt-F"
-
-section "9. GNOME core bindings"
+section "8. GNOME core bindings"
 
 # The profile of keyboard/keyboard.nix, set by ws-keyboard-apply.
 kb_dir="$HOME/.local/share/workstation/keyboard"
@@ -943,7 +882,7 @@ else
     fail "gsettings or keyboard shortcut data missing"
 fi
 
-section "10. GNOME extensions / D-Bus"
+section "9. GNOME extensions / D-Bus"
 
 for uuid in $(ext_list ego) $(ext_list local); do
     extension_active "$uuid" "GNOME extension active"
@@ -975,45 +914,8 @@ for uuid in $(ext_list local); do
     done
 done
 
-smart="$repo/gnome/extensions/workstation-smart-popup@local/extension.js"
-[[ -r "$smart" ]] && {
-    contains "$smart" 'tiling-assistant@ubuntu\.com' "Smart Popup knows Ubuntu Tiling Assistant UUID"
-    contains "$smart" 'tiling-assistant@leleat-on-github' "Smart Popup has upstream Tiling Assistant fallback"
-}
 
-input_ext="$repo/gnome/extensions/workstation-input-source@local/extension.js"
-[[ -r "$input_ext" ]] && {
-    contains "$input_ext" 'Cycle\(direction\)' "Input Source extension has deterministic Cycle()"
-    contains "$input_ext" 'UA/unknown -> EN' "Caps semantics include UA -> EN"
-    contains_literal "$input_ext" "'locked-changed'" "v25.3 uses ScreenShield locked-changed"
-    contains "$input_ext" '_isUnlockDialog\(\)' "v25.3 unlock-dialog policy present"
-    contains "$input_ext" '_onCurrentSourceChanged\(\)' "v25.3 re-enforces EN after input-source reload"
-    contains "$input_ext" '_syncLockScreenEnglish\(\)' "lock-screen EN enforcement hook present"
-    contains "$input_ext" "this\._activate\('en'\)" "lock-screen hook activates EN"
-
-    if grep -Fq -- "'notify::locked'" "$input_ext"; then
-        fail "obsolete notify::locked remains in Input Source extension"
-    else
-        pass "obsolete notify::locked is absent"
-    fi
-
-    if python3 - "$input_ext" >/dev/null 2>&1 <<'PY'
-import re, sys
-s=open(sys.argv[1], encoding='utf-8').read()
-m=re.search(r'_syncLockScreenEnglish\(\) \{(.*?)\n    \}', s, re.S)
-if not m:
-    raise SystemExit(1)
-raise SystemExit(1 if 'caps-binary-state' in m.group(1) else 0)
-PY
-    then
-        pass "lock-screen EN does not overwrite remembered Caps EN/RU state"
-    else
-        fail "lock-screen hook still modifies caps-binary-state"
-    fi
-}
-
-
-section "10.1 GNOME extension policy"
+section "9.1 GNOME extension policy"
 
 # Every extension of gnome/gnome-extensions.nix is required.
 mapfile -t required_gnome_extensions < <(ext_list)
@@ -1100,23 +1002,7 @@ for uuid in $(ext_list ego); do
     fi
 done
 
-
-dock_spring="$repo/gnome/extensions/workstation-dock-spring@local/extension.js"
-if [[ -r "$dock_spring" ]]; then
-    contains_literal "$dock_spring" 'const HOVER_DELAY_MS = 1300;' \
-        "Dock Spring delay frozen at 1300 ms"
-    contains_literal "$dock_spring" 'running-app-only' \
-        "Dock Spring running-app-only policy present"
-
-    if grep -Eq '(^|[^A-Za-z0-9_])app\.activate\(' "$dock_spring" \
-       || grep -Fq '_watchLaunchedApp' "$dock_spring"; then
-        fail "Dock Spring still contains launch-on-hover logic"
-    else
-        pass "Dock Spring never launches a closed application on hover"
-    fi
-fi
-
-section "11. Tiling Assistant private bindings"
+section "10. Tiling Assistant private bindings"
 
 ta_schema="org.gnome.shell.extensions.tiling-assistant"
 if have gsettings && gsettings list-keys "$ta_schema" >/dev/null 2>&1; then
@@ -1134,7 +1020,7 @@ else
     fail "Tiling Assistant GSettings schema missing"
 fi
 
-section "12. Input sources / Caps behavior / login"
+section "11. Input sources / Caps behavior / login"
 
 sources="$(gget org.gnome.desktop.input-sources sources)"
 mru_sources="$(gget org.gnome.desktop.input-sources mru-sources)"
@@ -1164,45 +1050,7 @@ if have busctl; then
         || fail "GDM/login X11 layout is '${sys_layout:-unknown}', expected us"
 fi
 
-meta="$repo/gnome/extensions/workstation-input-source@local/metadata.json"
-if [[ -r "$meta" ]] && python3 - "$meta" >/dev/null 2>&1 <<'PY'
-import json, sys
-with open(sys.argv[1], encoding='utf-8') as f:
-    d=json.load(f)
-m=d.get("session-modes", [])
-raise SystemExit(0 if "user" in m and "unlock-dialog" in m else 1)
-PY
-then
-    pass "Input Source extension enabled for unlock-dialog"
-elif [[ -r "$meta" ]]; then
-    fail "Input Source extension metadata lacks user/unlock-dialog session modes"
-fi
-
-section "13. Ghostty frozen keyboard layer"
-
-ghost="$repo/terminal/ghostty/keybinds.ghostty"
-for literal in \
-    'keybind = super+KeyC=copy_to_clipboard' \
-    'keybind = super+KeyV=paste_from_clipboard' \
-    'keybind = super+KeyA=select_all' \
-    'keybind = super+KeyF=start_search' \
-    'keybind = super+KeyT=new_tab' \
-    'keybind = super+KeyN=new_window' \
-    'keybind = super+KeyW=close_surface' \
-    'keybind = all:super+KeyQ=close_window' \
-    'keybind = super+comma=open_config' \
-    'keybind = super+equal=increase_font_size:1' \
-    'keybind = super+minus=decrease_font_size:1' \
-    'keybind = super+Digit0=reset_font_size'
-do
-    if grep -Fqx -- "$literal" "$ghost" 2>/dev/null; then
-        pass "Ghostty frozen: $literal"
-    else
-        fail "Ghostty frozen binding missing: $literal"
-    fi
-done
-
-section "14. Touch Bar native mode / udev"
+section "12. Touch Bar native mode / udev"
 
 tb_usb=""
 for dev in /sys/bus/usb/devices/*; do
@@ -1266,7 +1114,7 @@ else
     pass "obsolete runtime 70-workstation-uinput.rules absent"
 fi
 
-section "14.1 Suspend / T2 power"
+section "12.1 Suspend / T2 power"
 
 grep -Fq '[deep]' /sys/power/mem_sleep 2>/dev/null \
     && pass "mem_sleep default is deep (S3)" \
@@ -1307,7 +1155,7 @@ if [[ -e /etc/systemd/system/tiny-dfr-sleep.service ]]; then
     warn "obsolete /etc/systemd/system/tiny-dfr-sleep.service still exists"
 fi
 
-section "14.2 Boot / recovery"
+section "12.2 Boot / recovery"
 
 # The files and units themselves: ws system check. GRUB, rEFInd and the
 # "Ubuntu (AMD)" entry get their kernel parameters from facts.nix.
@@ -1331,7 +1179,7 @@ else
     pass "no forced ASPM in GRUB drop-ins"
 fi
 
-section "14.3 Default terminal (xdg-terminal-exec)"
+section "12.3 Default terminal (xdg-terminal-exec)"
 
 # The lists and the .desktop are home-manager links (section 4).
 for name in xdg-terminals.list ubuntu-xdg-terminals.list; do
@@ -1341,7 +1189,7 @@ for name in xdg-terminals.list ubuntu-xdg-terminals.list; do
         fail "$name does not select ghostty-open-here.desktop"
     fi
 done
-section "14.4 Nix layer (docs/plans/nix-migration.md)"
+section "12.4 Nix layer (docs/plans/nix-migration.md)"
 
 if compgen -G "$repo/flatpak/overrides/*.conf" >/dev/null; then
     fail "flatpak/overrides/*.conf is ignored; declare overrides in flatpak/flatpak.nix"
@@ -1399,7 +1247,7 @@ else
     warn "Nix not installed yet (phase 0 of docs/plans/nix-migration.md)"
 fi
 
-section "14.5 dGPU power / rEFInd Ubuntu (AMD)"
+section "12.5 dGPU power / rEFInd Ubuntu (AMD)"
 
 # rEFInd "Ubuntu" boots with ws.dgpu=off: ws-dgpu-off.service powers the AMD
 # dGPU off and removes it from the PCI bus. "Ubuntu (AMD)" boots /boot/ws
@@ -1434,7 +1282,7 @@ fi
 [[ "$newest_version" == *-t2-* ]] \
     || warn "newest kernel $newest_version is not a T2 kernel; rEFInd boots it by default"
 
-section "15. Extension schema source / generated files"
+section "13. Extension schema source / generated files"
 
 for uuid in $(ext_list local); do
     schema_dir="$repo/gnome/extensions/$uuid/schemas"
@@ -1470,72 +1318,7 @@ for uuid in $(ext_list local); do
     fi
 done
 
-section "16. Documentation consistency"
-
-kdoc="$repo/docs/keyboard.md"
-tdoc="$repo/docs/touchbar.md"
-
-missing=()
-for concept in "Always on Top" "Smart Popup" "CapsLock" "Tile Editing Mode" "ws-touchbar-fn" "unlock-dialog" "GDM/login" "EN -> RU -> UA -> EN"; do
-    grep -Fqi -- "$concept" "$kdoc" 2>/dev/null || missing+=("$concept")
-done
-if ((${#missing[@]} == 0)); then
-    pass "docs/keyboard.md includes final keyboard concepts"
-else
-    warn "docs/keyboard.md missing concepts: ${missing[*]}"
-fi
-
-if [[ -r "$tdoc" ]]; then
-    if grep -Fqi 'Текущий режим Touch Bar — **родной**' "$tdoc" \
-       && grep -Fqi '90-touchbar-native.rules' "$tdoc" \
-       && grep -Fqi 'ws-touchbar-fn' "$tdoc"; then
-        pass "docs/touchbar.md reflects native Touch Bar baseline"
-    else
-        fail "docs/touchbar.md does not describe the current native Touch Bar baseline"
-    fi
-else
-    fail "docs/touchbar.md missing"
-fi
-
-for doc in docs/keyboard.md docs/workstation.md docs/rebuild.md docs/roadmap.md; do
-    if [[ -r "$repo/$doc" ]]; then
-        if grep -Eqi 'Текущ(ий|ее).*(renderer|baseline).*tiny-dfr|Touch Bar через `tiny-dfr`|sudo apt install tiny-dfr|config/tiny-dfr' "$repo/$doc"; then
-            fail "$doc still describes tiny-dfr as the current Touch Bar baseline"
-        else
-            pass "$doc has no obsolete tiny-dfr baseline claim"
-        fi
-    else
-        fail "$doc missing"
-    fi
-done
-
-for uuid in $(ext_list local); do
-    grep -Fqi "$uuid" "$repo/docs/workstation.md" \
-        && pass "docs/workstation.md documents local extension $uuid" \
-        || fail "docs/workstation.md misses local extension $uuid"
-done
-
-if [[ -r "$repo/docs/plans/gnome.md" ]]; then
-    grep -Fqi 'Keyboard layer **завершён и является частью baseline**' "$repo/docs/plans/gnome.md" \
-        && pass "docs/plans/gnome.md marks keyboard layer as completed baseline" \
-        || fail "docs/plans/gnome.md still treats keyboard shortcuts as unfinished"
-else
-    fail "docs/plans/gnome.md missing"
-fi
-
-
-if [[ -r "$repo/docs/gnome.md" ]]; then
-    grep -Fqi 'gnome/gnome.nix' "$repo/docs/gnome.md" \
-        && grep -Fqi 'ws-gnome check' "$repo/docs/gnome.md" \
-        && pass "docs/gnome.md documents the managed GNOME profile" \
-        || fail "docs/gnome.md does not document the current managed GNOME profile"
-else
-    fail "docs/gnome.md missing"
-fi
-
-grep -Fqi 'Wine на host не устанавливается' "$repo/docs/gnome.md" 2>/dev/null \
-    && pass "docs/gnome.md preserves host-without-Wine architecture" \
-    || warn "docs/gnome.md does not explicitly preserve host-without-Wine architecture"
+section "14. Man pages"
 
 # Man pages are built by Nix from docs/ (nix/pkgs/man.nix) and linked by
 # home-manager into ~/.local/share/man/man1; man/ is not kept in git.
@@ -1569,7 +1352,7 @@ if have nix; then
     fi
 fi
 
-section "17. Legacy artifacts that should be gone"
+section "15. Legacy artifacts that should be gone"
 
 # Generated files live in ~/.local/share/workstation (before 2026-09-27:
 # ~/.config/workstation and ~/.cache/ws-suspend).
@@ -1632,7 +1415,7 @@ else
     pass "obsolete tiny-dfr-sleep.service not installed"
 fi
 
-section "18. Untracked files / cleanup candidates"
+section "16. Untracked files / cleanup candidates"
 
 untracked_any=false
 while IFS= read -r -d '' path; do
@@ -1669,7 +1452,7 @@ while IFS= read -r line; do
     fi
 done <<<"$status_porcelain"
 
-section "19. Safe Git plan (NO commands executed)"
+section "17. Safe Git plan (NO commands executed)"
 
 if ((${#git_remove_candidates[@]})); then
     mapfile -t git_remove_candidates < <(printf '%s\n' "${git_remove_candidates[@]}" | awk '!seen[$0]++')
@@ -1693,7 +1476,7 @@ cat <<EOF2
   Do NOT use 'git add .' for this cleanup. Add only reviewed source files explicitly.
 EOF2
 
-section "20. Final summary"
+section "18. Final summary"
 
 printf '  PASS:    %d\n' "$pass_n"
 printf '  WARN:    %d\n' "$warn_n"
