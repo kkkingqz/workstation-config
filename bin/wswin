@@ -33,7 +33,7 @@ Usage:
   wswin prefix [--box BOX] NAME winetricks [ARG...]
   wswin prefix [--box BOX] NAME remove --force
   wswin shell [--box BOX] [--prefix NAME]
-  wswin menu [--box BOX] [--prefix NAME] add
+  wswin menu [--box BOX] [--prefix NAME] add [PROGRAM.exe [TITLE]]
   wswin menu list|sync
   wswin menu remove ID
 
@@ -352,6 +352,22 @@ cmd_menu() {
         add)
             prefix="$(prefix_path "$box" "$pname")"
             [[ -d "$prefix" ]] || die "no prefix: $prefix"
+            # An exe given: an entry for it (Proton writes no Wine menu
+            # entries); a path inside the prefix or on the host.
+            if [[ -n "${2:-}" ]]; then
+                local exe="$2" title icon
+                [[ -f "$exe" ]] || exe="$prefix/$2"
+                [[ -f "$exe" ]] || die "not found: $2"
+                exe="$(realpath -- "$exe")"
+                title="${3:-$(basename "$exe" .exe)}"
+                icon="$(mktemp --suffix=.png "${XDG_RUNTIME_DIR:-/tmp}/wswin-icon.XXXXXX")"
+                exe_icon "$box" "$exe" "$icon" || true
+                [[ -s "$icon" ]] || { rm -f -- "$icon"; icon=""; }
+                make_launcher "$box" "$pname" "$title" "$(desktop_quote "$exe")" "$icon" \
+                    "$(basename "$exe")" ""
+                [[ -z "$icon" ]] || rm -f -- "$icon"
+                return 0
+            fi
             while read -r _ entry; do
                 offer_wine_entry "$box" "$pname" "$entry"
             done < <(wine_entries "$box" "$prefix")
@@ -513,7 +529,7 @@ cmd_install() {
         grep -qxF "$mtime $entry" <<<"$before" && continue
         offer_wine_entry "$box" "$pname" "$entry"
     done < <(wine_entries "$box" "$prefix")
-    printf 'More later: wswin menu --box %s --prefix %s add\n' "$box" "$pname"
+    printf 'More later: wswin menu --box %s --prefix %s add [PROGRAM.exe [TITLE]]\n' "$box" "$pname"
 }
 
 cmd_exec() {

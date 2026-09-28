@@ -63,7 +63,7 @@ wswin prefix [--box BOX] NAME winecfg|regedit|kill|path
 wswin prefix [--box BOX] NAME winetricks [ARG...]
 wswin prefix [--box BOX] NAME remove --force
 wswin shell [--box BOX] [--prefix NAME]
-wswin menu [--box BOX] [--prefix NAME] add
+wswin menu [--box BOX] [--prefix NAME] add [PROGRAM.exe [TITLE]]
 wswin menu list|sync
 wswin menu remove ID
 ```
@@ -78,7 +78,10 @@ wswin menu remove ID
 Пункты, которые Wine создаёт при установке (winemenubuilder), остаются в HOME
 контейнера. После установщика `wswin install` спрашивает про каждый новый
 пункт этого prefix, добавить ли его в меню host; позже —
-`wswin menu --box BOX --prefix NAME add`.
+`wswin menu --box BOX --prefix NAME add`. Proton пунктов Wine не создаёт:
+для `proton` (и любой программы) пункт на exe —
+`wswin menu --box BOX --prefix NAME add PROGRAM.exe [TITLE]` (путь на host
+или внутри prefix, иконка из exe).
 
 ```console
 wswin install --prefix foo ~/Downloads/foo-setup.exe
