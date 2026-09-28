@@ -299,6 +299,14 @@ ws check
 
 T2 hardware обслуживается T2Linux kernel stack.
 
+USB-контроллеры Thunderbolt (`09:00.0`, `7f:00.0`, `8086:15ec`) держатся
+вне runtime suspend правилом `71-tb-xhci-awake.rules`. Драйвер
+`thunderbolt` пишет `device links to tunneled native ports are missing!` и
+не будит уснувший xHCI при подключении, поэтому USB 3-часть устройства
+(хаб, сетевая карта AX88179A) не появлялась: видна была только USB 2-часть
+на PCH xHCI `00:14.0`. Проверка: `cat /sys/bus/pci/devices/0000:09:00.0/power/control`
+должно быть `on`.
+
 ---
 
 # GRAPHICS

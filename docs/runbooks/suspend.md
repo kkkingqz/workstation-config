@@ -269,6 +269,8 @@ S3 с AMD, убранной с шины при загрузке (8 минут)  
 
 После resume оба xHCI Thunderbolt пишут `xHC error in resume, USBSTS 0x401,
 Reinit` и работают дальше; так же было и с включённой AMD.
+`71-tb-xhci-awake.rules` держит их вне runtime suspend (см. `helpws
+workstation`, T2 HARDWARE); на системный S3 это не влияет.
 
 ## Source of truth
 
@@ -278,6 +280,7 @@ system/kernel/t2bce/nostate-fix.patch
 system/kernel/t2bce/t2bce.nix
 system/files/sleep.conf.d/80-deep-only.conf
 system/files/udev/70-bcm4364-no-d3cold.rules
+system/files/udev/71-tb-xhci-awake.rules
 system/files/usr/local/sbin/broadcom-aspm-suspend-guard
 system/files/usr/lib/systemd/system-sleep/80-broadcom-aspm
 system/files/systemd/system/broadcom-aspm-restore.service

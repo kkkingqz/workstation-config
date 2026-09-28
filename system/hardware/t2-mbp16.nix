@@ -13,6 +13,7 @@
     # Suspend (ws-suspend apply)
     (file "/etc/systemd/sleep.conf.d/80-deep-only.conf" "system/files/sleep.conf.d/80-deep-only.conf" "0644")
     (file "/etc/udev/rules.d/70-bcm4364-no-d3cold.rules" "system/files/udev/70-bcm4364-no-d3cold.rules" "0644")
+    (file "/etc/udev/rules.d/71-tb-xhci-awake.rules" "system/files/udev/71-tb-xhci-awake.rules" "0644")
     (file "/usr/local/sbin/broadcom-aspm-suspend-guard" "system/files/usr/local/sbin/broadcom-aspm-suspend-guard" "0755")
     (file "/usr/lib/systemd/system-sleep/80-broadcom-aspm" "system/files/usr/lib/systemd/system-sleep/80-broadcom-aspm" "0755")
     (file "/etc/systemd/system/broadcom-aspm-restore.service" "system/files/systemd/system/broadcom-aspm-restore.service" "0644")

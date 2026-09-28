@@ -1,0 +1,7 @@
+# MacBookPro16,1 Titan Ridge Thunderbolt xHCI (09:00.0, 7f:00.0, one per side):
+# keep it out of runtime suspend. The thunderbolt driver reports
+# "device links to tunneled native ports are missing!", so nothing wakes a
+# suspended xHCI on hotplug and the USB 3 side of a device never enumerates
+# (only its USB 2 side shows up, on the PCH xHCI 00:14.0). Seen 2026-09-28
+# with a VIA hub + ASIX AX88179A. The bridges above stay active with it.
+ACTION=="add", SUBSYSTEM=="pci", ATTR{vendor}=="0x8086", ATTR{device}=="0x15ec", ATTR{power/control}="on"
