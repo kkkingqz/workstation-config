@@ -8,10 +8,11 @@ volume: User Commands
 
 ## Статус
 
-План пересмотрен 2026-09-28. Выполнено 2026-09-28: этапы 0–3, 6 (Steam
-установлен, запуск через launcher не проверен), 4 — WinBox в `wine`
-(проверка запуска и удаление `winbox3`/export из `arch` — после проверки),
-5 — umu и Steam Runtime работают внутри `proton`, игра не проверялась.
+План пересмотрен 2026-09-28. Выполнено 2026-09-28: этапы 0–4, 6 (Steam
+запускается), 5 — umu и Steam Runtime работают внутри `proton`, игра не проверялась.
+WinBox из `wine` проверен пользователем; `winbox3` и export удалены из
+`arch`, старый prefix `~/distrobox/arch/.winbox` ещё на месте. Steam
+запустился (первый старт долгий: докачка клиента).
 Решено при выполнении: запуск через `wswin` идёт из HOME контейнера
 (distrobox с custom HOME отдаёт cwd как `/run/host/…`, это отвергает
 pressure-vessel). Пользовательская справка — `helpws windows`.
@@ -51,10 +52,10 @@ proton        Arch                 umu-launcher + Proton (UMU-/GE-Proton):
 - `proton`: multilib и 32-битные Vulkan-драйверы (`lib32-vulkan-radeon`,
   `lib32-vulkan-intel`) для DXVK; umu-launcher из [multilib].
   Proton и Steam Runtime umu скачивает в HOME контейнера.
-- Хук `wsbox-host-ntsync` (NTSYNC-MODULE) переходит из `arch` в
-  `wine-wayland` и `proton`.
+- Хук `wsbox-host-ntsync` (NTSYNC-MODULE) есть в `wine-wayland` и `proton`
+  и остаётся в `arch`: AUR-пакет, тянущий wine, не потянет ядро.
 - `arch` остаётся коробкой для AUR без Wine: `winbox3` и export
-  `arch/winbox3` убираются после переезда WinBox.
+  `arch/winbox3` убраны 2026-09-28 после проверки WinBox в `wine`.
 
 ## 2. GPU: AMD, если доступна
 

@@ -11,11 +11,12 @@
 #   exe      path inside the prefix (drive_c/...)
 #   args     arguments, split at spaces
 #   env      KEY=VALUE ..., split at spaces
-#   title, icon, categories, wmClass (default: the exe file name)
+#   icon     theme icon name, or a file inside the prefix (has a dot: "winbox.png")
+#   title, categories, wmClass (default: the exe file name)
 #
 # Add a program: wswin install [--box BOX] [--prefix NAME] SETUP.exe, then
 # an entry here, ws switch.
-{ lib, ... }:
+{ config, lib, ... }:
 let
   defaultBox = "wine-wayland";
 
@@ -27,7 +28,8 @@ let
       exe = "drive_c/Program Files/WinBox/winbox.exe";
       # No Mono prompt: WinBox does not use .NET.
       env = "WINEDLLOVERRIDES=mscoree=";
-      icon = "com.mikrotik.WinBox";
+      # From the AUR winbox3 package, copied into the prefix.
+      icon = "winbox.png";
       categories = "Network;RemoteAccess;";
     };
   };
@@ -42,6 +44,12 @@ let
     categories = "";
     wmClass = baseNameOf a.exe;
   } // a;
+
+  # The prefix on the host (the container HOME is ~/distrobox/BOX).
+  prefixDir = a: "${config.home.homeDirectory}/distrobox/${a.box}/"
+    + (if a.prefix == "default" then ".wine" else "prefixes/${a.prefix}");
+
+  iconOf = a: if lib.hasInfix "." a.icon then "${prefixDir a}/${a.icon}" else a.icon;
 
   full = lib.mapAttrs withDefaults apps;
 
@@ -61,7 +69,7 @@ let
     Type=Application
     Name=${a.title}
     Exec=wswin run ${name}
-    Icon=${a.icon}
+    Icon=${iconOf a}
     Terminal=false
     Categories=${a.categories}
     StartupWMClass=${a.wmClass}

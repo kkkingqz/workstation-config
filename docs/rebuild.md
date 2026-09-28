@@ -416,7 +416,7 @@ wswin prefix --box wine winbox init
 `~/distrobox/wine/prefixes/winbox/drive_c/Program Files/WinBox/`.
 
 Steam — flatpak (`wsflatpak apply`), udev-правила контроллеров — `steam-devices`
-из `nix/hosts/apt.txt` (`ws apply apt`).
+из `nix/hosts/apt.txt` (`sudo apt install steam-devices`; `ws check apt` сверяет список).
 
 Проверка:
 

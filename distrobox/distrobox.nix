@@ -76,8 +76,9 @@ let
       image = "docker.io/library/archlinux:latest";
       # base-devel: makepkg for the hook and for AUR (paru).
       packages = [ "base-devel" "git" ];
+      # No Wine here since 2026-09-28 (WinBox moved to wine); the provider
+      # stays so an AUR package that pulls wine does not pull a kernel.
       initHooks = [ ntsyncHook ];
-      exports.winbox3 = "/usr/share/applications/winbox3.desktop";
     }
     {
       # Default Windows box: Wine from Arch with its native Wayland driver.
