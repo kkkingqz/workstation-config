@@ -70,7 +70,7 @@ Runbooks (docs/runbooks):
 Plans (docs/plans):
   roadmap          What is left
   plan-t2          T2 optional / power / auth
-  plan-virt        KVM / libvirt / Unreal Engine
+  plan-virt        KVM / libvirt / virt-manager
   plan-final       Backup / inventory / finalization
 
 History (docs/history; old plan-* names work too):

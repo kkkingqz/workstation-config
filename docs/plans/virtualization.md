@@ -4,11 +4,9 @@ date: 2026-09-21
 source: Workstation
 volume: User Commands
 
-# PLAN — KVM / LIBVIRT / UNREAL ENGINE
+# PLAN — KVM / LIBVIRT
 
-## Часть A — KVM/QEMU/libvirt
-
-### Цель
+## Цель
 
 Получить штатную host-level virtualization. В отличие от development SDK, KVM/libvirt остаются на host, потому что тесно связаны с kernel, devices и networking.
 
@@ -80,43 +78,3 @@ virt-manager
 - `virt-manager` подключается к `qemu:///system`;
 - тестовая UEFI VM загружается;
 - понятно, где хранятся и как backup'ятся VM.
-
----
-
-## Часть B — Unreal Engine
-
-### Принцип
-
-Unreal Engine оставляем **user-managed native**, потому что ему нужны тесные GPU/filesystem/toolchain integration.
-
-Планируемые каталоги:
-
-```text
-~/Applications/UnrealEngine-5.x
-~/Projects/Unreal
-```
-
-### Этапы
-
-1. Выбрать binary или source build.
-2. Проверить, какой GPU используется.
-3. Поставить только реально необходимые host runtime/build dependencies.
-4. Не переносить generic Python/Node/Rust development stack на host.
-5. Для source build использовать официальный Epic workflow:
-   - Setup;
-   - GenerateProjectFiles;
-   - build.
-6. Проверить:
-   - editor launch;
-   - Vulkan;
-   - project compile;
-   - shader compilation;
-   - external monitor;
-   - AMD offload, если нужен.
-
-## DONE WHEN
-
-- Unreal Editor запускается стабильно;
-- проект создаётся/открывается;
-- build toolchain документирован;
-- host dependencies ограничены реально необходимыми UE packages.

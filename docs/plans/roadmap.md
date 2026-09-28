@@ -41,7 +41,7 @@ volume: User Commands
    Touch ID, fan policy, battery audit, optional hibernate/suspend-then-hibernate.
 
 2. `helpws plan-virt`
-   KVM/libvirt/virt-manager и user-managed Unreal Engine.
+   KVM/libvirt/virt-manager.
 
 3. `helpws plan-final`
    Инвентаризация, backups, snapshots, restore checkpoints и финальный
