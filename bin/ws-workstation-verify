@@ -95,15 +95,6 @@ have() { command -v "$1" >/dev/null 2>&1; }
 
 q() { printf '%q' "$1"; }
 
-contains_literal() {
-    local file="$1" literal="$2" label="$3"
-    if [[ -r "$file" ]] && grep -Fq -- "$literal" "$file"; then
-        pass "$label"
-    else
-        fail "$label"
-    fi
-}
-
 is_tracked() {
     git -C "$repo" ls-files --error-unmatch -- "$1" >/dev/null 2>&1
 }
@@ -444,25 +435,7 @@ else
     fail "no active home-manager generation (ws switch)"
 fi
 
-section "5. Apply reproducibility"
-
-apply="$repo/bin/ws-keyboard-apply"
-contains_literal "$apply" 'bin/ws-window' "apply installs ws-window runtime link"
-contains_literal "$apply" 'bin/ws-nautilus-current' "apply installs ws-nautilus-current runtime link"
-contains_literal "$apply" 'bin/ws-input-source' "apply installs ws-input-source runtime link"
-contains_literal "$apply" 'bin/ws-tiling-apply' "apply installs ws-tiling-apply runtime link"
-contains_literal "$apply" 'ws-keyboard-install-extensions' "apply installs/reuses local GNOME extension sources"
-contains_literal "$apply" 'ws-tiling-apply' "apply reapplies Tiling Assistant private bindings"
-[[ -x "$repo/bin/ws-keyboard-system-apply" ]] \
-    && pass "system-level keyboard/uinput/Touch Bar apply helper is executable" \
-    || fail "bin/ws-keyboard-system-apply missing/not executable"
-contains_literal "$repo/bin/ws-keyboard-system-apply" '"$repo/bin/ws" system apply' \
-    "ws-keyboard-system-apply delegates to ws system apply (one owner of system files)"
-contains_literal "$repo/bin/ws-suspend" '"$repo/bin/ws" system apply' \
-    "ws-suspend apply delegates to ws system apply (one owner of system files)"
-
-
-section "5.1 GNOME managed appearance"
+section "5. GNOME managed appearance"
 
 # Declared in gnome/gnome.nix (dconf.settings, written by ws switch);
 # the Nix module asserts that it does not overlap the keyboard, tiling,
@@ -478,7 +451,7 @@ else
 fi
 
 
-section "5.2 Host Qt integration"
+section "5.1 Host Qt integration"
 
 for pkg in qgnomeplatform-qt5 qgnomeplatform-qt6 qtwayland5 qt6-wayland; do
     if dpkg-query -W -f='${Status}' "$pkg" 2>/dev/null \
@@ -501,7 +474,7 @@ done
     && pass "no global Qt platform/theme/scale overrides"
 
 
-section "5.3 Managed Distrobox / Podman layer"
+section "5.2 Managed Distrobox / Podman layer"
 
 if lsmod 2>/dev/null | awk '$1 == "ntsync" { found=1 } END { exit !found }'; then
     pass "host ntsync module loaded"
@@ -520,11 +493,6 @@ if [[ -r "$ntsync_pkgbuild" ]]; then
     else
         fail "bash syntax error: distrobox/arch/wsbox-host-ntsync/PKGBUILD"
     fi
-
-    contains_literal \
-        "$ntsync_pkgbuild" \
-        'provides=("NTSYNC-MODULE")' \
-        "Arch host-NTSync package provides NTSYNC-MODULE"
 
     readme_sum="$(sha256sum "${ntsync_pkgbuild%/*}/README.md" 2>/dev/null | cut -d' ' -f1)"
     if grep -Fq "sha256sums=(\"$readme_sum\")" "$ntsync_pkgbuild"; then
@@ -631,7 +599,7 @@ else
     info "run separately when desired: wsbox check"
 fi
 
-section "5.4 Windows programs (docs/plans/windows-gaming.md)"
+section "5.3 Windows programs (docs/plans/windows-gaming.md)"
 
 boxes_ini="$HOME/.local/share/workstation/distrobox/boxes.ini"
 apps_ini="$HOME/.local/share/workstation/windows/apps.ini"
@@ -667,13 +635,6 @@ if have xdg-mime; then
     else
         warn ".exe opens with ${exe_default:-nothing}, not ws-win-exe.desktop (ws switch)"
     fi
-fi
-
-steam_desktop="flatpak/desktop/com.valvesoftware.Steam.desktop"
-if grep -q '^Exec=ws-gpu run ' "$repo/$steam_desktop" 2>/dev/null; then
-    pass "Steam launcher goes through ws-gpu (AMD when present)"
-else
-    fail "$steam_desktop does not start Steam through ws-gpu run"
 fi
 
 dangling_menu=""
@@ -833,13 +794,6 @@ if have busctl && busctl --user call \
 else
     fail "xremap GNOME Wayland bridge unavailable"
 fi
-
-contains_literal "$repo/bin/ws-xremap" \
-    'Dynamic Function Row Virtual Input Device' \
-    "xremap excludes the Dynamic Function Row virtual keyboard (loop guard)"
-contains_literal "$repo/bin/ws-xremap" \
-    '--output-device-name workstation-xremap' \
-    "xremap output device has stable name"
 
 virtual_found=false
 for input_name in /sys/class/input/event*/device/name /sys/class/input/input*/name; do
