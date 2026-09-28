@@ -263,11 +263,11 @@ ws-baseline diff A B       → различия, без изменчивых с�
 Что снимает `capture`:
 
 ```text
-Проверки владельцев   ws-workstation-verify --strict, ws system check,
-                      wsflatpak check,
-                      wsbox check, ws-gnome check, ws-gnome test (автоматическая
-                      часть), ws-suspend status, ws-keyboard-status,
-                      ws-input-source status
+Проверки владельцев   ws-workstation-verify --strict, ws check repo/home,
+                      ws-keyboard check, ws system check, wsflatpak check,
+                      wsbox check, wswin check, ws-gnome check, ws-gnome test
+                      (автоматическая часть), ws-suspend check и status,
+                      ws-keyboard-status, ws-input-source status
                       (сравниваются множества PASS/WARN/FAIL-строк)
 GNOME                 dconf dump /, gnome-extensions list --enabled
 Flatpak               flatpak list --user --app, remotes, override --show
@@ -741,8 +741,8 @@ ws apply    ws-keyboard-install-extensions → ws-tiling-apply →
             wsbox apply
             (шаги, чей preflight не прошёл, выводятся в конце; на новой
             машине: ws apply → logout/login → ws apply)
-ws check    ws-workstation-verify, wsflatpak check, wsbox check,
-            ws-gnome check, ws-suspend status; общий итог FAIL/WARN
+ws check    проверки владельцев с --json (lib/check.bash) и
+            ws-workstation-verify; общий итог FAIL/WARN
 ```
 
 - `ws apply` не выполняет sudo-шагов: системный слой — `ws system apply`
@@ -1132,6 +1132,32 @@ PASS, `ws baseline diff` пуст»:
        `facts.nix`, как `refind_linux.conf` и GRUB; устаревшие копии
        `system/files/boot/refind_linux.conf` и `10-workstation-cmdline.cfg`
        удалены.
+  6. **Сделано (2026-09-28).** Проверку ведёт владелец слоя, verify — только
+     связи между слоями. Общий формат результата — `lib/check.bash`
+     (`pass`/`warn`/`fail`/`info`, `check_finish`): с `--json` проверка
+     печатает один объект `{"status", "passes", "warnings", "failures",
+     "messages": [{"level", "text"}]}`, `ws check` читает только его (раньше
+     искал слова WARN/FAIL/DRIFT/DIFFERS/MISSING/«not held» в тексте).
+     Владельцы: `ws check repo` (git, мусор, синтаксис, исполняемые `bin/`,
+     устаревшие пути), `ws check home` (поколение home-manager, Nix, man,
+     окружение сессии), `ws-keyboard check` (xremap, сочетания GNOME и
+     Tiling из `keyboard.nix`, источники ввода), `ws-gnome check` (профиль и
+     расширения: набор, pin, ACTIVE, локальные копии, schemas),
+     `wsflatpak check`, `wsbox check` (плюс hooks, `PKGBUILD`,
+     `wsbox-host-ntsync` в контейнерах), `wswin check`, `ws-suspend check`
+     (deep, `stateful_sleep`, Touch Bar), `ws system check` (плюс шаблон
+     `/etc/default/grub`, `nofail`, раскладка GDM, устаревшие файлы, которые
+     убирает apply), `ws check apt`. verify (1500 → 190 строк): GNOME ↔
+     клавиатура (мост xremap, D-Bus Input Source, Tiling Assistant), ядро ↔
+     t2bce, загрузка ↔ dGPU (`ws.dgpu=off`, `/boot/ws`), Distrobox ↔
+     NTSync хоста; `ws check` запускает его последним, когда контейнеры уже
+     подняты `wsbox check`. Убраны дубли (verify вызывал `ws-gnome check` и
+     `wsbox check`, `ws-suspend status` — `ws system check`), проверки
+     пакетов, которые уже в `apt.txt`, и «Safe Git plan». Полный список
+     PASS до и после сверен: каждая пропавшая строка переименована,
+     перенесена или сведена к итогу (профиль GNOME — одна строка вместо
+     20); намеренно убраны только проверки содержимого списков
+     xdg-terminals (это ссылки home-manager).
 - **Последние версии вместо закреплённых** (2026-09-27, решение
   пользователя). Конкретная версия нужна только ядру: на него сделан патч
   t2bce. Всё остальное берёт штатную последнюю версию своего источника;

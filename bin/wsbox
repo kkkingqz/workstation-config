@@ -16,7 +16,7 @@ usage() {
 Usage:
   wsbox list
   wsbox status [NAME]
-  wsbox check
+  wsbox check [--json]
   wsbox dry-run [NAME]
   wsbox apply [NAME]
   wsbox update [NAME...]
@@ -455,26 +455,21 @@ check_exports_for() {
 }
 
 cmd_check() {
-    local failures=0
-    local warnings=0
     local name
     local expected_image
     local actual_image
     local expected_home
+    local repo hook path pkgbuild readme_sum ntsync_hook
 
-    pass() {
-        printf '  PASS  %s\n' "$*"
-    }
-
-    warn() {
-        ((warnings+=1))
-        printf '  WARN  %s\n' "$*"
-    }
-
-    fail() {
-        ((failures+=1))
-        printf '  FAIL  %s\n' "$*"
-    }
+    # Result contract of ws check (--json): lib/check.bash.
+    repo="$(cd "$bin_dir/.." && pwd)"
+    # shellcheck source=../lib/check.bash
+    . "$repo/lib/check.bash"
+    case "${1:-}" in
+        --json) check_json_mode ;;
+        "") ;;
+        *) die "usage: wsbox check [--json]" ;;
+    esac
 
     # Host packages (podman, distrobox, uidmap, …) are listed in nix/hosts/apt.txt
     # and checked by `ws check apt`.
@@ -569,12 +564,59 @@ cmd_check() {
             2>/dev/null
     )
 
-    echo
-    printf 'FAIL=%d WARN=%d\n' \
-        "$failures" \
-        "$warnings"
+    # Every hook the manifest runs: in the checkout, tracked, executable.
+    while IFS= read -r hook; do
+        path="${hook#"$repo"/}"
+        if [[ "$hook" != "$repo"/* ]]; then
+            fail "hook outside the checkout: $hook"
+        elif ! git -C "$repo" ls-files --error-unmatch -- "$path" >/dev/null 2>&1; then
+            fail "hook not tracked: $path"
+        elif [[ "$(git -C "$repo" ls-files -s -- "$path" | awk 'NR==1{print $1}')" != 100755 || ! -x "$hook" ]]; then
+            fail "hook not executable (file and Git mode 100755): $path"
+        else
+            pass "hook executable and tracked: $path"
+        fi
+    done < <(sed -nE 's/^(pre_)?init_hooks="([^ "]+).*/\2/p' "$manifest_source" 2>/dev/null | sort -u)
 
-    (( failures == 0 ))
+    # wsbox-host-ntsync: the Arch package that stands in for the kernel
+    # module the host provides (NTSYNC-MODULE).
+    pkgbuild="$repo/distrobox/arch/wsbox-host-ntsync/PKGBUILD"
+    if bash -n "$pkgbuild" >/dev/null 2>&1; then
+        pass "bash syntax: distrobox/arch/wsbox-host-ntsync/PKGBUILD"
+    else
+        fail "bash syntax error: distrobox/arch/wsbox-host-ntsync/PKGBUILD"
+    fi
+    readme_sum="$(sha256sum "${pkgbuild%/*}/README.md" 2>/dev/null | cut -d' ' -f1)"
+    if grep -Fq "sha256sums=(\"$readme_sum\")" "$pkgbuild"; then
+        pass "wsbox-host-ntsync PKGBUILD checksum matches README.md"
+    else
+        fail "wsbox-host-ntsync PKGBUILD sha256sums does not match README.md (makepkg fails; update it and pkgrel)"
+    fi
+    ntsync_hook="$repo/distrobox/arch/wsbox-host-ntsync/install-hook"
+    while IFS= read -r name; do
+        [[ -n "$name" ]] || continue
+        if [[ "$(podman inspect -f '{{.State.Running}}' "$name" 2>/dev/null || true)" != true ]]; then
+            info "$name not running; wsbox-host-ntsync not checked"
+            continue
+        fi
+        if podman exec "$name" pacman -Q wsbox-host-ntsync >/dev/null 2>&1; then
+            pass "$name: wsbox-host-ntsync installed"
+        else
+            fail "$name: wsbox-host-ntsync missing (wsbox recreate $name)"
+        fi
+        for pkg in linux mkinitcpio mkinitcpio-busybox; do
+            if podman exec "$name" pacman -Q "$pkg" >/dev/null 2>&1; then
+                fail "$name: container-local kernel/initramfs package should be absent: $pkg"
+            else
+                pass "$name: container-local package absent: $pkg"
+            fi
+        done
+    done < <(awk -v hook="init_hooks=\"$ntsync_hook\"" '
+        /^\[/ { box = substr($0, 2, length($0) - 2) }
+        $0 == hook { print box }
+    ' "$manifest_source" 2>/dev/null)
+
+    check_finish
 }
 
 cmd_dry_run() {

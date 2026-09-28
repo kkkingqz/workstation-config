@@ -10,6 +10,8 @@ Commands:
   apply       Apply GNOME shortcuts, symlinks and start xremap if ready
   restore     Restore backed-up GNOME shortcuts and disable xremap
   status      Show keyboard/xremap/GNOME status
+  check       Compare xremap, GNOME and Tiling Assistant shortcuts and the
+              input sources with keyboard/*.nix (--json: for ws check)
   start       Start xremap user service (clears the restore flag)
   stop        Stop xremap user service
   restart     Restart xremap user service
@@ -23,6 +25,7 @@ case "${1:-status}" in
     apply) exec "$repo/bin/ws-keyboard-apply" ;;
     restore) exec "$repo/bin/ws-keyboard-apply" --restore ;;
     status) exec "$repo/bin/ws-keyboard-status" ;;
+    check) shift; exec "$repo/bin/ws-keyboard-check" "$@" ;;
     start) rm -f "$HOME/.local/state/workstation/keyboard/xremap.disabled"; systemctl --user start xremap.service ;;
     stop) systemctl --user stop xremap.service ;;
     restart) systemctl --user restart xremap.service ;;

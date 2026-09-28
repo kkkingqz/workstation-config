@@ -92,19 +92,24 @@ cmd_capture() {
         || die "ws system manifest failed"
 
     echo "== owner checks"
-    # wsbox check first: it starts the containers, and verify runs its
-    # in-container checks only when they are already running.
+    # wsbox check first: it starts the containers; verify checks NTSync inside
+    # only in running ones.
     if [[ "$boxes" == true ]]; then
         run_to "$dir/checks/wsbox-check.txt" "$repo/bin/wsbox" check
     fi
-    run_to "$dir/checks/ws-workstation-verify.txt" "$repo/bin/ws-workstation-verify" --strict
+    run_to "$dir/checks/ws-check-repo.txt" "$repo/bin/ws-check-repo"
+    run_to "$dir/checks/ws-check-home.txt" "$repo/bin/ws-check-home"
+    run_to "$dir/checks/ws-keyboard-check.txt" "$repo/bin/ws-keyboard-check"
     run_to "$dir/checks/ws-system-check.txt" "$repo/bin/ws" system check
     run_to "$dir/checks/wsflatpak-check.txt" "$repo/bin/wsflatpak" check
+    run_to "$dir/checks/wswin-check.txt" "$repo/bin/wswin-check"
     run_to "$dir/checks/ws-gnome-check.txt" "$repo/bin/ws-gnome" check
     run_to "$dir/checks/ws-gnome-test.txt" "$repo/bin/ws-gnome" test
+    run_to "$dir/checks/ws-suspend-check.txt" "$repo/bin/ws-suspend-check"
     run_to "$dir/checks/ws-suspend-status.txt" "$repo/bin/ws-suspend" status
     run_to "$dir/checks/ws-keyboard-status.txt" "$repo/bin/ws-keyboard-status"
     run_to "$dir/checks/ws-input-source-status.txt" "$repo/bin/ws-input-source" status
+    run_to "$dir/checks/ws-workstation-verify.txt" "$repo/bin/ws-workstation-verify" --strict
 
     echo "== GNOME"
     run_to "$dir/gnome/dconf.ini" dconf dump /
@@ -226,33 +231,23 @@ cmd_capture() {
     echo "Captured: $dir"
 }
 
-# Owner checks: keep only PASS/WARN/FAIL lines, normalized and sorted, so the
-# comparison is about which checks pass, not about ordering or timings.
-# Status reports without such lines (ws-suspend status, ws-keyboard-status)
-# are compared as whole text.
+# Owner checks (lib/check.bash): keep only PASS/WARN/FAIL lines, normalized
+# and sorted, so the comparison is about which checks pass, not about
+# ordering or timings. Dropped: what depends on the moment, not on the
+# workstation - the Git state of the checkout, the active layout, checks
+# inside containers that run only when they happen to be up. Status reports
+# without such lines (ws-suspend status, ws-keyboard-status) are compared as
+# whole text.
 normalize_check() {
     if grep -qE '^[[:space:]]*(PASS|WARN|FAIL)[[:space:]]' "$1" 2>/dev/null; then
         grep -E '^[[:space:]]*(PASS|WARN|FAIL)[[:space:]]' "$1" \
             | sed -E 's/^[[:space:]]+//; s/[[:space:]]+/ /g' \
+            | grep -vE '^(PASS|WARN|FAIL) (working tree|[a-z0-9-]+: (wsbox-host-ntsync|container-local|NTSYNC-MODULE|/dev/ntsync visible))' \
+            | sed -E "s/^(PASS ws-input-source status works: ).*/\\1<layout>/" \
             | sort -u
     else
         cat "$1"
     fi
-}
-
-# verify without what depends on the moment, not on the workstation:
-# - Git state of the checkout (clean tree);
-# - `wsbox check` and in-container NTSync checks, which verify embeds only
-#   when the containers happen to be running (wsbox-check.txt has them
-#   in every baseline).
-normalize_verify() {
-    local base="$1" boxes
-    boxes="$(normalize_check "$base/checks/wsbox-check.txt" 2>/dev/null \
-        | grep -E '^(PASS|WARN|FAIL) ' || true)"
-    normalize_check "$base/checks/ws-workstation-verify.txt" \
-        | grep -vE '^(PASS|WARN|FAIL) (working tree|wsbox check:|arch: )' \
-        | grep -vxF -e "${boxes:-@@none@@}" \
-        | sed -E "s/^(PASS ws-input-source status works: ).*/\1<layout>/"
 }
 
 # Active user units without what depends on open apps and devices: app and
@@ -288,15 +283,6 @@ cmd_diff() {
             checks/ws-input-source-status.txt)
                 sed -E "s/^\('[a-z]+', '[a-z]+'\)$/<layout>/" "$a/$rel" > "$tmp/a"
                 sed -E "s/^\('[a-z]+', '[a-z]+'\)$/<layout>/" "$b/$rel" > "$tmp/b"
-                ;;
-            # OK/DIFFERS/MISSING per entry; the summary names the store path.
-            checks/ws-system-check.txt)
-                grep -E '^[A-Z]+ ' "$a/$rel" | sort > "$tmp/a"
-                grep -E '^[A-Z]+ ' "$b/$rel" | sort > "$tmp/b"
-                ;;
-            checks/ws-workstation-verify.txt)
-                normalize_verify "$a" > "$tmp/a"
-                normalize_verify "$b" > "$tmp/b"
                 ;;
             checks/*)
                 normalize_check "$a/$rel" > "$tmp/a"

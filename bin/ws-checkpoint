@@ -102,7 +102,7 @@ cmd_create() {
     echo "== system"
     tree="$("$repo/bin/ws" system tree)"
     out="$("$repo/bin/ws" system check)" || {
-        grep -vE '^(OK|SKIP) ' <<<"$out" >&2
+        grep -E '^ *(WARN|FAIL) ' <<<"$out" >&2
         die "the live system differs from the system tree of this commit; ws system apply first"
     }
     echo "live system = ${tree#/nix/store/}"

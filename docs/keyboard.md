@@ -533,7 +533,7 @@ bin/ws-caps-led
 bin/ws-tiling-apply
 bin/ws-keyboard-install-extensions
 bin/ws-keyboard-system-apply
-bin/ws-workstation-verify
+bin/ws-keyboard-check
 
 keyboard/xremap.nix
 nix/pkgs/xremap.nix
@@ -580,8 +580,8 @@ xremap binary — из Nix: `nix/pkgs/xremap.nix`, upstream
 ~/.local/bin/xremap -> /nix/store/…-xremap-gnome-0.15.13/bin/xremap
 ```
 
-Обновление xremap: версия и hash в `nix/pkgs/xremap.nix` и sha256 бинарника в
-`ws-workstation-verify`, затем `ws switch` и `ws-keyboard restart`.
+Обновление xremap: версия и hash в `nix/pkgs/xremap.nix`, затем `ws switch`
+и `ws-keyboard restart`.
 
 xremap service — `systemd.user.services.xremap` home-manager
 (`keyboard/xremap.nix`); unit и ссылку в
@@ -692,7 +692,8 @@ GNOME extensions. Их lifecycle управляется отдельно.
 Полная read-only проверка:
 
 ```console
-ws-workstation-verify --strict
+ws-keyboard check
+ws-workstation-verify     # GNOME ↔ клавиатура: мост xremap, Input Source, Tiling Assistant
 ```
 
 Основные ручные diagnostics:

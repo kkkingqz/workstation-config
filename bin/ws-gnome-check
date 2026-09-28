@@ -1,16 +1,26 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -u
+set -o pipefail
 
-# The profile is declared in gnome/gnome.nix and written by `ws switch`
-# (home-manager dconf.settings). This only compares the session with it.
+# GNOME owner check: the session against the managed profile of
+# gnome/gnome.nix (appearance, Ubuntu Dock) and the extensions of
+# gnome/gnome-extensions.nix (enabled set, pins, local sources, schemas).
+# Read-only; ws switch writes the profile, ws apply extensions installs.
+# ws check runs it with --json (lib/check.bash).
+
+repo="${WSCONFIG:-$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)}"
 profile="${WS_GNOME_PROFILE:-$HOME/.local/share/workstation/gnome/settings.conf}"
+# shellcheck source=../lib/check.bash
+. "$repo/lib/check.bash"
 quiet=false
 
 usage() {
     cat <<'USAGE'
 Usage:
-  ws-gnome-check           compare the session with the managed GNOME profile
-  ws-gnome-check --quiet   exit status only (for status/verify helpers)
+  ws-gnome-check           compare the session with gnome/gnome.nix and
+                           gnome/gnome-extensions.nix
+  ws-gnome-check --quiet   exit status only
+  ws-gnome-check --json    result object for ws check
 
 The profile (appearance and Ubuntu Dock) is declared in
 gnome/gnome.nix and applied by `ws switch`; home-manager builds
@@ -21,53 +31,205 @@ USAGE
 while (($#)); do
     case "$1" in
         --quiet) quiet=true; shift ;;
+        --json) check_json_mode; shift ;;
         -h|--help) usage; exit 0 ;;
         *) echo "ws-gnome-check: unknown argument: $1" >&2; usage >&2; exit 64 ;;
     esac
 done
+[[ "$quiet" == false ]] || exec >/dev/null
 
-die() {
-    echo "ws-gnome-check: $*" >&2
-    exit 1
+q() { printf '%q' "$1"; }
+
+is_tracked() {
+    git -C "$repo" ls-files --error-unmatch -- "$1" >/dev/null 2>&1
 }
 
-say() {
-    [[ "$quiet" == true ]] || printf '%s\n' "$*"
+# The extension list is built from gnome/gnome-extensions.nix.
+ext_list_file="$HOME/.local/share/workstation/gnome/extensions"
+ext_list() {
+    [[ -r "$ext_list_file" ]] || return 0
+    awk -v s="${1:-}" '!/^#/ && NF >= 2 && (s == "" || $2 == s) { print $1 }' "$ext_list_file"
 }
 
-command -v gsettings >/dev/null 2>&1 || die "gsettings not found"
-[[ -r "$profile" ]] || die "profile missing: $profile (run ws switch)"
-
-total=0
-drift=0
-while IFS='|' read -r schema key desired || [[ -n "${schema:-}" ]]; do
-    [[ -z "$schema" || "$schema" == \#* ]] && continue
-    ((total += 1))
-
-    if ! current="$(gsettings get "$schema" "$key" 2>/dev/null)"; then
-        ((drift += 1))
-        [[ "$quiet" == true ]] || printf '  MISSING %s %s (schema/key unavailable)\n' "$schema" "$key"
-        continue
-    fi
-
-    if [[ "$current" == "$desired" ]]; then
-        [[ "$quiet" == true ]] || printf '  OK      %s %s = %s\n' "$schema" "$key" "$current"
+compare_file() {
+    local source="$1" runtime="$2" label="$3"
+    if [[ ! -r "$source" ]]; then
+        fail "$label — repo source missing: $source"
+    elif [[ ! -r "$runtime" ]]; then
+        fail "$label — runtime file missing: $runtime"
+    elif cmp -s -- "$source" "$runtime"; then
+        pass "$label"
     else
-        ((drift += 1))
-        [[ "$quiet" == true ]] || {
-            printf '  DRIFT   %s %s\n' "$schema" "$key"
-            printf '          current: %s\n' "$current"
-            printf '          desired: %s\n' "$desired"
-        }
+        warn "$label — runtime differs from repo source"
     fi
-done < "$profile"
+}
 
-((total > 0)) || die "profile contains no settings: $profile"
+section "1. Managed profile (gnome/gnome.nix)"
 
-if ((drift == 0)); then
-    say "GNOME managed profile: in sync ($total settings)"
-    exit 0
+if ! have gsettings; then
+    fail "gsettings not found"
+elif [[ ! -r "$profile" ]]; then
+    fail "profile missing: $profile (ws switch)"
+else
+    total=0
+    drift=0
+    while IFS='|' read -r schema key desired || [[ -n "${schema:-}" ]]; do
+        [[ -z "$schema" || "$schema" == \#* ]] && continue
+        ((total += 1))
+        if ! current="$(gsettings get "$schema" "$key" 2>/dev/null)"; then
+            ((drift += 1))
+            fail "$schema $key: schema/key unavailable"
+        elif [[ "$current" != "$desired" ]]; then
+            ((drift += 1))
+            fail "$schema $key = $current, profile: $desired (ws switch writes it again)"
+        fi
+    done < "$profile"
+    if ((total == 0)); then
+        fail "profile contains no settings: $profile"
+    elif ((drift == 0)); then
+        pass "GNOME managed profile in sync ($total settings)"
+    fi
 fi
 
-say "GNOME managed profile: $drift setting(s) differ; ws switch writes them again"
-exit 1
+section "2. Extensions (gnome/gnome-extensions.nix)"
+
+# Every extension of gnome/gnome-extensions.nix is required.
+mapfile -t required_gnome_extensions < <(ext_list)
+
+# enabled-extensions = ego + local extensions, in list order (ws switch).
+declared_enabled="[$(for uuid in $(ext_list ego) $(ext_list local); do printf "'%s', " "$uuid"; done)"
+declared_enabled="${declared_enabled%, }]"
+actual_enabled="$(gsettings get org.gnome.shell enabled-extensions 2>/dev/null || true)"
+if [[ "$actual_enabled" == "$declared_enabled" ]]; then
+    pass "enabled-extensions matches gnome/gnome-extensions.nix"
+else
+    fail "enabled-extensions differs from gnome/gnome-extensions.nix (changed by hand?); ws switch writes it again"
+fi
+
+if have gnome-extensions; then
+    enabled_gnome_extensions="$(gnome-extensions list --enabled 2>/dev/null || true)"
+
+    for uuid in "${required_gnome_extensions[@]}"; do
+        if grep -Fxq "$uuid" <<<"$enabled_gnome_extensions"; then
+            pass "required GNOME extension enabled: $uuid"
+        else
+            fail "required GNOME extension missing/disabled: $uuid"
+        fi
+    done
+
+    extra_extensions=()
+    while IFS= read -r uuid; do
+        [[ -n "$uuid" ]] || continue
+        known=false
+        for required_uuid in "${required_gnome_extensions[@]}"; do
+            if [[ "$uuid" == "$required_uuid" ]]; then
+                known=true
+                break
+            fi
+        done
+        [[ "$known" == true ]] || extra_extensions+=("$uuid")
+    done <<<"$enabled_gnome_extensions"
+
+    if ((${#extra_extensions[@]})); then
+        warn "additional enabled GNOME extension(s): ${extra_extensions[*]}"
+    else
+        pass "enabled GNOME extension set matches policy"
+    fi
+else
+    fail "gnome-extensions binary missing; extension policy cannot be checked"
+fi
+
+# EGO extensions. With pin (third column of the list): built by
+# nix/pkgs/gnome-extensions.nix and linked file by file by home-manager; a real
+# file there means an update (Extension Manager) or a manual install replaced
+# the pinned copy. Without pin: an ordinary user installation (ws apply
+# extensions), updated by Extension Manager, so no links into the store.
+ego_pinned() {
+    awk -v u="$1" '!/^#/ && $1 == u && $2 == "ego" && NF >= 3 { print $3 }' "$ext_list_file"
+}
+shell_major="$(gnome-shell --version 2>/dev/null | awk '{ print $3 }' | cut -d. -f1)"
+for uuid in $(ext_list ego); do
+    ext_dir="$HOME/.local/share/gnome-shell/extensions/$uuid"
+    ext_meta="$(readlink -f "$ext_dir/metadata.json" 2>/dev/null || true)"
+    ext_pin="$(ego_pinned "$uuid")"
+    if [[ -n "$ext_pin" ]]; then
+        ext_foreign="$(find "$ext_dir" -type f 2>/dev/null | head -n1)"
+        if [[ -n "$ext_foreign" ]]; then
+            fail "$uuid pinned, but has files not from Nix ($(q "$ext_foreign")); move the directory away and ws switch"
+        elif [[ "$ext_meta" == /nix/store/*-gnome-shell-extension-*-"$ext_pin"/share/gnome-shell/extensions/"$uuid"/metadata.json ]]; then
+            pass "$uuid pinned to EGO version $ext_pin: ${ext_meta#/nix/store/}"
+        else
+            fail "$uuid pinned to EGO version $ext_pin, not installed from Nix (${ext_meta:-missing}); ws switch"
+        fi
+        continue
+    fi
+    if [[ ! -f "$ext_dir/metadata.json" ]]; then
+        fail "$uuid not installed; ws apply extensions"
+    elif [[ -n "$(find "$ext_dir" -type l -lname '/nix/store/*' 2>/dev/null | head -n1)" ]]; then
+        fail "$uuid still has links into the Nix store (no pin any more); ws switch, then ws apply extensions"
+    else
+        ext_ver="$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print(d.get("version", "?"), " ".join(map(str, d.get("shell-version", []))))' "$ext_dir/metadata.json" 2>/dev/null || echo '? ?')"
+        if [[ -n "$shell_major" && " ${ext_ver#* } " != *" $shell_major "* ]]; then
+            warn "$uuid EGO version ${ext_ver%% *} does not list GNOME Shell $shell_major (shell-version: ${ext_ver#* }); update it in Extension Manager"
+        else
+            pass "$uuid from extensions.gnome.org, EGO version ${ext_ver%% *} (updated by Extension Manager)"
+        fi
+    fi
+done
+
+# Enabled is not running: an extension with an error stays enabled.
+if have gnome-extensions; then
+    for uuid in $(ext_list ego) $(ext_list local); do
+        if gnome-extensions info "$uuid" 2>/dev/null | grep -Eq 'State:[[:space:]]+ACTIVE'; then
+            pass "extension active: $uuid"
+        else
+            fail "extension not active: $uuid ($(gnome-extensions info "$uuid" 2>/dev/null | sed -n 's/^ *State: *//p'))"
+        fi
+    done
+fi
+
+for uuid in $(ext_list local); do
+    for file in metadata.json extension.js; do
+        src="$repo/gnome/extensions/$uuid/$file"
+        dst="$HOME/.local/share/gnome-shell/extensions/$uuid/$file"
+        [[ -r "$src" ]] && compare_file "$src" "$dst" "$uuid/$file runtime matches repo"
+    done
+done
+
+section "3. Extension schemas"
+
+for uuid in $(ext_list local); do
+    schema_dir="$repo/gnome/extensions/$uuid/schemas"
+    if [[ -d "$schema_dir" ]]; then
+        xml_count="$(find "$schema_dir" -maxdepth 1 -type f -name '*.gschema.xml' | wc -l)"
+        if (( xml_count > 0 )); then
+            pass "$uuid has GSettings schema source"
+        else
+            fail "$uuid has no *.gschema.xml source"
+        fi
+
+        if is_tracked "gnome/extensions/$uuid/schemas/gschemas.compiled"; then
+            fail "$uuid generated gschemas.compiled is tracked"
+        elif git -C "$repo" check-ignore -q -- "gnome/extensions/$uuid/schemas/gschemas.compiled"; then
+            pass "$uuid generated gschemas.compiled is ignored"
+        else
+            warn "$uuid generated gschemas.compiled is not ignored"
+        fi
+
+        if have glib-compile-schemas; then
+            schema_tmp="$(mktemp -d)"
+            cp -a "$schema_dir/." "$schema_tmp/"
+            rm -f "$schema_tmp/gschemas.compiled"
+            if glib-compile-schemas "$schema_tmp" >/dev/null 2>&1; then
+                pass "$uuid schema compiles"
+            else
+                fail "$uuid schema compilation failed"
+            fi
+            rm -rf -- "$schema_tmp"
+        fi
+    else
+        pass "$uuid has no GSettings schemas"
+    fi
+done
+
+check_finish

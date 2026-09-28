@@ -1,0 +1,84 @@
+#!/usr/bin/env bash
+set -u
+set -o pipefail
+
+# Suspend / T2 power layer at runtime: deep sleep, t2bce stateful sleep, the
+# Touch Bar in native keyboard mode. The files are checked by ws system
+# check, the patched t2bce against the kernel by ws-workstation-verify.
+# Read-only. ws-suspend check; ws check runs it with --json (lib/check.bash).
+
+repo="${WSCONFIG:-$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)}"
+# shellcheck source=../lib/check.bash
+. "$repo/lib/check.bash"
+
+case "${1:-}" in
+    --json) check_json_mode ;;
+    "") ;;
+    -h|--help) echo "Usage: ws-suspend check [--json]"; exit 0 ;;
+    *) echo "ws-suspend check: unknown argument: $1" >&2; exit 64 ;;
+esac
+
+section "1. Sleep"
+
+grep -Fq '[deep]' /sys/power/mem_sleep 2>/dev/null \
+    && pass "mem_sleep default is deep (S3)" \
+    || fail "mem_sleep default is not deep: $(cat /sys/power/mem_sleep 2>/dev/null)"
+
+if grep -Eq '(^| )pcie_aspm(=|\.policy=)' /proc/cmdline; then
+    warn "kernel cmdline forces ASPM ($(grep -Eo 'pcie_aspm[^ ]*' /proc/cmdline | tr '\n' ' ')); all T2 stateful-suspend rejections happened with it"
+else
+    pass "kernel cmdline does not force ASPM"
+fi
+
+t2bce_param="$(cat /sys/module/t2bce_core/parameters/stateful_sleep 2>/dev/null || true)"
+[[ -z "$t2bce_param" || "$t2bce_param" == "Y" ]] \
+    && pass "t2bce stateful sleep enabled" \
+    || fail "t2bce_core.stateful_sleep=$t2bce_param (forced no-state test mode left on)"
+
+section "2. Touch Bar native mode"
+
+tb_usb=""
+for dev in /sys/bus/usb/devices/*; do
+    if [[ "$(cat "$dev/idVendor" 2>/dev/null):$(cat "$dev/idProduct" 2>/dev/null)" == "05ac:8302" ]]; then
+        tb_usb="$dev"
+        break
+    fi
+done
+if [[ -n "$tb_usb" ]]; then
+    tb_cfg="$(cat "$tb_usb/bConfigurationValue" 2>/dev/null || true)"
+    [[ "$tb_cfg" == "1" ]] \
+        && pass "Touch Bar USB configuration 1 (native keyboard mode)" \
+        || fail "Touch Bar USB configuration is '${tb_cfg:-0}', expected 1"
+else
+    fail "Touch Bar USB device 05ac:8302 not found"
+fi
+
+[[ -d /sys/module/appletbdrm ]] \
+    && fail "appletbdrm is loaded (Touch Bar display mode)" \
+    || pass "appletbdrm not loaded"
+
+tb_mode_node=""
+for node in /sys/bus/hid/drivers/hid-appletb-kbd/*/mode; do
+    [[ -r "$node" ]] && { tb_mode_node="$node"; break; }
+done
+if [[ -n "$tb_mode_node" ]]; then
+    tb_mode="$(cat "$tb_mode_node" 2>/dev/null || true)"
+    [[ "$tb_mode" == "1" ]] \
+        && pass "hid-appletb-kbd bound, mode 1 (F1..F12)" \
+        || warn "hid-appletb-kbd mode is '$tb_mode', expected 1 unless Fn is held"
+else
+    fail "hid-appletb-kbd is not bound to the Touch Bar"
+fi
+
+if have dpkg-query && dpkg-query -W -f='${Status}' tiny-dfr 2>/dev/null | grep -q 'install ok installed'; then
+    fail "tiny-dfr is installed (it switches the Touch Bar to display mode)"
+else
+    pass "tiny-dfr not installed"
+fi
+
+# The unit and its file: ws system check (system/*.nix manifest).
+systemctl is-active --quiet ws-touchbar-fn.service 2>/dev/null \
+    && pass "ws-touchbar-fn.service active" \
+    || fail "ws-touchbar-fn.service not active"
+
+check_finish

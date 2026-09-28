@@ -1,0 +1,171 @@
+#!/usr/bin/env bash
+set -u
+set -o pipefail
+
+# Keyboard layer (keyboard/keyboard.nix, keyboard/xremap.nix): xremap runs
+# the config built from keyboard/xremap.yml, GNOME and Tiling Assistant
+# shortcuts match keyboard.nix, the input sources exist. Read-only.
+# ws-keyboard check; ws check runs it with --json (lib/check.bash).
+
+repo="${WSCONFIG:-$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)}"
+# shellcheck source=../lib/check.bash
+. "$repo/lib/check.bash"
+
+case "${1:-}" in
+    --json) check_json_mode ;;
+    "") ;;
+    -h|--help) echo "Usage: ws-keyboard check [--json]"; exit 0 ;;
+    *) echo "ws-keyboard check: unknown argument: $1" >&2; exit 64 ;;
+esac
+
+gget() {
+    gsettings get "$1" "$2" 2>/dev/null || true
+}
+
+gcontains() {
+    local schema="$1" key="$2" needle="$3" label="$4"
+    local value
+    value="$(gget "$schema" "$key")"
+    if [[ "$value" == *"$needle"* ]]; then
+        pass "$label"
+    else
+        fail "$label — got: ${value:-MISSING}"
+    fi
+}
+
+section "1. xremap"
+
+# keyboard/xremap.nix builds the store config from keyboard/xremap.yml
+# (@repo@ -> checkout path).
+xremap_env="$(systemctl --user show -P Environment xremap.service 2>/dev/null || true)"
+xremap_cfg="$(tr ' ' '\n' <<<"$xremap_env" | sed -n 's/^XREMAP_CONFIG=//p')"
+xremap_env_bin="$(tr ' ' '\n' <<<"$xremap_env" | sed -n 's/^XREMAP_BIN=//p')"
+if [[ "$xremap_cfg" != /nix/store/* || ! -r "$xremap_cfg" ]]; then
+    fail "xremap.service has no store XREMAP_CONFIG (${xremap_cfg:-unset}); run ws switch"
+elif [[ "$(sed "s|@repo@|$repo|g" "$repo/keyboard/xremap.yml" | sha256sum)" != "$(sha256sum < "$xremap_cfg")" ]]; then
+    warn "xremap store config differs from keyboard/xremap.yml; run ws switch"
+else
+    pass "xremap store config matches keyboard/xremap.yml (${xremap_cfg#/nix/store/})"
+fi
+
+
+if have xremap; then
+    pass "xremap binary: $(command -v xremap)"
+    info "xremap version: $(xremap --version 2>/dev/null || echo unknown)"
+else
+    fail "xremap binary missing"
+fi
+
+# ~/.local/bin/xremap: nix/pkgs/xremap.nix, pinned by hash (ws check home).
+xremap_real="$(readlink -f "$HOME/.local/bin/xremap" 2>/dev/null || true)"
+
+id -nG | tr ' ' '\n' | grep -Fxq input \
+    && pass "user belongs to input group" \
+    || fail "user not in input group"
+
+[[ -e /dev/uinput && -w /dev/uinput ]] \
+    && pass "/dev/uinput exists and is writable" \
+    || fail "/dev/uinput missing/not writable"
+
+systemctl --user is-active --quiet xremap.service 2>/dev/null \
+    && pass "xremap.service active" \
+    || fail "xremap.service not active"
+
+# keyboard/xremap.nix: home-manager owns the unit and its wants link;
+# `ws-keyboard restore` switches xremap off with a ConditionPathExists flag.
+[[ -L "$HOME/.config/systemd/user/graphical-session.target.wants/xremap.service" ]] \
+    && pass "xremap.service wanted by graphical-session.target" \
+    || fail "xremap.service wants link missing; run ws switch"
+[[ -e "$HOME/.local/state/workstation/keyboard/xremap.disabled" ]] \
+    && warn "xremap switched off by ws-keyboard restore (ws-keyboard apply turns it on)" \
+    || pass "xremap not switched off by ws-keyboard restore"
+[[ -s "$HOME/.local/state/workstation/keyboard/gsettings-backup.tsv" ]] \
+    && pass "original GNOME shortcuts saved for ws-keyboard restore" \
+    || warn "no ~/.local/state/workstation/keyboard/gsettings-backup.tsv; ws-keyboard restore has nothing to restore"
+[[ -n "$xremap_env_bin" && "$xremap_env_bin" == "$xremap_real" ]] \
+    && pass "xremap.service runs the same binary as ~/.local/bin/xremap" \
+    || fail "xremap.service XREMAP_BIN ${xremap_env_bin:-unset} differs from ~/.local/bin/xremap"
+
+virtual_found=false
+for input_name in /sys/class/input/event*/device/name /sys/class/input/input*/name; do
+    [[ -r "$input_name" ]] || continue
+    if grep -Fxq 'workstation-xremap' "$input_name" 2>/dev/null; then
+        virtual_found=true
+        break
+    fi
+done
+[[ "$virtual_found" == true ]] \
+    && pass "virtual input device workstation-xremap present" \
+    || warn "virtual input device workstation-xremap not found in /sys/class/input"
+
+section "2. GNOME shortcuts"
+
+# The profile of keyboard/keyboard.nix, set by ws-keyboard-apply.
+kb_dir="$HOME/.local/share/workstation/keyboard"
+
+if have gsettings && [[ -r "$kb_dir/gnome-shortcuts.tsv" ]]; then
+    kb_total=0
+    kb_bad=0
+    while IFS=$'\t' read -r schema key value kind; do
+        [[ -z "$schema" || "$schema" == \#* ]] && continue
+        if [[ "$kind" == optional ]] && ! gsettings range "$schema" "$key" >/dev/null 2>&1; then
+            continue
+        fi
+        ((kb_total += 1))
+        actual="$(gget "$schema" "$key")"
+        # A string-typed key holds the first element of the declared array.
+        if [[ "$actual" != "$value" && "$actual" == \'* && "$value" == \[* ]]; then
+            value="$(sed -E "s/^\[('([^'\\\\]|\\\\.)*')?.*$/\1/" <<<"$value")"
+        fi
+        if [[ "$actual" != "$value" ]]; then
+            ((kb_bad += 1))
+            fail "GNOME shortcut $schema $key = ${actual:-MISSING}, profile: $value (ws apply keyboard)"
+        fi
+    done < "$kb_dir/gnome-shortcuts.tsv"
+    ((kb_bad == 0)) && pass "GNOME shortcuts match keyboard/keyboard.nix ($kb_total keys)"
+else
+    fail "gsettings or keyboard shortcut data missing"
+fi
+
+section "3. Tiling Assistant private bindings"
+
+ta_schema="org.gnome.shell.extensions.tiling-assistant"
+if have gsettings && gsettings list-keys "$ta_schema" >/dev/null 2>&1; then
+    pass "Tiling Assistant GSettings schema present"
+    # Private chords of keyboard/keyboard.nix, appended by ws-tiling-apply.
+    if [[ -r "$kb_dir/tiling-bindings.tsv" ]]; then
+        while IFS=$'\t' read -r key binding; do
+            [[ -z "$key" || "$key" == \#* ]] && continue
+            gcontains "$ta_schema" "$key" "'$binding'" "private $key: $binding"
+        done < "$kb_dir/tiling-bindings.tsv"
+    else
+        fail "missing $kb_dir/tiling-bindings.tsv (ws switch)"
+    fi
+else
+    fail "Tiling Assistant GSettings schema missing"
+fi
+
+section "4. Input sources"
+
+sources="$(gget org.gnome.desktop.input-sources sources)"
+mru_sources="$(gget org.gnome.desktop.input-sources mru-sources)"
+info "sources: $sources"
+info "mru-sources: $mru_sources"
+
+for code in us ru ua; do
+    [[ "$sources" == *"'$code'"* ]] \
+        && pass "input source configured: $code" \
+        || fail "input source missing: $code"
+    [[ "$mru_sources" == *"'$code'"* ]] \
+        && pass "MRU source contains: $code" \
+        || warn "MRU source missing: $code"
+done
+
+if [[ -x "$repo/bin/ws-input-source" ]]; then
+    state_out="$("$repo/bin/ws-input-source" status 2>/dev/null || true)"
+    [[ -n "$state_out" ]] \
+        && pass "ws-input-source status works: $state_out" \
+        || fail "ws-input-source status failed"
+fi
+
+check_finish

@@ -25,6 +25,7 @@ usage() {
 Usage: ws-suspend <command> [KERNEL]
 
   status                 show sleep mode, t2bce state and runtime drift (read-only)
+  check [--json]         deep sleep, t2bce stateful sleep, Touch Bar mode (ws check)
   apply                  install the system files: ws system apply (sudo)
   t2bce-build [KERNEL]   build patched t2bce modules into ~/.local/share/workstation/t2bce
   t2bce-install [KERNEL] install built modules into /lib/modules/KERNEL/updates/t2bce (sudo)
@@ -65,7 +66,7 @@ cmd_status() {
     # The suspend files are part of the system layer (system/hardware/*.nix);
     # its manifest check covers them with the rest.
     echo "== System files (ws system check) =="
-    "$repo/bin/ws" system check 2>/dev/null | grep -vE '^(OK|SKIP) |^$' || true
+    "$repo/bin/ws" system check 2>/dev/null | grep -E '^ *(WARN|FAIL) ' || echo "no problems"
 }
 
 # Since phase 4 of docs/plans/nix-migration.md one owner installs all system
@@ -162,6 +163,7 @@ kver="${2:-$(uname -r)}"
 
 case "$cmd" in
     status) cmd_status ;;
+    check) shift; exec "$repo/bin/ws-suspend-check" "$@" ;;
     apply) cmd_apply ;;
     t2bce-build) cmd_t2bce_build "$kver" ;;
     t2bce-install) cmd_t2bce_install "$kver" ;;

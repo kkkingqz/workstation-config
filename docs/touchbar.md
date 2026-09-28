@@ -214,7 +214,7 @@ journal                      listening on /dev/input/eventN (workstation-xremap)
 Дополнительно:
 
 ```console
-ws-workstation-verify --strict
+ws-suspend check
 ```
 
 ## Source of truth

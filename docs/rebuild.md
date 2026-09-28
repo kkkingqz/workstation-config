@@ -202,7 +202,7 @@ ws system apply     # системные файлы (sudo); затем reboot, �
 ws apply            # расширения → tiling → клавиатура → Flatpak → Distrobox
 # logout/login: новые расширения GNOME активируются только в новой сессии
 ws apply            # шаг keyboard, не прошедший preflight в первый раз
-ws check            # verify, wsflatpak, wsbox, ws-gnome, ws-suspend, ws system, apt
+ws check            # проверки всех владельцев и verify (связи между слоями)
 ```
 
 `bootstrap.sh` (от пользователя, sudo вызывает сам; `--dry-run` только
@@ -220,7 +220,15 @@ ws check            # verify, wsflatpak, wsbox, ws-gnome, ws-suspend, ws system,
 `/usr/lib/systemd/system-sleep`), собранные Nix из `system/`, с
 установленными; ничего не меняет. Пустой вывод — система совпадает с repo.
 `ws check apt` сравнивает списки apt с установленными пакетами и только
-сообщает о различиях.
+сообщает о различиях. `ws check` запускает проверки владельцев: `ws check
+repo` (checkout), `ws check home` (home-manager, Nix, man), `ws-keyboard
+check`, `ws-gnome check`, `wsflatpak check`, `wsbox check`, `wswin check`,
+`ws-suspend check`, `ws system check`, `ws check apt` и последним
+`ws-workstation-verify` — только связи между слоями (GNOME ↔ клавиатура,
+ядро ↔ t2bce, загрузка ↔ dGPU, Distrobox ↔ NTSync). Каждая проверка с
+`--json` печатает один объект `{"status","passes","warnings","failures",
+"messages"}` (`lib/check.bash`); `ws check` читает только его, текст для
+людей можно менять.
 `ws update` обновляет всё, что не закреплено, до последних версий: apt
 (`sudo apt full-upgrade`, `linux-t2` остаётся held), Nix (`nix flake update`,
 разница пакетов, switch; изменившийся `flake.lock` закоммитить), Flatpak,
@@ -520,7 +528,7 @@ ua
 
 ```console
 ws-input-source status
-ws-workstation-verify
+ws-keyboard check
 ```
 
 Ожидаемое поведение:
@@ -728,7 +736,6 @@ GNOME plan.
 
 ```bash
 ws check
-ws-workstation-verify --strict
 ```
 
 Затем вручную проверить:

@@ -14,8 +14,8 @@ Usage:
   ws diff
   ws apply [STEP...]
   ws update [STEP...]
-  ws check [-v] | ws check apt
-  ws system diff|check|apply|manifest|tree
+  ws check [-v] | ws check apt|repo|home [--json]
+  ws system diff|check [--json]|apply|manifest|tree
   ws baseline capture|diff|list ...
   ws checkpoint create|list|show|diff|remove ...
   ws host
@@ -48,12 +48,16 @@ update    bring everything that is not pinned to the latest version, in order:
           pinned on purpose and not touched: the kernel (linux-t2 held,
           system/kernel/t2bce/t2bce.nix), xremap (nix/pkgs/xremap.nix), extensions
           with pin, container images by digest
-check     run the owners' checks (ws-workstation-verify, wsflatpak check,
-          wsbox check, ws-gnome check, ws-suspend status, ws system check,
-          ws check apt) and summarize;
-          shows WARN/FAIL lines only, -v shows the full output;
+check     run the owners' checks with --json and summarize their result
+          objects (lib/check.bash): ws check repo, ws check home,
+          ws-keyboard check, ws-gnome check, wsflatpak check, wsbox check,
+          wswin check, ws-suspend check, ws system check, ws check apt and
+          ws-workstation-verify (cross-layer invariants); shows WARN/FAIL messages, -v all;
+          check repo: the checkout (Git, hygiene, syntax, bin/ executables);
+          check home: home-manager generation, Nix, man pages, session;
           check apt compares nix/hosts/apt.txt and nix/hosts/<host>/apt.txt (the
-          lists of bootstrap.sh) with the installed packages, report only
+          lists of bootstrap.sh) with the installed packages, report only;
+          each takes --json (one result object, what ws check reads)
 system    build the host system file tree (system) and compare it
           with the live system, read-only: diff shows file differences,
           check also unit states and prints OK/DIFFERS/MISSING per entry;
@@ -305,83 +309,135 @@ system_tree() {
     "$nix" build --no-link --print-out-paths "$repo#system-$(host)"
 }
 
+# Result of one entry: ws system check reports it through lib/check.bash
+# (pass/fail, --json for ws check); diff prints only the problems.
+system_report() {
+    if [[ "$system_mode" == check ]]; then
+        "$1" "$2"
+    elif [[ "$1" != pass ]]; then
+        printf '%s\n' "$2"
+    fi
+}
+
 # Compare one built file with the live one: content, mode and root:root.
-# Prints a status line (and, for diff, the content difference); returns 1 on
-# a difference.
+# Reports it (diff also prints the content difference); returns 1 on a
+# difference.
 system_compare() {
-    local mode="$1" built="$2" live="$3" want="$4" have
+    local built="$1" live="$2" want="$3" have
     if [[ ! -e "$live" ]]; then
-        printf 'MISSING %s\n' "$live"
+        system_report fail "missing: $live"
         return 1
     fi
     if [[ ! -r "$live" ]]; then
-        printf 'FAIL    %s (not readable)\n' "$live"
+        system_report fail "not readable: $live"
         return 1
     fi
     if ! cmp -s "$built" "$live"; then
-        printf 'DIFFERS %s\n' "$live"
-        [[ "$mode" == diff ]] && { diff -u --label "$live" --label "built" "$live" "$built" || true; }
+        system_report fail "differs: $live"
+        [[ "$system_mode" == diff ]] && { diff -u --label "$live" --label "built" "$live" "$built" || true; }
         return 1
     fi
     have="$(stat -c '%a %U:%G' "$live")"
     if [[ "$have" != "${want#0} root:root" ]]; then
-        printf 'DIFFERS %s (%s, want %s root:root)\n' "$live" "$have" "${want#0}"
+        system_report fail "differs: $live ($have, want ${want#0} root:root)"
         return 1
     fi
-    if [[ "$mode" == check ]]; then
-        printf 'OK      %s\n' "$live"
+    system_report pass "$live"
+}
+
+# What the system layer relies on without installing it, and what apply
+# removes: checked by ws system check after the manifest entries.
+system_check_extra() {
+    local mounts layout
+    # /etc/default/grub belongs to the grub package (ucf); workstation
+    # settings live only in grub.d drop-ins.
+    if cmp -s /usr/share/grub/default/grub /etc/default/grub; then
+        pass "/etc/default/grub is the package template"
+    else
+        warn "/etc/default/grub differs from /usr/share/grub/default/grub; settings belong in grub.d (system/)"
     fi
+    [[ -e /etc/default/grub.d/90-pcie-aspm.cfg ]] \
+        && warn "/etc/default/grub.d/90-pcie-aspm.cfg forces ASPM on GRUB/recovery kernels (docs/suspend.md)"
+    # Recovery must not stop in emergency mode when a non-system disk is absent.
+    mounts="$(awk '$0 !~ /^[[:space:]]*#/ && NF >= 4 && $2 ~ /^\/mnt\// && $4 !~ /(^|,)nofail(,|$)/ { print $2 }' /etc/fstab 2>/dev/null)"
+    if [[ -z "$mounts" ]]; then
+        pass "fstab: /mnt/* mounts are nofail"
+    else
+        warn "fstab: /mnt/* without nofail ($(echo $mounts)); boot/recovery would stop in emergency mode"
+    fi
+    # GDM/login: /etc/default/keyboard as apply edits it (keyboard_default).
+    layout="$(busctl get-property org.freedesktop.locale1 /org/freedesktop/locale1 \
+        org.freedesktop.locale1 X11Layout 2>/dev/null | sed -E 's/^s "(.*)"$/\1/')"
+    [[ "$layout" == us ]] \
+        && pass "GDM/login X11 layout: us" \
+        || fail "GDM/login X11 layout is '${layout:-unknown}', expected us (ws system apply)"
+    [[ -f "$obsolete_uinput" ]] && warn "obsolete $obsolete_uinput (ws system apply removes it)"
+    [[ -f "$obsolete_tiny_cfg" ]] && ! tiny_dfr_installed \
+        && warn "obsolete $obsolete_tiny_cfg (ws system apply removes it)"
+    systemctl list-unit-files tiny-dfr-sleep.service 2>/dev/null | grep -q '^tiny-dfr-sleep\.service' \
+        && warn "obsolete tiny-dfr-sleep.service still installed"
+    return 0
 }
 
 cmd_system() {
-    local mode="${1:-}" tree kind a b esp state problems=0 files=0 units=0
+    local tree kind a b esp state
+    system_mode="${1:-}"
 
-    case "$mode" in
-        diff|check) ;;
+    case "$system_mode" in
+        diff) ;;
+        check)
+            # shellcheck source=../lib/check.bash
+            . "$repo/lib/check.bash"
+            case "${2:-}" in
+                --json) check_json_mode ;;
+                "") ;;
+                *) die "usage: ws system check [--json]" ;;
+            esac
+            ;;
         apply) shift; cmd_system_apply "$@"; return ;;
         tree) system_tree; return ;;
         manifest) cat "$(system_tree)/manifest"; return ;;
         *) die "usage: ws system diff|check|apply|manifest|tree" ;;
     esac
     tree="$(system_tree)"
+    local problems=0 files=0
 
     while IFS=$'\t' read -r kind a b; do
         case "$kind" in
             file)
                 files=$((files + 1))
-                system_compare "$mode" "$tree/files$b" "$b" "$a" || problems=$((problems + 1))
+                system_compare "$tree/files$b" "$b" "$a" || problems=$((problems + 1))
                 ;;
             esp)
                 files=$((files + 1))
                 esp="$(findmnt -rno TARGET "/dev/disk/by-partuuid/$a" 2>/dev/null | head -n1 || true)"
                 if [[ -z "$esp" ]]; then
-                    if [[ "$mode" == check ]]; then
-                        printf 'SKIP    ESP:%s (ESP not mounted)\n' "$b"
-                    fi
+                    [[ "$system_mode" == check ]] && info "ESP:$b not compared (ESP not mounted)"
                     continue
                 fi
-                system_compare "$mode" "$tree/esp/$b" "$esp/$b" 0644 || problems=$((problems + 1))
+                system_compare "$tree/esp/$b" "$esp/$b" 0644 || problems=$((problems + 1))
                 ;;
             unit)
-                units=$((units + 1))
-                [[ "$mode" == check ]] || continue
+                [[ "$system_mode" == check ]] || continue
                 state="$(systemctl is-enabled "$b" 2>/dev/null || true)"
                 if [[ "$state" == "$a" ]]; then
-                    printf 'OK      unit %s (%s)\n' "$b" "$state"
+                    pass "unit $b ($state)"
                 else
-                    printf 'DIFFERS unit %s (%s, want %s)\n' "$b" "${state:-unknown}" "$a"
-                    problems=$((problems + 1))
+                    fail "unit $b is ${state:-unknown}, want $a"
                 fi
                 ;;
         esac
     done < "$tree/manifest"
 
-    if [[ "$mode" == check ]]; then
-        printf '\n%s: %d files, %d units, %d problem(s)\n' "$tree" "$files" "$units" "$problems"
+    if [[ "$system_mode" == check ]]; then
+        info "tree: $tree"
+        system_check_extra
+        check_finish
     elif ((problems == 0)); then
         echo "no differences ($files files)"
+    else
+        return 1
     fi
-    ((problems == 0))
 }
 
 # GDM/login keyboard: /etc/default/keyboard belongs to keyboard-configuration
@@ -577,7 +633,7 @@ cmd_system_apply() {
     echo "== Check"
     [[ "$saved" == true ]] && echo "backup: $backup"
     out="$(cmd_system check)" || rc=1
-    grep -vE '^OK ' <<<"$out" || true
+    grep -E '^ *(WARN|FAIL) ' <<<"$out" || echo "ws system check: no problems"
     for unit in "${restart[@]}"; do
         if systemctl is-active --quiet "$unit"; then
             echo "OK      $unit active"
@@ -639,16 +695,21 @@ PY
     return "$rc"
 }
 
-# Owner checks: name, command. Problem lines are WARN/FAIL (verify, wsflatpak,
-# wsbox), DRIFT (ws-gnome), DIFFERS/MISSING and an unheld kernel (ws-suspend).
+# Owner checks: name, command. Each runs with --json and prints one result
+# object (lib/check.bash); ws check reads only that, not the text. verify
+# (cross-layer) runs last: wsbox check has started the containers by then.
 check_steps=(
-    "verify ws-workstation-verify"
+    "repo ws-check-repo"
+    "home ws-check-home"
+    "keyboard ws-keyboard check"
+    "gnome ws-gnome check"
     "flatpak wsflatpak check"
     "distrobox wsbox check"
-    "gnome ws-gnome check"
-    "suspend ws-suspend status"
+    "windows wswin check"
+    "suspend ws-suspend check"
     "system ws system check"
     "apt ws check apt"
+    "verify ws-workstation-verify"
 )
 
 # The apt lists of bootstrap.sh against the installed system; reports only.
@@ -658,6 +719,14 @@ cmd_check_apt() {
     local h pkg status
     local -a want=() extra=()
     local -A listed=() manual=()
+
+    # shellcheck source=../lib/check.bash
+    . "$repo/lib/check.bash"
+    case "${1:-}" in
+        --json) check_json_mode ;;
+        "") ;;
+        *) die "usage: ws check apt [--json]" ;;
+    esac
 
     h="$(host)"
     mapfile -t want < <(cat "$repo/nix/hosts/apt.txt" "$repo/nix/hosts/$h/apt.txt" 2>/dev/null \
@@ -670,53 +739,76 @@ cmd_check_apt() {
         listed[$pkg]=1
         status="$(dpkg-query -W -f='${Status}' "$pkg" 2>/dev/null || true)"
         if [[ "$status" != *" ok installed" ]]; then
-            printf 'WARN    not installed: %s\n' "$pkg"
+            warn "not installed: $pkg"
         elif [[ -z "${manual[$pkg]:-}" ]]; then
-            printf 'WARN    auto-installed, apt autoremove could remove it: %s (sudo apt-mark manual %s)\n' "$pkg" "$pkg"
+            warn "auto-installed, apt autoremove could remove it: $pkg (sudo apt-mark manual $pkg)"
         else
-            printf 'OK      %s\n' "$pkg"
+            pass "$pkg"
         fi
     done
     for pkg in "${!manual[@]}"; do
         [[ -n "${listed[$pkg]:-}" ]] || extra+=("$pkg")
     done
-    printf '\nINFO    %d manual packages are not in nix/hosts/apt.txt or nix/hosts/%s/apt.txt:\n' "${#extra[@]}" "$h"
-    printf '%s\n' "${extra[@]}" | sort | fmt -w 78 | sed 's/^/        /'
+    info "${#extra[@]} manual packages are not in nix/hosts/apt.txt or nix/hosts/$h/apt.txt: $(printf '%s\n' "${extra[@]}" | sort | paste -sd' ')"
+    check_finish
+}
+
+# Counts and messages of one result object: first line "WARNINGS FAILURES",
+# then the messages to show (WARN/FAIL; all with -v). Fails on bad JSON.
+check_result() {
+    python3 -c '
+import json, sys
+try:
+    d = json.load(open(sys.argv[1]))
+    print(int(d["warnings"]), int(d["failures"]))
+except Exception:
+    sys.exit(1)
+for m in d.get("messages", []):
+    if sys.argv[2] == "true" or m["level"] in ("warn", "fail"):
+        print("  %-5s %s" % (m["level"].upper(), m["text"]))
+' "$1" "$2"
 }
 
 cmd_check() {
-    local verbose=false step name cmd rc out warn fail
+    local verbose=false step name cmd rc out err res counts warn fail
     local -a results=()
     local total_warn=0 total_fail=0
 
     case "${1:-}" in
-        apt) cmd_check_apt; return ;;
+        apt) shift; cmd_check_apt "$@"; return ;;
+        repo) shift; exec "$repo/bin/ws-check-repo" "$@" ;;
+        home) shift; exec "$repo/bin/ws-check-home" "$@" ;;
         -v|--verbose) verbose=true ;;
         "") ;;
         *) die "unknown check option: $1" ;;
     esac
 
     out="$(mktemp)"
-    trap 'rm -f "$out"; trap - RETURN' RETURN
+    err="$(mktemp)"
+    trap 'rm -f "$out" "$err"; trap - RETURN' RETURN
 
     for step in "${check_steps[@]}"; do
         name="${step%% *}"
         cmd="${step#* }"
         rc=0
         # shellcheck disable=SC2086 # cmd is a fixed command line
-        "$repo/bin/"$cmd > "$out" 2>&1 || rc=$?
-        warn="$(grep -cE '^[[:space:]]*WARN[[:space:]]|not held' "$out" || true)"
-        fail="$(grep -cE '^[[:space:]]*(FAIL|DRIFT|DIFFERS|MISSING)[[:space:]]' "$out" || true)"
-        # A non-zero exit without problem lines still counts as one failure.
+        "$repo/bin/"$cmd --json > "$out" 2> "$err" || rc=$?
+        printf '\n=== %s: %s (exit %s)\n' "$name" "$cmd" "$rc"
+        if res="$(check_result "$out" "$verbose")"; then
+            counts="${res%%$'\n'*}"
+            warn="${counts% *}"
+            fail="${counts#* }"
+            [[ "$res" != *$'\n'* ]] || printf '%s\n' "${res#*$'\n'}"
+        else
+            # No result object: the check itself broke.
+            warn=0
+            fail=1
+            echo "  FAIL  no result from $cmd --json:"
+            tail -n 5 "$err" | sed 's/^/        /'
+        fi
+        # A non-zero exit without failures still counts as one failure.
         if ((rc != 0 && fail == 0)); then
             fail=1
-        fi
-
-        printf '\n=== %s: %s (exit %s)\n' "$name" "$cmd" "$rc"
-        if [[ "$verbose" == true ]]; then
-            cat "$out"
-        else
-            grep -E '^[[:space:]]*(WARN|FAIL|DRIFT|DIFFERS|MISSING)[[:space:]]|not held' "$out" || true
         fi
 
         total_warn=$((total_warn + warn))

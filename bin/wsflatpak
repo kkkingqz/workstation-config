@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 import configparser
+import json
 import os
 from pathlib import Path
 import shutil
@@ -653,32 +654,44 @@ def cmd_status():
     print("\n===== GLOBAL USER OVERRIDE =====")
     print(runtime_override() or "(none)")
 
-def cmd_check():
+def cmd_check(json_mode=False):
+    """Result contract of ws check (--json), as lib/check.bash: one object
+    {"status", "passes", "warnings", "failures", "messages"} on stdout."""
     ensure_cfg()
 
-    failures = 0
-    warnings = 0
+    counts = {"pass": 0, "warn": 0, "fail": 0}
+    messages = []
+
+    def report(level, text):
+        counts[level] += 1
+        messages.append({"level": level, "text": text})
+        if not json_mode:
+            print(f"  {level.upper():<5} {text}")
 
     def passed(text):
-        print("PASS ", text)
+        report("pass", text)
 
     def warn(text):
-        nonlocal warnings
-        warnings += 1
-        print("WARN ", text)
+        report("warn", text)
 
     def fail(text):
-        nonlocal failures
-        failures += 1
-        print("FAIL ", text)
+        report("fail", text)
+
+    def finish():
+        status = "fail" if counts["fail"] else "warn" if counts["warn"] else "pass"
+        if json_mode:
+            print(json.dumps({
+                "status": status, "passes": counts["pass"],
+                "warnings": counts["warn"], "failures": counts["fail"],
+                "messages": messages,
+            }))
+        else:
+            print(f"\n  PASS={counts['pass']} WARN={counts['warn']} FAIL={counts['fail']}")
+        return 1 if counts["fail"] else 0
 
     if not shutil.which("flatpak"):
         fail("flatpak installed")
-        print(
-            f"\nResult: FAIL ({failures} failure(s), "
-            f"{warnings} warning(s))"
-        )
-        return 1
+        return finish()
 
     passed("flatpak installed")
 
@@ -863,15 +876,7 @@ def cmd_check():
                 "(run ws switch)"
             )
 
-    if failures:
-        print(
-            f"\nResult: FAIL ({failures} failure(s), "
-            f"{warnings} warning(s))"
-        )
-        return 1
-
-    print(f"\nResult: PASS ({warnings} warning(s))")
-    return 0
+    return finish()
 
 def cmd_test():
     need_flatpak()
@@ -1087,7 +1092,11 @@ def build_parser():
     q.add_argument("app")
     q.add_argument("args", nargs=argparse.REMAINDER)
 
-    for name in ("status", "check", "test", "apply"):
+    q = sp.add_parser("check")
+    q.add_argument("--json", action="store_true",
+                   help="one result object for ws check")
+
+    for name in ("status", "test", "apply"):
         sp.add_parser(name)
 
     return p
@@ -1143,7 +1152,7 @@ def main():
     elif ns.cmd == "status":
         cmd_status()
     elif ns.cmd == "check":
-        raise SystemExit(cmd_check())
+        raise SystemExit(cmd_check(ns.json))
     elif ns.cmd == "test":
         raise SystemExit(cmd_test())
     elif ns.cmd == "apply":

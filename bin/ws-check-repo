@@ -1,0 +1,411 @@
+#!/usr/bin/env bash
+set -u
+set -o pipefail
+
+# The checkout itself: Git integrity, hygiene, syntax of tracked files,
+# executables of bin/, legacy paths and untracked files. Read-only.
+# ws check repo runs it with --json (lib/check.bash).
+
+repo="${WSCONFIG:-$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)}"
+# shellcheck source=../lib/check.bash
+. "$repo/lib/check.bash"
+
+case "${1:-}" in
+    --json) check_json_mode ;;
+    "") ;;
+    -h|--help) echo "Usage: ws-check-repo [--json]  (ws check repo)"; exit 0 ;;
+    *) echo "ws-check-repo: unknown argument: $1" >&2; exit 64 ;;
+esac
+
+q() { printf '%q' "$1"; }
+
+is_tracked() {
+    git -C "$repo" ls-files --error-unmatch -- "$1" >/dev/null 2>&1
+}
+
+# The extension list is built from gnome/gnome-extensions.nix.
+ext_list() {
+    local f="$HOME/.local/share/workstation/gnome/extensions"
+    [[ -r "$f" ]] || return 0
+    awk -v s="${1:-}" '!/^#/ && NF >= 2 && (s == "" || $2 == s) { print $1 }' "$f"
+}
+
+section "1. Repository identity / Git integrity"
+
+if ! git -C "$repo" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    fail "not a Git repository: $repo"
+    check_finish
+    exit
+fi
+pass "Git repository exists"
+
+branch="$(git -C "$repo" branch --show-current 2>/dev/null || true)"
+[[ "$branch" == "main" ]] && pass "branch: main" || warn "branch: ${branch:-detached}"
+
+origin="$(git -C "$repo" remote get-url origin 2>/dev/null || true)"
+[[ "$origin" == *"kkkingqz/wsconfig"* ]] \
+    && pass "origin: $origin" \
+    || warn "unexpected origin: ${origin:-none}"
+
+head="$(git -C "$repo" rev-parse HEAD 2>/dev/null || true)"
+info "HEAD: ${head:-unknown}"
+
+if git -C "$repo" diff --check >/dev/null 2>&1; then
+    pass "git diff --check"
+else
+    fail "git diff --check found whitespace errors"
+fi
+
+if git -C "$repo" diff --cached --check >/dev/null 2>&1; then
+    pass "git diff --cached --check"
+else
+    fail "git diff --cached --check found whitespace errors"
+fi
+
+if git -C "$repo" fsck --no-progress --full >/dev/null 2>&1; then
+    pass "git fsck --full"
+else
+    fail "git fsck reports repository object errors"
+fi
+
+status_porcelain="$(git -C "$repo" status --porcelain=v1 --untracked-files=all 2>/dev/null || true)"
+if [[ -z "$status_porcelain" ]]; then
+    pass "working tree clean"
+else
+    warn "working tree has staged/modified/untracked files"
+    printf '%s\n' "$status_porcelain" | sed 's/^/        /'
+fi
+
+section "2. Repository hygiene / junk detection"
+
+weird_found=false
+while IFS= read -r -d '' path; do
+    bad=false
+    reason=""
+
+    if [[ "$path" == *$'\n'* || "$path" == *$'\r'* || "$path" == *$'\t'* ]]; then
+        bad=true; reason="contains control whitespace"
+    elif [[ "$path" =~ (^|/)[[:space:]] || "$path" =~ [[:space:]]$ ]]; then
+        bad=true; reason="leading/trailing whitespace"
+    elif [[ "$path" == *'\\'* ]]; then
+        bad=true; reason="contains backslash"
+    fi
+
+    if [[ "$bad" == true ]]; then
+        weird_found=true
+        warn "tracked suspicious filename ($(q "$path")): $reason"
+    fi
+done < <(git -C "$repo" ls-files -z)
+[[ "$weird_found" == false ]] && pass "no tracked filenames with control/trailing whitespace/backslashes"
+
+zero_found=false
+while IFS= read -r -d '' path; do
+    full="$repo/$path"
+    if [[ -f "$full" && ! -s "$full" ]]; then
+        zero_found=true
+        warn "tracked zero-byte file: $(q "$path")"
+    fi
+done < <(git -C "$repo" ls-files -z)
+[[ "$zero_found" == false ]] && pass "no tracked zero-byte regular files"
+
+junk_found=false
+while IFS= read -r -d '' path; do
+    base="${path##*/}"
+    case "$base" in
+        *~|*.bak|*.backup|*.orig|*.rej|*.swp|*.swo|*.tmp|*.temp|.DS_Store|Thumbs.db|*.pyc)
+            junk_found=true
+            warn "tracked backup/editor/temp candidate: $(q "$path")"
+                ;;
+    esac
+    case "$path" in
+        fix-keyboard-layer-v*.sh|*/fix-keyboard-layer-v*.sh|rollback-keyboard-layer-v*.sh|*/rollback-keyboard-layer-v*.sh)
+            junk_found=true
+            warn "tracked one-shot migration/fix script candidate: $(q "$path")"
+            ;;
+    esac
+done < <(git -C "$repo" ls-files -z)
+[[ "$junk_found" == false ]] && pass "no obvious tracked editor/backup/one-shot junk"
+
+runtime_tracked=false
+for p in state runtime; do
+    if git -C "$repo" ls-files -- "$p" | grep -q .; then
+        runtime_tracked=true
+        fail "generated/runtime path is tracked: $p"
+    fi
+done
+[[ "$runtime_tracked" == false ]] && pass "runtime/generated directories are not tracked"
+
+for ignored in runtime/probe $(for uuid in $(ext_list local); do
+    [[ -d "$repo/gnome/extensions/$uuid/schemas" ]] \
+        && echo "gnome/extensions/$uuid/schemas/gschemas.compiled"
+done); do
+    if git -C "$repo" check-ignore -q -- "$ignored"; then
+        pass ".gitignore covers: $ignored"
+    else
+        warn ".gitignore does not cover expected runtime path: $ignored"
+    fi
+done
+
+broken_link=false
+while IFS= read -r -d '' p; do
+    if [[ -L "$p" && ! -e "$p" ]]; then
+        broken_link=true
+        fail "broken symlink in repo tree: $(q "${p#$repo/}") -> $(q "$(readlink "$p")")"
+    fi
+done < <(find "$repo" -path "$repo/.git" -prune -o -type l -print0 2>/dev/null)
+[[ "$broken_link" == false ]] && pass "no broken symlinks inside repository tree"
+
+large_found=false
+while IFS= read -r -d '' path; do
+    full="$repo/$path"
+    [[ -f "$full" ]] || continue
+    size="$(stat -c %s "$full" 2>/dev/null || echo 0)"
+    if (( size > 5 * 1024 * 1024 )); then
+        large_found=true
+        warn "tracked file >5 MiB: $path ($size bytes)"
+    fi
+done < <(git -C "$repo" ls-files -z)
+[[ "$large_found" == false ]] && pass "no tracked files larger than 5 MiB"
+
+if git -C "$repo" grep -nEI -- \
+    '-----BEGIN (RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----|AKIA[0-9A-Z]{16}|github_pat_[A-Za-z0-9_]{20,}|gh[pousr]_[A-Za-z0-9]{20,}' \
+    -- . ':(exclude)docs/*.md' >/tmp/ws-verify-secret.$$ 2>/dev/null; then
+    warn "possible secret/private-key marker in tracked files (inspect manually):"
+    sed 's/^/        /' /tmp/ws-verify-secret.$$
+else
+    pass "no obvious private-key/GitHub/AWS secret markers in tracked non-doc files"
+fi
+rm -f /tmp/ws-verify-secret.$$
+
+current_home_prefix="${HOME%/}/"
+other_hardcoded_home="$(git -C "$repo" grep -nF "$current_home_prefix" -- \
+    ':!docs/**' \
+    ':!bin/ws-check-repo' \
+    2>/dev/null || true)"
+if [[ -n "$other_hardcoded_home" ]]; then
+    warn "unexpected hard-coded current HOME paths found outside validated helper locations:"
+    printf '%s\n' "$other_hardcoded_home" | sed 's/^/        /'
+else
+    pass "no unexpected hard-coded current HOME paths outside validated helper locations"
+fi
+
+conflict_hits="$(git -C "$repo" grep -nE '^(<<<<<<<|=======|>>>>>>>)' -- . 2>/dev/null || true)"
+[[ -z "$conflict_hits" ]] \
+    && pass "no merge-conflict markers in tracked files" \
+    || { fail "merge-conflict markers found"; printf '%s\n' "$conflict_hits" | sed 's/^/        /'; }
+
+crlf_found=false
+while IFS= read -r -d '' path; do
+    full="$repo/$path"
+    [[ -f "$full" ]] || continue
+    case "$path" in
+        *.sh|*.fish|*.yml|*.yaml|*.toml|*.service|*.rules|*.md|*.ghostty|*.json)
+            if LC_ALL=C grep -q $'\r$' "$full" 2>/dev/null; then
+                crlf_found=true
+                warn "CRLF line endings: $path"
+            fi
+            ;;
+    esac
+done < <(git -C "$repo" ls-files -z)
+[[ "$crlf_found" == false ]] && pass "no CRLF in tracked config/script/docs files"
+
+
+section "3. Script / config syntax"
+
+bash_bad=false
+while IFS= read -r -d '' path; do
+    full="$repo/$path"
+    [[ -f "$full" ]] || continue
+    if head -n1 "$full" 2>/dev/null | grep -Eq '^#!.*\b(bash|sh)([[:space:]]|$)'; then
+        if bash -n "$full" 2>/dev/null; then
+            pass "bash syntax: $path"
+        else
+            bash_bad=true
+            fail "bash syntax error: $path"
+        fi
+    fi
+done < <(git -C "$repo" ls-files -z)
+[[ "$bash_bad" == false ]] || true
+
+if have fish; then
+    fish_bad=false
+    while IFS= read -r -d '' path; do
+        [[ "$path" == *.fish ]] || continue
+        if fish -n "$repo/$path" >/dev/null 2>&1; then
+            pass "fish syntax: $path"
+        else
+            fish_bad=true
+            fail "fish syntax error: $path"
+        fi
+    done < <(git -C "$repo" ls-files -z)
+else
+    warn "fish not installed; Fish syntax checks skipped"
+fi
+
+json_bad=false
+while IFS= read -r -d '' path; do
+    [[ "$path" == *.json ]] || continue
+    if python3 -m json.tool "$repo/$path" >/dev/null 2>&1; then
+        pass "JSON syntax: $path"
+    else
+        json_bad=true
+        fail "JSON syntax error: $path"
+    fi
+done < <(git -C "$repo" ls-files -z)
+
+while IFS= read -r -d '' path; do
+    head -n1 "$repo/$path" 2>/dev/null | grep -Eq '^#!.*python' || continue
+    py_out="$(mktemp)"
+    if python3 -c 'import py_compile, sys; py_compile.compile(sys.argv[1], cfile=sys.argv[2], doraise=True)' \
+        "$repo/$path" "$py_out" >/dev/null 2>&1; then
+        pass "Python syntax: $path"
+    else
+        fail "Python syntax error: $path"
+    fi
+    rm -f -- "$py_out"
+done < <(git -C "$repo" ls-files -z)
+
+if have udevadm; then
+    while IFS= read -r -d '' path; do
+        [[ "$path" == *.rules ]] || continue
+        if udevadm verify --resolve-names=never "$repo/$path" >/dev/null 2>&1; then
+            pass "udev syntax: $path"
+        else
+            fail "udev syntax error: $path"
+        fi
+    done < <(git -C "$repo" ls-files -z)
+fi
+
+if have shellcheck; then
+    shellcheck_files=()
+    while IFS= read -r -d '' path; do
+        full="$repo/$path"
+        [[ -f "$full" ]] || continue
+        if head -n1 "$full" 2>/dev/null | grep -Eq '^#!.*\b(bash|sh)([[:space:]]|$)'; then
+            shellcheck_files+=("$full")
+        fi
+    done < <(git -C "$repo" ls-files -z)
+    if ((${#shellcheck_files[@]})); then
+        if shellcheck -S warning "${shellcheck_files[@]}" >/tmp/ws-verify-shellcheck.$$ 2>&1; then
+            pass "shellcheck -S warning"
+        else
+            warn "shellcheck reported issues:"
+            sed 's/^/        /' /tmp/ws-verify-shellcheck.$$
+        fi
+        rm -f /tmp/ws-verify-shellcheck.$$
+    fi
+else
+    info "shellcheck not installed; optional lint skipped"
+fi
+
+
+section "4. Legacy artifacts that should be gone"
+
+# Generated files live in ~/.local/share/workstation (before 2026-09-27:
+# ~/.config/workstation and ~/.cache/ws-suspend).
+for old in "$HOME/.config/workstation" "$HOME/.cache/ws-suspend" \
+    "$HOME/.local/share/distrobox-homes"; do
+    if [[ -e "$old" || -L "$old" ]]; then
+        warn "obsolete directory: $(q "$old") (docs/workstation.md: ~/.local/share/workstation, ~/distrobox)"
+    else
+        pass "obsolete directory absent: $old"
+    fi
+done
+
+# Machine-local state lives in ~/.local/state/workstation, not in the checkout.
+if [[ -e "$repo/state" ]]; then
+    fail "state/ in the checkout is obsolete: move keyboard/gsettings-backup.tsv to ~/.local/state/workstation/keyboard/"
+else
+    pass "no state/ in the checkout"
+fi
+
+legacy_repo_paths=(
+    bin/ws-nautilus-go
+    bin/ws-gnome-apply
+    systemd
+    # Layout before ~/wsconfig (2026-09-27): config/, modules/, kernel/,
+    # hosts/, pkgs/ and the system tree directly under system/.
+    config
+    modules
+    kernel
+    hosts
+    pkgs
+    system/udev
+    system/modprobe
+    system/systemd
+    system/usr
+    system/boot/refind_linux.conf
+    system/default
+    system/esp
+    system/NetworkManager
+    system/sleep.conf.d
+    system/modules-load.d
+    system/files/udev/70-workstation-uinput.rules
+    system/kernel/t2bce/sources.conf
+    # micro writes its buffers into ~/.local/share/workstation/micro-help.
+    terminal/micro-help/buffers
+)
+for path in "${legacy_repo_paths[@]}"; do
+    if is_tracked "$path"; then
+        warn "obsolete tracked artifact: $(q "$path")"
+    elif [[ -e "$repo/$path" || -L "$repo/$path" ]]; then
+        warn "obsolete untracked artifact in repo: $(q "$path")"
+    else
+        pass "legacy artifact absent: $path"
+    fi
+done
+
+section "5. Untracked files / cleanup candidates"
+
+untracked_any=false
+while IFS= read -r -d '' path; do
+    untracked_any=true
+    base="${path##*/}"
+    case "$base" in
+        *~|*.bak|*.backup|*.orig|*.rej|*.swp|*.swo|*.tmp|*.temp|.DS_Store|Thumbs.db|*.pyc)
+            warn "untracked backup/editor/temp candidate: $(q "$path")"
+            ;;
+        *)
+            case "$path" in
+                runtime/*|*/schemas/gschemas.compiled)
+                    info "ignored/generated untracked file: $(q "$path")"
+                    ;;
+                fix-keyboard-layer-v*.sh|*/fix-keyboard-layer-v*.sh|rollback-keyboard-layer-v*.sh|*/rollback-keyboard-layer-v*.sh)
+                    warn "untracked one-shot migration/fix script candidate: $(q "$path")"
+                    ;;
+                *)
+                    info "untracked: $(q "$path")"
+                    ;;
+            esac
+            ;;
+    esac
+done < <(git -C "$repo" ls-files --others --exclude-standard -z)
+[[ "$untracked_any" == false ]] && pass "no non-ignored untracked files"
+
+
+section "6. Executables"
+
+# bin/ is run through ~/.local/bin links (and ws-caps-led from the checkout):
+# every file there is executable in Git and on disk.
+bin_bad=false
+while IFS= read -r -d '' path; do
+    mode="$(git -C "$repo" ls-files -s -- "$path" | awk 'NR==1{print $1}')"
+    if [[ "$mode" != 100755 || ! -x "$repo/$path" ]]; then
+        bin_bad=true
+        fail "$path not executable (Git mode ${mode:-?})"
+    fi
+done < <(git -C "$repo" ls-files -z -- bin)
+[[ "$bin_bad" == false ]] && pass "bin/: every file executable (file and Git mode 100755)"
+[[ -x "$repo/bootstrap.sh" ]] && is_tracked bootstrap.sh \
+    && pass "bootstrap.sh tracked and executable" \
+    || fail "bootstrap.sh missing, untracked or not executable"
+
+# Built by Nix, not kept in git: man pages (nix/pkgs/man.nix), Flatpak
+# overrides (flatpak/flatpak.nix).
+[[ -z "$(git -C "$repo" ls-files -- man)" ]] \
+    && pass "man/ not tracked (pages built by Nix)" \
+    || fail "man/ is tracked in git; pages are built by Nix (nix/pkgs/man.nix)"
+compgen -G "$repo/flatpak/overrides/*.conf" >/dev/null \
+    && fail "flatpak/overrides/*.conf is ignored; declare overrides in flatpak/flatpak.nix"
+
+check_finish

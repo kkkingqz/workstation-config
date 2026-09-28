@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+set -u
+set -o pipefail
+
+# Windows layer (windows/apps.nix, the Windows boxes of distrobox.nix):
+# programs point at Windows boxes, .exe opens in the default box, menu links
+# resolve. Read-only. wswin check; ws check runs it with --json
+# (lib/check.bash).
+
+repo="${WSCONFIG:-$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)}"
+# shellcheck source=../lib/check.bash
+. "$repo/lib/check.bash"
+
+case "${1:-}" in
+    --json) check_json_mode ;;
+    "") ;;
+    -h|--help) echo "Usage: wswin check [--json]"; exit 0 ;;
+    *) echo "wswin check: unknown argument: $1" >&2; exit 64 ;;
+esac
+
+data="${WSWIN_DATA:-$HOME/.local/share/workstation}"
+boxes_ini="$data/distrobox/boxes.ini"
+apps_ini="$data/windows/apps.ini"
+# Both files are built by ws switch (distrobox/distrobox.nix, windows/apps.nix).
+win_boxes="$(awk '/^\[/ { box = substr($0, 2, length($0) - 2) } /^profile=/ { print box }' "$boxes_ini" 2>/dev/null)"
+if [[ -n "$win_boxes" ]]; then
+    pass "Windows boxes: $(echo $win_boxes)"
+else
+    fail "no Windows box in boxes.ini (distrobox/distrobox.nix)"
+fi
+
+default_box="$(sed -nE 's/^default_box=//p' "$apps_ini" 2>/dev/null)"
+if [[ -n "$default_box" ]] && grep -qxF "$default_box" <<<"$win_boxes"; then
+    pass "wswin default box is a Windows box: $default_box"
+else
+    fail "wswin default box is not a Windows box: ${default_box:-<none>}"
+fi
+
+while IFS= read -r app; do
+    [[ -n "$app" && "$app" != wswin ]] || continue
+    app_box="$(awk -v s="[$app]" '$0 == s { i = 1; next } i && /^\[/ { exit } i && /^box=/ { sub(/^box=/, ""); print; exit }' "$apps_ini")"
+    if grep -qxF "$app_box" <<<"$win_boxes"; then
+        pass "app $app: box $app_box is a Windows box"
+    else
+        fail "app $app: box ${app_box:-<none>} is not a Windows box"
+    fi
+done < <(sed -nE 's/^\[([^]]+)\]$/\1/p' "$apps_ini" 2>/dev/null)
+
+if have xdg-mime; then
+    exe_default="$(xdg-mime query default application/vnd.microsoft.portable-executable 2>/dev/null)"
+    if [[ "$exe_default" == ws-win-exe.desktop ]]; then
+        pass ".exe opens with ws-win-exe.desktop (wine-wayland, standard prefix)"
+    else
+        warn ".exe opens with ${exe_default:-nothing}, not ws-win-exe.desktop (ws switch)"
+    fi
+fi
+
+dangling_menu=""
+for link in "$HOME"/.local/share/applications/wswin-*.desktop; do
+    [[ -L "$link" && ! -e "$link" ]] && dangling_menu+=" $(basename "$link")"
+done
+if [[ -n "$dangling_menu" ]]; then
+    warn "wswin menu links to missing prefixes:$dangling_menu (wswin menu sync)"
+else
+    pass "wswin menu links resolve"
+fi
+
+info "GPU for Proton/Steam: $("$repo/bin/ws-gpu" status 2>/dev/null || echo unknown)"
+
+check_finish

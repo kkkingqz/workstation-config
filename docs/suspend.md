@@ -132,7 +132,7 @@ vga_switcheroo при `OFF` открытых клиентов не провер�
 `pcie_aspm=force pcie_aspm.policy=powersave` убраны из
 `/boot/refind_linux.conf` 2026-09-25. Все три отказа T2 (ниже) случились при
 forced ASPM и Touch Bar в режиме дисплея; без него отказов не было.
-`ws-workstation-verify` предупреждает, если параметры вернутся.
+`ws-suspend check` предупреждает, если параметры вернутся.
 
 Ядрам, которые грузятся через GRUB (recovery, предыдущие ядра), forced ASPM
 добавлял `/etc/default/grub.d/90-pcie-aspm.cfg`; он удалён 2026-09-26.
@@ -245,7 +245,8 @@ sudo reboot
 
 ```console
 ws-suspend status
-ws-workstation-verify --strict
+ws-suspend check
+ws-workstation-verify     # ядро ↔ t2bce
 ```
 
 Ожидается:

@@ -31,6 +31,7 @@ end
 
 complete -c wswin -f
 complete -c wswin -n __wswin_needs_command -a list -d 'Programs and prefixes'
+complete -c wswin -n __wswin_needs_command -a check -d 'Check the Windows layer (--json for ws check)'
 complete -c wswin -n __wswin_needs_command -a install -d 'Run an installer in a box/prefix'
 complete -c wswin -n __wswin_needs_command -a run -d 'Start a program from windows/apps.nix'
 complete -c wswin -n __wswin_needs_command -a exec -d 'Run any program in a box/prefix'

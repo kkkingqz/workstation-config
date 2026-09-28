@@ -250,7 +250,7 @@ bin/ws-nautilus-current
 bin/ws-input-source
 bin/ws-caps-led
 bin/ws-tiling-apply
-bin/ws-workstation-verify
+bin/ws-keyboard-check
 
 gnome/extensions/workstation-input-source@local/
 gnome/extensions/workstation-smart-popup@local/
@@ -278,7 +278,7 @@ helpws keyboard
 Полная проверка:
 
 ```console
-ws-workstation-verify --strict
+ws check
 ```
 
 ---
@@ -809,9 +809,13 @@ wsconfig/
 │   ├── ws-keyboard
 │   ├── ws-keyboard-apply
 │   ├── ws-keyboard-status
+│   ├── ws-keyboard-check  ws-keyboard check
 │   ├── ws-keyboard-install-extensions
 │   ├── ws-keyboard-system-apply
-│   ├── ws-workstation-verify
+│   ├── ws-workstation-verify  связи между слоями (последний шаг ws check)
+│   ├── ws-check-repo, ws-check-home  ws check repo / home
+│   ├── ws-suspend, ws-suspend-check
+│   ├── ws-baseline, ws-checkpoint
 │   ├── ws-gnome
 │   ├── ws-gnome-check
 │   ├── ws-gnome-status
@@ -823,7 +827,9 @@ wsconfig/
 │   ├── ws-tiling-apply
 │   ├── wsbox, wsflatpak
 │   ├── wswin             Windows-программы: install, run, prefixes
+│   ├── wswin-check       wswin check
 │   └── ws-gpu            AMD для Proton/Steam, если она есть
+├── lib/check.bash       общий формат результата проверок (--json для ws check)
 └── docs/
 ```
 
@@ -854,7 +860,7 @@ gnome/extensions/*/schemas/gschemas.compiled
 Перед commit используется:
 
 ```console
-ws-workstation-verify
+ws check repo
 git status --short
 git diff --check
 git diff --cached --check
