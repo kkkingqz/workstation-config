@@ -694,10 +694,18 @@ cmd_prefix() {
             fi
             ;;
         kill)
-            if [[ "$run" == wine ]]; then
-                in_box "$box" "$prefix" wineserver -k
+            # Every process started with this WINEPREFIX (the containers
+            # share the host PID namespace; Proton runs its own wineserver).
+            local pid pids=()
+            for pid in /proc/[0-9]*; do
+                { tr '\0' '\n' < "$pid/environ"; } 2>/dev/null \
+                    | grep -qxF "WINEPREFIX=$prefix" && pids+=("${pid#/proc/}")
+            done
+            if ((${#pids[@]})); then
+                kill -- "${pids[@]}" 2>/dev/null || true
+                printf 'Stopped %d processes of %s\n' "${#pids[@]}" "$prefix"
             else
-                in_box "$box" "$prefix" pkill -f -- "$prefix"
+                printf 'Nothing runs in %s\n' "$prefix"
             fi
             ;;
         remove)
