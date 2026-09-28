@@ -215,12 +215,16 @@ fi
 echo
 echo "== 6. First ws switch"
 # Before the first switch there is no ~/.config/nix/nix.conf yet, and the
-# nix-users membership applies only to new logins: sg runs the switch with it.
+# nix-users membership applies only to new logins: sg (util-linux-extra on
+# Ubuntu 26.04) runs the switch with it when this session lacks the group.
 # Files home-manager would replace are kept as *.pre-hm.
-if [[ "$dry_run" == true ]]; then
-    echo "would run: sg nix-users -c 'NIX_CONFIG=... $repo/bin/ws switch -b pre-hm'"
+switch="NIX_CONFIG='experimental-features = nix-command flakes' '$repo/bin/ws' switch -b pre-hm"
+if id -nG | tr ' ' '\n' | grep -qx nix-users; then
+    run bash -c "$switch"
+elif [[ "$dry_run" == true ]]; then
+    echo "would run: sg nix-users -c \"$switch\""
 else
-    sg nix-users -c "NIX_CONFIG='experimental-features = nix-command flakes' '$repo/bin/ws' switch -b pre-hm"
+    sg nix-users -c "$switch"
 fi
 
 echo

@@ -40,6 +40,10 @@ steam-devices
 # Btrfs subvolumes, snapshots and recovery (system-backup-snapshot)
 btrfs-progs
 
+# sg: bootstrap.sh runs the first switch with nix-users before a new login
+# (Ubuntu 26.04 moved sg/newgrp from login to util-linux-extra)
+util-linux-extra
+
 # Virtual machines: KVM/QEMU, libvirt qemu:///system, virt-manager (helpws virt).
 # Recommends are not installed, so the SPICE console parts are listed.
 qemu-system-x86
