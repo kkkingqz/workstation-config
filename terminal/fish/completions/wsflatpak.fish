@@ -32,17 +32,20 @@ complete -c wsflatpak -n '__wsflatpak_needs_command' -a status -d 'Show Flatpak 
 complete -c wsflatpak -n '__wsflatpak_needs_command' -a check -d 'Check Flatpak policy'
 complete -c wsflatpak -n '__wsflatpak_needs_command' -a test -d 'Run integration smoke test'
 complete -c wsflatpak -n '__wsflatpak_needs_command' -a apply -d 'Apply managed Flatpak state'
+complete -c wsflatpak -n '__wsflatpak_needs_command' -a manage -d 'Add installed app to flatpak/apps.txt'
+complete -c wsflatpak -n '__wsflatpak_needs_command' -a unmanage -d 'Remove app from flatpak/apps.txt'
 
 for cmd in remove uninstall
     complete -c wsflatpak -n "__wsflatpak_using_command $cmd" \
         -l keep-data -d 'Keep application data'
 end
 
-for cmd in permissions reset-permissions info run remove uninstall
+for cmd in permissions reset-permissions info run remove uninstall manage unmanage
     complete -c wsflatpak \
         -n "__wsflatpak_using_command $cmd" \
         -a '(__wsflatpak_user_apps)'
 end
+complete -c wsflatpak -n "__wsflatpak_using_command install" -l unmanaged -d "Do not add to flatpak/apps.txt"
 complete -c wsflatpak -n "__wsflatpak_using_command run" -l direct -d "Use flatpak run directly"
 
 

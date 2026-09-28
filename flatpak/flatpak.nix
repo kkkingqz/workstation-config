@@ -1,12 +1,13 @@
-# Flatpak declarations: user remotes, managed apps, per-app overrides and
-# desktop overrides. wsflatpak stays the owner of apply/check and reads what is
-# built here from ~/.local/share/workstation/flatpak (one link to the store):
+# Flatpak declarations: user remotes, managed apps (apps.txt), per-app
+# overrides and desktop overrides. wsflatpak stays the owner of apply/check
+# and reads what is built here from ~/.local/share/workstation/flatpak (one link to the store):
 #
 #   remotes.conf      NAME URL
 #   apps.conf         REMOTE APP
 #   overrides/APP.conf, desktop/APP.desktop
 #
-# Change: edit this file, `ws switch`, `wsflatpak apply` (or `ws apply`).
+# Change: edit this file or apps.txt, `ws switch`, `wsflatpak apply` (or
+# `ws apply`).
 # apply resets the overrides of every managed app before setting the declared
 # ones, so a key removed here disappears too. Desktop overrides are linked
 # into ~/.local/share/applications by home-manager.
@@ -17,20 +18,16 @@ let
     flatpark = "https://dl.flatpark.org/flatpark.flatpakrepo";
   };
 
-  # APP = REMOTE
-  apps = {
-    "com.github.tchx84.Flatseal" = "flathub";
-    "org.gimp.GIMP" = "flathub";
-    "com.mikrotik.WinBox" = "flathub";
-    "com.anydesk.Anydesk" = "flathub";
-    "us.zoom.Zoom" = "flathub";
-    "com.obsproject.Studio" = "flathub";
-    "org.videolan.VLC" = "flathub";
-    "com.anthropic.ClaudeDesktop" = "flatpark";
-    "com.mattjakeman.ExtensionManager" = "flathub";
-    # Launcher: desktop/com.valvesoftware.Steam.desktop (AMD when present).
-    "com.valvesoftware.Steam" = "flathub";
-  };
+  # REMOTE APP lines of apps.txt, in order; wsflatpak edits that file.
+  apps = lib.concatMap (raw:
+    let
+      line = lib.head (lib.splitString "#" raw);
+      m = builtins.match "[[:space:]]*([^[:space:]]+)[[:space:]]+([^[:space:]]+)[[:space:]]*" line;
+    in
+    if builtins.match "[[:space:]]*" line != null then [ ]
+    else if m == null then throw "flatpak/apps.txt: invalid line: ${raw}"
+    else [ { remote = lib.elemAt m 0; app = lib.elemAt m 1; } ]
+  ) (lib.splitString "\n" (builtins.readFile ./apps.txt));
 
   # Supported: Context.filesystems (list), Environment, "Session Bus Policy"
   # (talk only) — the keys `wsflatpak apply` sets with `flatpak override`.
@@ -67,7 +64,7 @@ let
   flatpakConfig = pkgs.runCommandLocal "workstation-flatpak-config" { } (''
     mkdir -p $out/overrides $out/desktop
     cp ${pkgs.writeText "remotes.conf" (lines (n: u: "${n} ${u}\n") remotes)} $out/remotes.conf
-    cp ${pkgs.writeText "apps.conf" (lines (a: r: "${r} ${a}\n") apps)} $out/apps.conf
+    cp ${pkgs.writeText "apps.conf" (lib.concatMapStrings (x: "${x.remote} ${x.app}\n") apps)} $out/apps.conf
   '' + lines (app: o: ''
     cp ${pkgs.writeText "${app}.conf" (toIni o)} $out/overrides/${app}.conf
   '') overrides + lib.concatMapStrings (f: ''
@@ -75,9 +72,9 @@ let
   '') desktop);
 in
 {
-  assertions = lib.mapAttrsToList (app: remote: {
-    assertion = remotes ? ${remote};
-    message = "flatpak.nix: ${app} uses undeclared remote ${remote}";
+  assertions = map (x: {
+    assertion = remotes ? ${x.remote};
+    message = "flatpak/apps.txt: ${x.app} uses undeclared remote ${x.remote}";
   }) apps;
 
   xdg.dataFile = {

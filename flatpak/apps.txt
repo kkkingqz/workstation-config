@@ -1,0 +1,16 @@
+# Managed Flatpak apps: REMOTE APP, one per line. Remotes are declared in
+# flatpak.nix. `wsflatpak install` appends here (unless --unmanaged),
+# `wsflatpak manage|unmanage` add or drop a line; then `ws switch`.
+flathub com.github.tchx84.Flatseal
+flathub org.gimp.GIMP
+flathub com.mikrotik.WinBox
+flathub com.anydesk.Anydesk
+flathub us.zoom.Zoom
+flathub com.obsproject.Studio
+flathub org.videolan.VLC
+flatpark com.anthropic.ClaudeDesktop
+flathub com.mattjakeman.ExtensionManager
+# Launcher: desktop/com.valvesoftware.Steam.desktop (AMD when present).
+flathub com.valvesoftware.Steam
+flathub com.jgraph.drawio.desktop
+flathub org.qbittorrent.qBittorrent

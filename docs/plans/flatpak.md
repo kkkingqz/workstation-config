@@ -16,7 +16,13 @@ volume: User Commands
 работают как раньше, но читают этот каталог. Команды, которые раньше писали
 в `flatpak/` (`manage`, `unmanage`, `remote-add`, `host`, `unhost`,
 `filesystem`, `unfilesystem`, `env`, `unenv`, `talk`, `untalk`), теперь только
-печатают строку для `flatpak.nix`. Изменение:
+печатают строку для `flatpak.nix`.
+
+**2026-09-28: список приложений — `flatpak/apps.txt`** (`REMOTE APP` по
+строке), его читает `flatpak.nix`. `wsflatpak install` снова сам добавляет
+приложение (в этот файл; `--unmanaged` — не добавлять), `manage APP [REMOTE]`
+и `unmanage APP` добавляют и убирают строку; дальше `ws switch`. Изменение
+остального:
 
 ```console
 $EDITOR ~/wsconfig/flatpak/flatpak.nix
@@ -89,7 +95,8 @@ Source of truth:
 
 ```text
 bin/wsflatpak
-flatpak/flatpak.nix                  remotes, apps, overrides
+flatpak/flatpak.nix                  remotes, overrides
+flatpak/apps.txt                     managed apps
 flatpak/desktop/                   полные .desktop-файлы
 ~/.local/share/workstation/flatpak/            сборка из Nix, читает wsflatpak
 terminal/fish/completions/wsflatpak.fish
@@ -103,7 +110,8 @@ list / search / info / run
 update / cleanup
 permissions / reset-permissions
 status / check / test / apply
-manage, host, env, talk, …   подсказка для flatpak.nix
+manage / unmanage            строка в flatpak/apps.txt
+host, env, talk, …           подсказка для flatpak.nix
 ```
 
 Fish completion поддерживает подкоманды, options и установленные App ID.
@@ -118,9 +126,12 @@ Fish completion поддерживает подкоманды, options и уст
 wsflatpak install APP
 ```
 
-ставит приложение и печатает строку для `apps` в `flatpak/flatpak.nix`
-(с 2026-09-27; раньше добавляло его в managed state само). Пока строки нет,
-`wsflatpak check` показывает WARN unmanaged user app.
+ставит приложение и добавляет строку `REMOTE APP` в `flatpak/apps.txt`;
+приложение managed после `ws switch` (до него `wsflatpak check` показывает
+WARN: файл отличается от сборки). Не добавлять — `--unmanaged`; такое
+приложение `wsflatpak check` показывает как WARN unmanaged user app.
+Уже установленное — `wsflatpak manage APP`. 2026-09-27 — 2026-09-28
+`install` только печатал строку для `flatpak.nix`.
 
 Установка из конкретного managed remote:
 
@@ -159,8 +170,9 @@ Managed application нельзя удалить случайно:
 wsflatpak remove APP
 ```
 
-Для удаления managed application его сначала убирают из `apps` (и
-`overrides`) в `flatpak/flatpak.nix`, `ws switch`, затем:
+Для удаления managed application его сначала убирают из списка
+(`wsflatpak unmanage APP`; `overrides` в `flatpak/flatpak.nix` — вручную),
+`ws switch`, затем:
 
 ```console
 wsflatpak remove APP

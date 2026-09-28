@@ -8,8 +8,15 @@ import subprocess
 import sys
 
 # Declarations live in flatpak/flatpak.nix; home-manager builds them into
-# ~/.local/share/workstation/flatpak. wsflatpak only reads that directory.
+# ~/.local/share/workstation/flatpak, which wsflatpak reads. The managed app
+# list is flatpak/apps.txt in the checkout: install, manage and unmanage edit
+# it, `ws switch` builds it.
 SOURCE = "flatpak/flatpak.nix"
+REPO = Path(
+    os.environ.get("WSCONFIG")
+    or Path(os.path.realpath(__file__)).parent.parent
+)
+APPS_LIST = REPO / "flatpak/apps.txt"
 CFG = Path(
     os.environ.get(
         "WSFLATPAK_CONFIG",
@@ -97,6 +104,47 @@ def managed_entries():
 
 def managed_apps():
     return [app for remote, app in managed_entries()]
+
+
+def listed_apps():
+    out = {}
+    for raw in APPS_LIST.read_text().splitlines():
+        entry = parse_managed_line(raw)
+        if entry:
+            out[entry[1]] = entry[0]
+    return out
+
+
+def list_add(app, remote):
+    if app in listed_apps():
+        print(f"Already in {APPS_LIST}: {app}")
+        return
+
+    text = APPS_LIST.read_text()
+    if text and not text.endswith("\n"):
+        text += "\n"
+    APPS_LIST.write_text(text + f"{remote} {app}\n")
+    print(f"Added to {APPS_LIST}: {remote} {app}\nthen: ws switch")
+
+
+def list_remove(app):
+    lines = APPS_LIST.read_text().splitlines(keepends=True)
+    keep = [
+        x for x in lines
+        if (parse_managed_line(x) or (None, None))[1] != app
+    ]
+
+    if len(keep) == len(lines):
+        raise SystemExit(f"wsflatpak: {app} is not in {APPS_LIST}")
+
+    APPS_LIST.write_text("".join(keep))
+    print(f"Removed from {APPS_LIST}: {app}\nthen: ws switch")
+
+    desktop = DESKTOP_OVERRIDES / f"{app}.desktop"
+    if override_file(app).exists() or desktop.exists():
+        print(
+            f"NOTE: {app} still has overrides or a desktop file in {SOURCE}"
+        )
 
 
 def managed_remote(app):
@@ -405,12 +453,11 @@ def cmd_install(ns):
 
     if is_managed(app):
         apply_override(app)
+    elif ns.unmanaged:
+        print(f"\nNot managed (--unmanaged): {app}")
     else:
-        print(
-            f"\nNot managed yet. To manage {app}, add to apps in {SOURCE}:"
-            f'\n\n    "{app}" = "{ns.remote}";\n\n'
-            "then: ws switch && wsflatpak apply"
-        )
+        print()
+        list_add(app, ns.remote)
 
 def cmd_remove(ns):
     need_flatpak()
@@ -418,8 +465,8 @@ def cmd_remove(ns):
 
     if is_managed(app):
         raise SystemExit(
-            f"wsflatpak: {app} is managed; remove it from apps "
-            f"(and overrides) in {SOURCE}, `ws switch`, then remove again"
+            f"wsflatpak: {app} is managed; `wsflatpak unmanage {app}`, "
+            "`ws switch`, then remove again"
         )
 
     cmd = ["flatpak", "uninstall", "--user"]
@@ -706,6 +753,14 @@ def cmd_check():
                 f"expected={remote} actual={origin or '(unknown)'}"
             )
 
+    if APPS_LIST.is_file():
+        listed = sorted(f"{r} {a}" for a, r in listed_apps().items())
+        built = sorted(f"{r} {a}" for r, a in managed_entries())
+        if listed == built:
+            passed(f"{APPS_LIST.name} built")
+        else:
+            warn(f"{APPS_LIST} differs from the build; run ws switch")
+
     for app in user_apps():
         if not is_managed(app):
             warn(f"unmanaged user app: {app}")
@@ -940,8 +995,6 @@ def cmd_apply():
     return cmd_check()
 
 DECLARE = {
-    "manage": ("Add to apps", '"{0}" = "{1}";'),
-    "unmanage": ("Remove from apps", '"{0}" = ...;'),
     "remote-add": ("Add to remotes", '{0} = "{1}";'),
     "host": ("Add to overrides", '"{0}".Context.filesystems = [ "host" ];'),
     "unhost": ("Remove from overrides", '"{0}".Context.filesystems "host"'),
@@ -974,9 +1027,6 @@ def cmd_declare(cmd, args):
         need_flatpak()
         args[0] = resolve_user_app(args[0])
 
-        if cmd == "manage":
-            args[1] = installed_origin(args[0]) or "flathub"
-
     declare_hint(action, snippet.format(*args))
 
 
@@ -990,8 +1040,20 @@ def build_parser():
         default="flathub",
         help="Flatpak remote to install from (default: flathub)",
     )
+    q.add_argument(
+        "--unmanaged",
+        action="store_true",
+        help=f"do not add the app to {APPS_LIST.name}",
+    )
     q.add_argument("app")
     q.add_argument("extra", nargs=argparse.REMAINDER)
+
+    q = sp.add_parser("manage")
+    q.add_argument("app")
+    q.add_argument("remote", nargs="?")
+
+    q = sp.add_parser("unmanage")
+    q.add_argument("app")
 
     q = sp.add_parser("remove", aliases=["uninstall"])
     q.add_argument("--keep-data", action="store_true")
@@ -1040,6 +1102,12 @@ def main():
 
     if ns.cmd == "install":
         cmd_install(ns)
+    elif ns.cmd == "manage":
+        need_flatpak()
+        app = resolve_user_app(ns.app)
+        list_add(app, ns.remote or installed_origin(app) or "flathub")
+    elif ns.cmd == "unmanage":
+        list_remove(ns.app)
     elif ns.cmd in DECLARE:
         cmd_declare(ns.cmd, ns.args)
     elif ns.cmd in ("remove", "uninstall"):
