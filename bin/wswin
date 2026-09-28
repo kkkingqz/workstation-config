@@ -116,7 +116,8 @@ prefix_path() {
 }
 
 # Run a command in BOX with WINEPREFIX. For proton, GAMEID tells umu which
-# protonfixes apply (none for umu-default). With a custom HOME distrobox
+# protonfixes apply (none for umu-default). LC_CTYPE (apps.ini lc_ctype)
+# is the codepage of non-Unicode programs, LC_MESSAGES the UI language. With a custom HOME distrobox
 # starts in /run/host/$PWD, which the Steam Runtime (pressure-vessel)
 # refuses: start in WSWIN_CWD (a host path that exists in the container) or
 # the container HOME.
@@ -128,6 +129,8 @@ in_box() {
         WINEPREFIX="$prefix" \
         GAMEID="${GAMEID:-umu-default}" \
         WINEDEBUG="${WINEDEBUG:--all}" \
+        LC_CTYPE="$(ini_value "$apps_ini" wswin lc_ctype)" \
+        LC_MESSAGES="$(ini_value "$apps_ini" wswin lc_messages)" \
         WSWIN_CWD="${WSWIN_CWD:-}" \
         bash -c 'cd "${WSWIN_CWD:-$HOME}" && exec "$@"' _ "$@"
 }

@@ -1,0 +1,13 @@
+#!/bin/sh
+# distrobox init hook of Ubuntu Windows boxes (root, every start): generate
+# the locales given (ru_RU.UTF-8: wswin runs Windows programs with it as
+# LC_CTYPE, the codepage of non-Unicode programs).
+set -eu
+missing=""
+for l in "$@"; do
+    norm="$(printf '%s' "$l" | sed 's/UTF-8$/utf8/')"
+    locale -a 2>/dev/null | grep -qx "$norm" || missing="$missing $l"
+done
+[ -z "$missing" ] && exit 0
+command -v locale-gen >/dev/null || DEBIAN_FRONTEND=noninteractive apt-get install -y locales
+locale-gen $missing

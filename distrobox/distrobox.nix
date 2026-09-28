@@ -97,7 +97,11 @@ let
       name = "wine";
       image = hostUbuntu;
       packages = [ "ca-certificates" "icoutils" "mesa-vulkan-drivers" ];
-      initHooks = [ "${wsconfig}/distrobox/wine/winehq-install-hook" ];
+      initHooks = [
+        "${wsconfig}/distrobox/wine/winehq-install-hook"
+        # The Arch boxes have every locale (glibc-locales).
+        "${wsconfig}/distrobox/wine/locale-hook ru_RU.UTF-8"
+      ];
       # WineHQ has no Mono/Gecko packages: wineboot would ask to download
       # them; winetricks adds them to a prefix that needs them.
       windows = { profile = "wine"; driver = "x11"; dpi = 192; initOverrides = "mscoree,mshtml="; };

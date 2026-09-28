@@ -20,6 +20,14 @@
 let
   defaultBox = "wine-wayland";
 
+  # LC_CTYPE of every Windows program (wswin): the codepage for non-Unicode
+  # programs, as "Language for non-Unicode programs" in Windows. With the
+  # session's C.UTF-8 Wine takes cp1252 and loses Cyrillic (the title of the
+  # GOG installer). Wine then also takes the UI language from it unless
+  # LC_MESSAGES is set: uiLocale keeps it English, as the host session.
+  ansiLocale = "ru_RU.UTF-8";
+  uiLocale = "en_US.UTF-8";
+
   apps = {
     winbox = {
       title = "WinBox 3";
@@ -53,7 +61,7 @@ let
 
   full = lib.mapAttrs withDefaults apps;
 
-  appsIni = "[wswin]\ndefault_box=${defaultBox}\n"
+  appsIni = "[wswin]\ndefault_box=${defaultBox}\nlc_ctype=${ansiLocale}\nlc_messages=${uiLocale}\n"
     + lib.concatStrings (lib.mapAttrsToList (name: a: ''
 
       [${name}]

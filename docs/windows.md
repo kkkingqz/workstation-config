@@ -50,6 +50,16 @@ Proton и Steam Runtime umu скачивает при первом запуск�
 `wine-wayland`: `LogPixels=144` (150%, масштаб экрана 1.5) — Wayland-драйвер
 сам не масштабирует окна (проверено на Notepad++ 2026-09-28).
 
+## Кодировка
+
+Windows-программы запускаются с `LC_CTYPE=ru_RU.UTF-8` (`ansiLocale` в
+`windows/apps.nix`) — как «Язык программ, не поддерживающих Юникод» в
+Windows: кодировка `cp1251` для не-Unicode программ. С `C.UTF-8` сессии Wine
+брал `cp1252`, и кириллица пропадала (заголовок установщика GOG). Без
+`LC_MESSAGES` Wine взял бы из `LC_CTYPE` и язык интерфейса; `uiLocale`
+(`LC_MESSAGES=en_US.UTF-8`) оставляет его английским, как в сессии host. Локаль есть в Arch-контейнерах
+(glibc-locales), в `wine` её создаёт `distrobox/wine/locale-hook`.
+
 ## wswin
 
 ```console
