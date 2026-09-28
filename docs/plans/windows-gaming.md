@@ -9,7 +9,9 @@ volume: User Commands
 ## Статус
 
 План пересмотрен 2026-09-28. Выполнено 2026-09-28: этапы 0–4, 6 (Steam
-запускается), 5 — umu и Steam Runtime работают внутри `proton`, игра не проверялась.
+запускается), 5 — umu и Steam Runtime работают внутри `proton`; IXION (GOG) проверен:
+AMD (RADV NAVI14) в «Ubuntu (AMD)», Intel UHD 630 в «Ubuntu»; игра из Steam —
+на AMD.
 WinBox из `wine` проверен пользователем; `winbox3` и export удалены из
 `arch`, старый prefix `~/distrobox/arch/.winbox` ещё на месте. Steam
 запустился (первый старт долгий: докачка клиента).
