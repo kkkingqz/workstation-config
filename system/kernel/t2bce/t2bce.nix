@@ -1,10 +1,10 @@
-# Patched t2bce modules (docs/suspend.md): for every kernel release the
+# Patched t2bce modules (helpws suspend): for every kernel release the
 # linux-t2-patches commit whose 1001-Add-t2bce-driver-stack.patch produced
 # its in-tree t2bce. `ws-suspend t2bce-build` fetches that patch, applies
 # nostate-fix.patch and builds the modules for the kernel.
 #
 # New kernel: add its release and commit here, `ws switch`, then
-# `ws-suspend t2bce-build KERNEL` (docs/suspend.md).
+# `ws-suspend t2bce-build KERNEL` (helpws suspend).
 #
 # Built into ~/.local/share/workstation/t2bce/sources (KERNEL COMMIT per
 # line), read by ws-suspend and ws-workstation-verify.

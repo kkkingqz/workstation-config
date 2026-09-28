@@ -1,4 +1,4 @@
-title: ws-plan-flatpak
+title: ws-history-flatpak
 section: 1
 date: 2026-09-26
 source: Workstation
@@ -7,6 +7,8 @@ volume: User Commands
 **Status:** DONE — Flatpak application layer finalized, extended for managed multi-remote support, and verified 2026-09-26.
 
 # PLAN — FLATPAK DESKTOP APPS
+
+> История: как слой строился и почему так. Действующее описание — `helpws flatpak`; пути и команды ниже могли с тех пор измениться.
 
 **2026-09-27: декларации перенесены в Nix.** Remotes, managed apps, overrides
 и desktop overrides объявляются в `flatpak/flatpak.nix`. home-manager

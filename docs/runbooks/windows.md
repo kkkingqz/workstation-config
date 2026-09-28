@@ -6,7 +6,7 @@ volume: User Commands
 
 # WINDOWS PROGRAMS — WINE / PROTON / STEAM
 
-План и решения: `helpws plan-windows`.
+Как слой строился и почему так: `helpws history-windows`.
 
 ## Контейнеры
 
@@ -154,8 +154,7 @@ render node с драйвером `amdgpu` при каждом запуске и
 ## WinBox
 
 `wine-wayland`, свой prefix `winbox`, `drive_c/Program Files/WinBox/winbox.exe`,
-`LogPixels=144`, без Mono (`WINEDLLOVERRIDES=mscoree=`). До 2026-09-28 был в
-`wine` (XWayland, `LogPixels=192`).
+`LogPixels=144`, без Mono (`WINEDLLOVERRIDES=mscoree=`).
 
 ## Удаление
 

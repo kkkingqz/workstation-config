@@ -50,7 +50,7 @@ let
   pacmanHook = pkgs: "${wsconfig}/distrobox/arch/pacman-install-hook ${lib.concatStringsSep " " pkgs}";
   multilibHook = "${wsconfig}/distrobox/arch/multilib-hook";
 
-  # Windows boxes (wswin, docs/plans/windows-gaming.md):
+  # Windows boxes (wswin, helpws history-windows):
   #   profile  wine: wine/winetricks; proton: umu-run
   #   driver   Wine graphics driver written into every new prefix
   #   dpi      LogPixels of a new prefix (192 = 200%)
@@ -72,7 +72,7 @@ let
       name = "arch";
       # Arch is rolling: pacman -Syu inside (wsbox update). Recreate only
       # when needed; AUR packages are installed again by hand
-      # (docs/rebuild.md).
+      # (helpws rebuild).
       image = "docker.io/library/archlinux:latest";
       # base-devel: makepkg for the hook and for AUR (paru).
       packages = [ "base-devel" "git" ];

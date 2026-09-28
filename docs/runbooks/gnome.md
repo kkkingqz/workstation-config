@@ -4,7 +4,7 @@ date: 2026-09-25
 source: Workstation
 volume: User Commands
 
-# GNOME DESKTOP — CURRENT MANAGED BASELINE
+# GNOME DESKTOP
 
 Этот документ описывает управляемую часть GNOME layer workstation.
 
@@ -32,22 +32,11 @@ appearance profile его не задаёт и не меняет.
 
 Стандартную кнопку `Show Applications` и меню приложений пока не заменяем.
 
-## Application layers вне текущего этапа
+## Приложения
 
-Интеграцию приложений специально разводим по соответствующим планам:
-
-```text
-Flatpak theme / scale / portals
-    -> plan-flatpak
-
-Distrobox GUI / Wayland / Qt
-    -> plan-dev
-
-Wine
-    -> plan-windows
-    -> Wine устанавливается в отдельный Distrobox
-    -> Wine на host не устанавливается
-```
+Тема, масштаб и порталы приложений — у их слоёв: Flatpak (`helpws flatpak`),
+Distrobox (`helpws distrobox`), Wine (`helpws windows`; Wine только в
+контейнерах, на host не ставится).
 
 # Управляемый appearance profile
 
@@ -227,7 +216,7 @@ extensions.gnome.org, обновляет Extension Manager.
 Неизвестные дополнительные extensions автоматически не отключаются; verifier
 только выдаёт WARN.
 
-# Dock spring-loaded drag-and-drop — VERIFIED
+# Dock spring-loaded drag-and-drop
 
 Local extension:
 
@@ -254,17 +243,7 @@ drop handling           extension does not consume the drop
 Desktop Icons NG и `ubuntu-dock@ubuntu.com` этим extension не патчатся и не
 заменяются.
 
-# GNOME PLAN STATUS — DONE
-
-GNOME host layer finalized 2026-09-23.
-
-Final state includes the managed Yaru/Dock profile, Retina scale checkpoint,
-host Qt5/Qt6 integration, required extension policy, portals/PipeWire and the
-verified `workstation-dock-spring@local` behavior.
-
-The complete automatic and manual GNOME smoke-test passed.
-
-# Final host smoke-test — VERIFIED
+# Smoke-test
 
 ```console
 ws-gnome test
@@ -283,36 +262,7 @@ ws-gnome-test
 нельзя достоверно проверить без действий пользователя.
 
 
-# Current inventory checkpoint
-
-На рабочей системе 2026-09-23 подтверждено:
-
-```text
-GNOME Shell            50.1
-Mutter                  50.1-0ubuntu2.4
-session                 Wayland
-internal display        3072x1920@60
-logical scale           1.5
-color scheme            prefer-dark
-accent                  orange
-GTK / icons             Yaru-dark
-Ubuntu Dock             BOTTOM
-portals                  active
-PipeWire / WirePlumber  active
-host Wine               absent
-```
-
-Mutter experimental features сейчас содержат:
-
-```text
-scale-monitor-framebuffer
-xwayland-native-scaling
-```
-
-Они только инвентаризируются и не являются частью `settings.conf`.
-
-
-# Host Qt5/Qt6 — CURRENT BASELINE
+# Host Qt5/Qt6
 
 Для host Qt applications используется минимальная GNOME integration layer:
 
@@ -323,14 +273,7 @@ qtwayland5
 qt6-wayland
 ```
 
-Тестирование выполнено на временных приложениях:
-
-```text
-JuffEd      Qt5
-FeatherPad  Qt6
-```
-
-Подтверждено:
+Проверено на временных JuffEd (Qt5) и FeatherPad (Qt6):
 
 ```text
 Qt5 normal launch  -> libqwayland-generic.so
@@ -351,21 +294,15 @@ QT_SCALE_FACTOR
 Это важно: обычное Qt приложение получает native Wayland и GNOME appearance
 без workstation-specific environment hacks.
 
-Тестовые `juffed` и `featherpad` не являются частью workstation baseline и
-после проверки удаляются. `apt autoremove` на этом этапе специально не
-выполняется.
-
-Distrobox Qt integration не наследуется из этого раздела автоматически и будет
-проверяться отдельно в `plan-dev`.
+Пакеты — `nix/hosts/apt.txt` (`ws check apt`), отсутствие overrides —
+`ws check home`. Qt в контейнерах этим не настраивается.
 
 ---
 
 
-# Colors — FROZEN
+# Colors
 
-Цветовой эксперимент завершён без изменения baseline.
-
-Остаётся штатный Ubuntu/GNOME visual profile:
+Штатный Ubuntu/GNOME visual profile:
 
 ```text
 color scheme   prefer-dark
@@ -378,7 +315,4 @@ cursor         Yaru
 Не используем custom GTK/libadwaita palette, custom GNOME Shell CSS или
 стороннюю GTK theme как workstation baseline. Это сохраняет максимально
 штатное поведение GNOME и снижает риск несовместимости после обновлений.
-
-Flatpak, Distrobox/Qt и Wine visual integration по-прежнему проверяются позже
-в соответствующих application plans.
 

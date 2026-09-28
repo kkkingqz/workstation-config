@@ -1,10 +1,12 @@
-title: ws-plan-nix
+title: ws-history-nix
 section: 1
 date: 2026-09-26
 source: Workstation
 volume: User Commands
 
 # PLAN — NIX + HOME-MANAGER (UBUNTU ОСТАЁТСЯ)
+
+> История: как слой строился и почему так. Действующее описание — `helpws rebuild` (и `helpws workstation`, `helpws checks`); пути и команды ниже могли с тех пор измениться.
 
 **Версия 3, 2026-09-26.** Сверена с репозиторием на `0b50385` (managed
 Flatpak, Distrobox, suspend/T2 layer) и с живой системой. Главное отличие от
@@ -172,7 +174,7 @@ Recovery в нынешнем виде, скорее всего, не подни�
 - в `/etc/default/grub.d/` лежит `90-pcie-aspm.cfg` (2026-09-18): он
   добавляет `pcie_aspm=force pcie_aspm.policy=powersave` ко всем пунктам
   GRUB, то есть к ядрам, которые грузятся через recovery. С этими
-  параметрами T2 отказывала в stateful suspend (`docs/suspend.md`), из
+  параметрами T2 отказывала в stateful suspend (`docs/runbooks/suspend.md`), из
   rEFInd они убраны 2026-09-25, а здесь остались.
 
 Меню GRUB уже видно: `99-recovery-menu.cfg` в том же каталоге ставит
@@ -370,7 +372,7 @@ bin/, config/, system/, kernel/, gnome/, docs/, man/, state/   — как сей
    sudo apt-mark hold linux-t2
    ```
 
-   В том же коммите поправить `docs/suspend.md`, раздел «Обновление ядра»:
+   В том же коммите поправить `docs/runbooks/suspend.md`, раздел «Обновление ядра»:
    обновление — это снять hold, собрать модули, вернуть hold.
    `ws-suspend status` уже показывает `held`.
 
@@ -382,7 +384,7 @@ bin/, config/, system/, kernel/, gnome/, docs/, man/, state/   — как сей
 
 3. **GRUB: только drop-in'ы.** Меню уже включено `99-recovery-menu.cfg`.
    - удалить `/etc/default/grub.d/90-pcie-aspm.cfg`: forced ASPM не
-     используется (`docs/suspend.md`), recovery-ядра должны грузиться с теми
+     используется (`docs/runbooks/suspend.md`), recovery-ядра должны грузиться с теми
      же параметрами, что и обычные;
    - свои параметры ядра вынести из `/etc/default/grub` в
      `/etc/default/grub.d/10-workstation-cmdline.cfg`

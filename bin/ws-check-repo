@@ -169,7 +169,7 @@ done < <(git -C "$repo" ls-files -z)
 
 if git -C "$repo" grep -nEI -- \
     '-----BEGIN (RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----|AKIA[0-9A-Z]{16}|github_pat_[A-Za-z0-9_]{20,}|gh[pousr]_[A-Za-z0-9]{20,}' \
-    -- . ':(exclude)docs/*.md' >/tmp/ws-verify-secret.$$ 2>/dev/null; then
+    -- . ':(exclude)docs/**/*.md' >/tmp/ws-verify-secret.$$ 2>/dev/null; then
     warn "possible secret/private-key marker in tracked files (inspect manually):"
     sed 's/^/        /' /tmp/ws-verify-secret.$$
 else
@@ -306,7 +306,7 @@ section "4. Legacy artifacts that should be gone"
 for old in "$HOME/.config/workstation" "$HOME/.cache/ws-suspend" \
     "$HOME/.local/share/distrobox-homes"; do
     if [[ -e "$old" || -L "$old" ]]; then
-        warn "obsolete directory: $(q "$old") (docs/workstation.md: ~/.local/share/workstation, ~/distrobox)"
+        warn "obsolete directory: $(q "$old") (helpws workstation: ~/.local/share/workstation, ~/distrobox)"
     else
         pass "obsolete directory absent: $old"
     fi

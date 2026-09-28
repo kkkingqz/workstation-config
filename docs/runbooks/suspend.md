@@ -4,7 +4,7 @@ date: 2026-09-28
 source: Workstation
 volume: User Commands
 
-# UBUNTU T2 SUSPEND — CURRENT BASELINE
+# UBUNTU T2 SUSPEND
 
 ## Текущее состояние
 
@@ -50,9 +50,8 @@ ws-suspend t2bce-rollback [KERNEL]
 ```
 
 По умолчанию systemd после неудачного S3 пробует `freeze` (s2idle). На T2
-s2idle виснет. 2026-09-25 12:00 так и было: brcmfmac не ушёл в D3, S3
-прервался, systemd сразу перешёл в s2idle, система зависла. С этим файлом
-неудачный suspend просто возвращает в рабочую сессию.
+s2idle виснет. С этим файлом неудачный suspend просто возвращает в рабочую
+сессию.
 
 ## Broadcom BCM4364
 
@@ -95,14 +94,12 @@ amdgpu 0000:03:00.0: PM: failed to suspend noirq: error -22
 ```
 
 Откат прерванного S3 роняет оба xHCI-контроллера Thunderbolt (`HC died`), и
-через несколько минут система погибает без единой строки в логе:
-2026-09-27 22:31 (крышка закрыта, logind повторил suspend) и
-2026-09-28 08:51 (крышка открыта, повтора не было).
+через несколько минут система погибает без единой строки в логе.
 
 Включать карту на время сна нельзя. Она стоит за PCIe-коммутатором внутри
 пакета Navi 14 (`01:00.0`, `02:00.0`), который теряет конфигурацию вместе с
 питанием: после `ON` карта недоступна (`Unable to change power state from
-D3cold to D0`), `PSP create ring failed` (проверено 2026-09-28). У автора
+D3cold to D0`), `PSP create ring failed`. У автора
 поддержки gmux для T2 на MacBookPro16,1 то же и после `pci rescan` (LKML,
 «apple-gmux: support MMIO gmux type on T2 Macs», 2023-02).
 
@@ -112,8 +109,8 @@ D3cold to D0`), `PSP create ring failed` (проверено 2026-09-28). У а�
 
 1. Сначала HDMI-аудио карты (`03:00.1`), пока карта включена. При `OFF`
    vga_switcheroo блокирует его ALSA-карту (`card->shutdown`), и удаление
-   после `OFF` навсегда виснет в `snd_card_free` (2026-09-28: `tee` в
-   состоянии D; спать после этого нельзя, перезагрузка виснет в конце).
+   после `OFF` навсегда виснет в `snd_card_free` (процесс в состоянии D;
+   спать после этого нельзя, перезагрузка виснет в конце).
 2. `OFF` и проверка: конфигурационное пространство карты и `01:00.0`
    читается как `ffff`.
 3. `echo 1 > /sys/bus/pci/devices/0000:01:00.0/remove`.
@@ -125,19 +122,15 @@ vga_switcheroo при `OFF` открытых клиентов не провер�
 (`1:DIS: :Off:0000:03:00.0` в `/sys/kernel/debug/vgaswitcheroo/switch`).
 Писать туда нельзя: `ON` включает питание gmux и даёт Oops в
 `amdgpu_switcheroo_set_state`, после чего блокировка vga_switcheroo занята
-навсегда (2026-09-28, старый hook сна писал туда `ON`).
+навсегда.
 
 ## ASPM
 
-`pcie_aspm=force pcie_aspm.policy=powersave` убраны из
-`/boot/refind_linux.conf` 2026-09-25. Все три отказа T2 (ниже) случились при
-forced ASPM и Touch Bar в режиме дисплея; без него отказов не было.
-`ws-suspend check` предупреждает, если параметры вернутся.
-
-Ядрам, которые грузятся через GRUB (recovery, предыдущие ядра), forced ASPM
-добавлял `/etc/default/grub.d/90-pcie-aspm.cfg`; он удалён 2026-09-26.
-Параметры ядра для GRUB теперь в `/etc/default/grub.d/10-workstation-cmdline.cfg`
-(`system/files/default/grub.d/`) и совпадают с `refind_linux.conf`.
+ASPM не форсируется: `pcie_aspm=force` и `pcie_aspm.policy=powersave` нет ни
+в `refind_linux.conf`, ни в GRUB (параметры обоих собираются из `facts.nix`).
+Все отказы T2 случились с forced ASPM и Touch Bar в режиме дисплея.
+`ws-suspend check` предупреждает, если параметры вернутся, `ws system check` —
+если вернётся `/etc/default/grub.d/90-pcie-aspm.cfg`.
 
 ## t2bce: отказ stateful suspend
 
@@ -152,8 +145,7 @@ t2bce_core: remote rejected stateful suspend payload
 получают ответа (`Possible desync`, `command queue timeout`,
 `SQ/CQ unregister failed`). После resume `CQ registration failed`, и IRQ-поток
 `bce_dma` падает с NULL dereference в `t2bce_dma_reserve_submission`.
-Система намертво зависает. Так закончились все три отказа
-(2026-09-22 19:25, 09-23 17:31, 09-24 14:11).
+Система намертво зависает (три таких случая: `helpws history-suspend`).
 
 Upstream:
 
@@ -204,7 +196,6 @@ systemctl suspend
 echo Y | sudo tee /sys/module/t2bce_core/parameters/stateful_sleep
 ```
 
-Проверено 2026-09-25: no-state цикл прошёл чисто.
 
 ## Обновление ядра
 

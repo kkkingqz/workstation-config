@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Entry point of the Nix layer (docs/plans/nix-migration.md). Runs as the
+# Entry point of the Nix layer (helpws history-nix). Runs as the
 # desktop user and calls sudo itself where needed: `sudo ws` would not find
 # Nix, secure_path does not contain the Nix profile.
 
@@ -18,6 +18,7 @@ Usage:
   ws system diff|check [--json]|apply|manifest|tree
   ws baseline capture|diff|list ...
   ws checkpoint create|list|show|diff|remove ...
+  ws collect [--no-firmware] [ARCHIVE]
   ws host
   ws news
 
@@ -76,6 +77,9 @@ system    build the host system file tree (system) and compare it
           ~/.local/state/workstation/system (applied: link and GC root,
           history: date, commit, tree, result)
 baseline  functional baseline, see ws-baseline --help
+collect   archive of the machine state a rebuild needs and the repository
+          does not hold (baseline, boot and disks, apt, Apple firmware,
+          ~/.local/state/workstation), see ws-collect --help; asks sudo
 checkpoint  which commit matched which working state (home-manager
           generation, system tree, kernel, baseline), see ws-checkpoint --help
 host      print the flake host name used for this machine
@@ -91,7 +95,7 @@ die() {
 
 nix_bin() {
     command -v nix 2>/dev/null \
-        || die "nix not found (apt: nix-bin nix-setup-systemd; docs/plans/nix-migration.md, phase 0)"
+        || die "nix not found (apt: nix-bin nix-setup-systemd; helpws history-nix, phase 0)"
 }
 
 # Flake host for this machine: WS_HOST, else by hostname.
@@ -225,7 +229,7 @@ update_apt() {
     sudo apt update || return
     sudo apt full-upgrade || return
     if apt-mark showhold | grep -qx linux-t2; then
-        echo "linux-t2 held: a new kernel needs new t2bce modules (docs/suspend.md)"
+        echo "linux-t2 held: a new kernel needs new t2bce modules (helpws suspend)"
     fi
 }
 
@@ -357,7 +361,7 @@ system_check_extra() {
         warn "/etc/default/grub differs from /usr/share/grub/default/grub; settings belong in grub.d (system/)"
     fi
     [[ -e /etc/default/grub.d/90-pcie-aspm.cfg ]] \
-        && warn "/etc/default/grub.d/90-pcie-aspm.cfg forces ASPM on GRUB/recovery kernels (docs/suspend.md)"
+        && warn "/etc/default/grub.d/90-pcie-aspm.cfg forces ASPM on GRUB/recovery kernels (helpws suspend)"
     # Recovery must not stop in emergency mode when a non-system disk is absent.
     mounts="$(awk '$0 !~ /^[[:space:]]*#/ && NF >= 4 && $2 ~ /^\/mnt\// && $4 !~ /(^|,)nofail(,|$)/ { print $2 }' /etc/fstab 2>/dev/null)"
     if [[ -z "$mounts" ]]; then
@@ -508,7 +512,7 @@ system_record() {
         "$tree" "$([[ "$rc" == 0 ]] && echo ok || echo problems)" >> "$dir/history"
 }
 
-# One owner of the system files (phase 4 of docs/plans/nix-migration.md):
+# One owner of the system files (phase 4 of helpws history-nix):
 # what ws-keyboard-system-apply and ws-suspend apply did, for the whole tree.
 # Only files that differ are backed up and replaced; the ESP is not touched,
 # nothing reboots.
@@ -672,7 +676,7 @@ PY
 
     if [[ "$touchbar" == true ]]; then
         if tiny_dfr_installed; then
-            echo "WARN    tiny-dfr is installed; it switches the Touch Bar to display mode (docs/touchbar.md)"
+            echo "WARN    tiny-dfr is installed; it switches the Touch Bar to display mode (helpws touchbar)"
         fi
         for dev in /sys/bus/usb/devices/*; do
             [[ "$(cat "$dev/idVendor" 2>/dev/null):$(cat "$dev/idProduct" 2>/dev/null)" == "05ac:8302" ]] || continue
@@ -690,7 +694,7 @@ PY
     echo
     echo "$changed file(s) changed."
     [[ "$refind" == true ]] && echo "refind_linux.conf changed: the kernel command line applies on the next boot."
-    [[ "$refind" == true ]] && echo "refind.conf on the ESP is not installed by apply; copy system/files/esp/refind.conf by hand (docs/workstation.md, GRAPHICS)."
+    [[ "$refind" == true ]] && echo "refind.conf on the ESP is not installed by apply; copy system/files/esp/refind.conf by hand (helpws workstation, GRAPHICS)."
     [[ "$d3cold" == true ]] && echo "The d3cold rule takes effect on the next boot."
     return "$rc"
 }
@@ -838,6 +842,7 @@ case "${1:-}" in
     system) shift; cmd_system "$@" ;;
     baseline) shift; exec "$repo/bin/ws-baseline" "$@" ;;
     checkpoint) shift; exec "$repo/bin/ws-checkpoint" "$@" ;;
+    collect) shift; exec "$repo/bin/ws-collect" "$@" ;;
     host) host ;;
     -h|--help|help) usage ;;
     "") usage; exit 1 ;;

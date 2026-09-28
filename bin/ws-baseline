@@ -3,7 +3,7 @@ set -euo pipefail
 
 # Functional baseline of the workstation: what every layer owner reports and
 # what is actually installed. Used as the regression gate of the Nix migration
-# (docs/plans/nix-migration.md, "Эталон функционала").
+# (helpws history-nix, "Эталон функционала").
 
 repo="${WSCONFIG:-$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)}"
 root="${XDG_STATE_HOME:-$HOME/.local/state}/workstation/baseline"
@@ -209,7 +209,7 @@ cmd_capture() {
         echo "== sudo"
         sudo dpkg --verify > "$dir/system/dpkg-verify.txt" 2>&1 || true
         # After @ is restored from recovery the default must be the new @
-        # (docs/plans/nix-migration.md, «Возврат @ из recovery»).
+        # (helpws history-nix, «Возврат @ из recovery»).
         sudo btrfs subvolume get-default / > "$dir/system/get-default.txt" 2>&1 || true
         sudo lsinitrd "/boot/initrd.img-$(uname -r)" 2>/dev/null \
             | awk '{ print $NF }' | grep -E 't2bce|appletb|modprobe\.d|modules-load' \

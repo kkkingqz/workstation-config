@@ -3,7 +3,7 @@
 # Installed by bootstrap.sh; `ws check apt` compares with apt-mark showmanual.
 # Host packages: nix/hosts/<name>/apt.txt.
 
-# Nix: delivers the user layer (docs/plans/nix-migration.md)
+# Nix: delivers the user layer (helpws history-nix)
 nix-bin
 nix-setup-systemd
 

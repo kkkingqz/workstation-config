@@ -37,7 +37,7 @@ let
     { uuid = "window-monitor-pro@muhammed.hussien2030.gmail.com"; source = "ego"; }
     # WM_CLASS bridge for xremap application filters (ws-xremap waits for it).
     { uuid = "xremap@k0kubun.com"; source = "ego"; }
-    # D-Bus window control for ws-window (docs/keyboard.md).
+    # D-Bus window control for ws-window (helpws keyboard).
     { uuid = "window-control@carlo9890.github.io"; source = "ego"; }
 
     { uuid = "workstation-smart-popup@local"; source = "local"; }

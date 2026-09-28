@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Suspend / T2 power layer: deep-only sleep, Broadcom Wi-Fi guards and the
-# patched t2bce modules (no-state fallback fix). See docs/suspend.md.
+# patched t2bce modules (no-state fallback fix). See helpws suspend.
 
 repo="${WSCONFIG:-$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)}"
 # Build results (sources, modules per kernel): generated, not edited.
@@ -69,7 +69,7 @@ cmd_status() {
     "$repo/bin/ws" system check 2>/dev/null | grep -E '^ *(WARN|FAIL) ' || echo "no problems"
 }
 
-# Since phase 4 of docs/plans/nix-migration.md one owner installs all system
+# Since phase 4 of helpws history-nix one owner installs all system
 # files, including the suspend layer: `ws system apply` (system).
 cmd_apply() {
     exec "$repo/bin/ws" system apply

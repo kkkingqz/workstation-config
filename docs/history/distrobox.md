@@ -1,10 +1,12 @@
-title: ws-plan-dev
+title: ws-history-distrobox
 section: 1
 date: 2026-09-26
 source: Workstation
 volume: User Commands
 
 # DISTROBOX / PODMAN — MANAGED APPLICATION & DEVELOPMENT LAYER
+
+> История: как слой строился и почему так. Действующее описание — `helpws distrobox`; пути и команды ниже могли с тех пор измениться.
 
 ## Статус
 

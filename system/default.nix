@@ -1,4 +1,4 @@
-# Host system file tree (phase 4 of docs/plans/nix-migration.md): the files
+# Host system file tree (phase 4 of helpws history-nix): the files
 # ws-keyboard-system-apply, ws-suspend apply and the manual steps install,
 # byte for byte. Nix only builds it; `ws system diff|check` compares it with
 # the live system.

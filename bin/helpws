@@ -7,30 +7,38 @@ repo="${WSCONFIG:-$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)}"
 micro_cfg="$HOME/.local/share/workstation/micro-help"
 topic="${1:-terminal}"
 
-open_md() {
-    MICRO_CONFIG_HOME="$micro_cfg" exec micro -readonly true "$1"
+# A topic names a page by its `title:`, not by a path: docs/ can be
+# rearranged without touching this list.
+open_title() {
+    doc="$(grep -rlx --include='*.md' "title: $1" "$repo/docs" | head -n 1)"
+    [ -n "$doc" ] || { echo "helpws: no document with title $1" >&2; exit 1; }
+    MICRO_CONFIG_HOME="$micro_cfg" exec micro -readonly true "$doc"
 }
 
 case "$topic" in
-    terminal|term) open_md "$repo/docs/terminal.md" ;;
-    ghostty|fish) open_md "$repo/docs/terminal.md" ;;
-    keyboard|keys) open_md "$repo/docs/keyboard.md" ;;
-    workstation|system|baseline) open_md "$repo/docs/workstation.md" ;;
-    touchbar|touch-bar) open_md "$repo/docs/touchbar.md" ;;
-    suspend|sleep|power) open_md "$repo/docs/suspend.md" ;;
-    gnome|desktop) open_md "$repo/docs/gnome.md" ;;
-    rebuild|reinstall|install) open_md "$repo/docs/rebuild.md" ;;
-    roadmap|plans) open_md "$repo/docs/roadmap.md" ;;
-    distrobox|box|boxes|wsbox) open_md "$repo/docs/plans/development.md" ;;
-    windows|wine|wswin|steam|proton) open_md "$repo/docs/windows.md" ;;
-    plan-t2) open_md "$repo/docs/plans/t2-optional.md" ;;
-    plan-gnome) open_md "$repo/docs/plans/gnome.md" ;;
-    plan-flatpak) open_md "$repo/docs/plans/flatpak.md" ;;
-    plan-dev) open_md "$repo/docs/plans/development.md" ;;
-    plan-windows) open_md "$repo/docs/plans/windows-gaming.md" ;;
-    plan-virt) open_md "$repo/docs/plans/virtualization-unreal.md" ;;
-    plan-final) open_md "$repo/docs/plans/finalization.md" ;;
-    plan-nix) open_md "$repo/docs/plans/nix-migration.md" ;;
+    readme) MICRO_CONFIG_HOME="$micro_cfg" exec micro -readonly true "$repo/README.md" ;;
+    layers|architecture) open_title ws-layers ;;
+    checks|check) open_title ws-checks ;;
+    workstation|system|baseline) open_title ws-workstation ;;
+    terminal|term|ghostty|fish) open_title ws-terminal ;;
+    keyboard|keys) open_title ws-keyboard ;;
+    touchbar|touch-bar) open_title ws-touchbar ;;
+    suspend|sleep|power) open_title ws-suspend ;;
+    gnome|desktop) open_title ws-gnome ;;
+    rebuild|reinstall|install) open_title ws-rebuild ;;
+    distrobox|box|boxes|wsbox) open_title ws-distrobox ;;
+    flatpak|wsflatpak) open_title ws-flatpak ;;
+    windows|wine|wswin|steam|proton) open_title ws-windows ;;
+    roadmap|plans) open_title ws-roadmap ;;
+    plan-t2) open_title ws-plan-t2 ;;
+    plan-virt) open_title ws-plan-virt ;;
+    plan-final) open_title ws-plan-final ;;
+    history-gnome|plan-gnome) open_title ws-history-gnome ;;
+    history-flatpak|plan-flatpak) open_title ws-history-flatpak ;;
+    history-distrobox|plan-dev) open_title ws-history-distrobox ;;
+    history-windows|plan-windows) open_title ws-history-windows ;;
+    history-nix|plan-nix) open_title ws-history-nix ;;
+    history-suspend|history-touchbar) open_title ws-history-suspend ;;
     man)
         page="${2:-ws-terminal}"
         tmp="$(mktemp "${TMPDIR:-/tmp}/helpws.XXXXXX")"
@@ -42,27 +50,32 @@ case "$topic" in
         cat <<'USAGE'
 Usage: helpws [topic]
 
-Core:
-  terminal         Ghostty + Fish handbook
+Architecture (docs/architecture):
+  readme           README: entry point
+  layers           Layers, owners, rules, where things live
+  checks           ws check: who checks what, --json format
+  workstation      Current workstation in detail, repository map
+
+Runbooks (docs/runbooks):
+  rebuild          Reinstall to the current state
   keyboard         macOS-style keyboard layer
-  workstation      Current workstation baseline
-  touchbar         Touch Bar implementation notes
+  gnome            GNOME desktop
+  terminal         Ghostty + Fish handbook
   suspend          Suspend / T2 power layer
-  gnome            GNOME desktop status / baseline work
-  rebuild          Reinstall to current baseline
-  roadmap          Remaining workstation roadmap
-  distrobox        Managed Distrobox / Podman layer
+  touchbar         Touch Bar
+  flatpak          Flatpak applications (wsflatpak)
+  distrobox        Managed Distrobox / Podman containers (wsbox)
   windows          Windows programs, Wine, Proton, Steam (wswin)
 
-Plans:
+Plans (docs/plans):
+  roadmap          What is left
   plan-t2          T2 optional / power / auth
-  plan-gnome       GNOME visual / input / portals
-  plan-flatpak     Flatpak desktop apps
-  plan-dev         Distrobox / Podman managed layer (completed)
-  plan-windows     Wine / Steam / Proton (completed)
   plan-virt        KVM / libvirt / Unreal Engine
   plan-final       Backup / inventory / finalization
-  plan-nix         Nix + home-manager migration
+
+History (docs/history; old plan-* names work too):
+  history-gnome    history-flatpak    history-distrobox
+  history-windows  history-nix        history-suspend (and Touch Bar)
 
 Other:
   man PAGE         Open generated man page in Micro

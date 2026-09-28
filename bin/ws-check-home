@@ -110,7 +110,7 @@ if [[ -d /nix/var/nix ]]; then
             && warn "/usr/bin/$tool exists too; Nix provides $tool (sudo apt remove the package)"
     done
 else
-    warn "Nix not installed yet (phase 0 of docs/plans/nix-migration.md)"
+    warn "Nix not installed yet (phase 0 of helpws history-nix)"
 fi
 
 section "3. Man pages"
@@ -121,7 +121,7 @@ if have nix; then
     man_built="$(nix eval --raw "$repo#packages.$(uname -m)-linux.man.outPath" 2>/dev/null || true)"
     man_missing=false
     man_stale=false
-    for doc in "$repo"/docs/*.md "$repo"/docs/plans/*.md; do
+    while IFS= read -r doc; do
         page="$(sed -n 's/^title:[[:space:]]*//p' "$doc" | head -n 1)"
         [[ -n "$page" ]] || continue
         link="$HOME/.local/share/man/man1/$page.1"
@@ -131,7 +131,7 @@ if have nix; then
         elif [[ -n "$man_built" && "$(readlink -f "$link")" != "$man_built/"* ]]; then
             man_stale=true
         fi
-    done
+    done < <(find "$repo/docs" -type f -name '*.md' | sort)
     [[ "$man_missing" == false ]] && pass "man pages installed for every docs title"
     if [[ -z "$man_built" ]]; then
         warn "cannot evaluate the man package of the flake"

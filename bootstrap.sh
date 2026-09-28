@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# First steps on a fresh Ubuntu (docs/rebuild.md, docs/plans/nix-migration.md):
+# First steps on a fresh Ubuntu (helpws rebuild, helpws history-nix):
 # @nix subvolume at /nix → apt packages (nix/hosts/apt.txt, nix/hosts/<host>/apt.txt)
 # → nix-users → fish as login shell → first `ws switch`.
 #

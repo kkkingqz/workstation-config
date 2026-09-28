@@ -29,7 +29,7 @@ volume: User Commands
   - CapsLock EN/RU и Fn+CapsLock -> UA;
   - GDM/login EN и GNOME lock screen EN;
   - Tiling Assistant, Tile Editing Mode, Always on Top и Smart Popup;
-- Nix + home-manager поверх Ubuntu (`helpws plan-nix`, тег `nix-v1`):
+- Nix + home-manager поверх Ubuntu (`helpws history-nix`, тег `nix-v1`):
   `bootstrap.sh` → `ws switch` → `ws system apply` → `ws apply`, проверка —
   `ws check`; задачи после миграции — там же, «После миграции»;
 - development/toolchains не должны расползаться по host;
@@ -37,50 +37,38 @@ volume: User Commands
 
 ## Что осталось
 
-Работы разбиты по независимым категориям:
-
 1. `helpws plan-t2`
    Touch ID, fan policy, battery audit, optional hibernate/suspend-then-hibernate.
 
-2. `helpws plan-gnome` — **DONE**
-   GNOME host layer завершён 2026-09-23: Retina scale, managed Yaru/Dock profile, host Qt5/Qt6 native Wayland integration, extension policy, portals/PipeWire, Dock Spring и полный smoke-test зафиксированы.
-
-3. `helpws plan-flatpak` — **DONE**
-   Flatpak application layer завершён 2026-09-24: user-only Flathub,
-   managed-by-default `wsflatpak`, tracked filesystem/environment/D-Bus
-   overrides, GTK/Qt6 integration, portals/PipeWire, associations,
-   install/remove lifecycle и maintenance проверены.
-
-4. `helpws plan-dev` — **DONE**
-   Managed Distrobox/Podman layer завершён 2026-09-26: rootless Podman,
-   declarative `containers.ini`/`exports.ini`, `wsbox`, custom HOME,
-   WinBox export, destructive recovery и host NTSync provider проверены.
-
-5. `helpws plan-windows` — **DONE**
-   Windows layer завершён 2026-09-28: контейнеры wine-wayland/wine/proton,
-   `wswin` (install, portable, пункты меню по ярлыкам, prefixes), Steam
-   flatpak; Proton и Steam на AMD, если она доступна, иначе на Intel.
-
-6. `helpws plan-virt`
+2. `helpws plan-virt`
    KVM/libvirt/virt-manager и user-managed Unreal Engine.
 
-7. `helpws plan-final`
-   Инвентаризация, backups, snapshots, restore checkpoints и финальный smoke-test.
+3. `helpws plan-final`
+   Инвентаризация, backups, snapshots, restore checkpoints и финальный
+   smoke-test. Уже есть: `ws collect` (состояние машины для rebuild),
+   `ws checkpoint` (коммит ↔ рабочее состояние), `ws baseline`.
 
-## Рекомендуемый порядок
+Отложено:
+
+- фикс t2bce через DKMS — только если сборка в podman станет неудобной;
+  `build-essential` на host противоречит правилу про toolchains.
+
+`01` можно выполнять отдельно: базовый suspend и Touch Bar уже работают,
+поэтому Touch ID/hibernate/fan tuning не блокируют остальное.
+
+## Завершённые слои
+
+Как строились — `docs/history/` (`helpws history-…`), как работают —
+`docs/runbooks/`:
 
 ```text
-06 KVM / Unreal
-        ↓
-05 Wine / Steam
-        ↓
-07 backup + final inventory
-
-01 T2 optional
+GNOME host layer        2026-09-23   history-gnome     gnome
+Flatpak                 2026-09-24   history-flatpak   flatpak
+Distrobox / Podman      2026-09-26   history-distrobox distrobox
+Windows / Wine / Steam  2026-09-28   history-windows   windows
+Nix + home-manager      2026-09-28   history-nix       rebuild, workstation
 ```
-
-`01` можно выполнять отдельно: базовый suspend и Touch Bar уже работают, поэтому Touch ID/hibernate/fan tuning не должны блокировать остальную workstation.
 
 ## Главное правило
 
-Каждая категория должна завершаться рабочим checkpoint. Если изменение затрагивает kernel, boot, GNOME extensions, power или T2 hardware — перед ним делается Btrfs snapshot.
+Каждая категория должна завершаться рабочим checkpoint (`ws checkpoint create NAME`). Если изменение затрагивает kernel, boot, GNOME extensions, power или T2 hardware — перед ним делается Btrfs snapshot.

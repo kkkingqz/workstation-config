@@ -10,7 +10,7 @@
 # still runs its S3 callbacks for a switched-off card, though, and the MODE1
 # reset in its suspend_noirq fails and aborts S3. So after OFF the whole
 # package is removed from the bus: no driver takes part in sleep, and
-# apple-gmux cuts the power again on resume by itself. See docs/suspend.md.
+# apple-gmux cuts the power again on resume by itself. See helpws suspend.
 #
 # The HDMI audio function (03:00.1) goes first, while the card is still on:
 # vga_switcheroo OFF locks its ALSA card (card->shutdown), and removing it
@@ -20,7 +20,7 @@
 # Run by ws-dgpu-off.service at boot when the kernel command line has
 # ws.dgpu=off (the default rEFInd entry "Ubuntu"), before GDM opens any GPU:
 # vga_switcheroo does not check for open clients on OFF. External displays
-# (Thunderbolt DP on the dGPU) need "Ubuntu (AMD)". See docs/workstation.md,
+# (Thunderbolt DP on the dGPU) need "Ubuntu (AMD)". See helpws workstation,
 # GRAPHICS.
 set -eu
 

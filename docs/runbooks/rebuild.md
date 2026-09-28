@@ -4,24 +4,32 @@ date: 2026-09-28
 source: Workstation
 volume: User Commands
 
-# UBUNTU T2 WORKSTATION — REBUILD TO CURRENT BASELINE
+# UBUNTU T2 WORKSTATION — REBUILD
 
 # 0. До удаления рабочей системы
 
-С рабочей Ubuntu выполнить:
+Собрать то, чего нет в репозитории, и унести архив с ноутбука:
 
-```bash
-./scripts/collect-current-baseline.sh --with-firmware
+```console
+ws collect                      # ./ws-collect-HOST-DATE.tar.gz, спрашивает sudo
+ws checkpoint create before-reinstall
 ```
 
-Скопировать полученный архив за пределы ноутбука.
+`ws collect` (`ws collect --help`) кладёт в архив:
 
-Также сохранить:
+- `baseline/` — `ws baseline capture --with-sudo`: проверки, GNOME,
+  Flatpak, Distrobox, ссылки, системные файлы, пакеты — эталон, с которым
+  сравнивается новая установка (`ws baseline diff`);
+- `boot/` — `/proc/cmdline`, fstab, `refind_linux.conf`, `lsblk`, `blkid`,
+  `efibootmgr -v`, subvolumes Btrfs;
+- `apt/` — sources, ручные и held пакеты, `dpkg -l`;
+- `firmware/` — файлы `/lib/firmware/brcm` без пакета: Wi-Fi/Bluetooth
+  Apple, взятые из macOS (без macOS их больше не получить);
+- `state/` — `~/.local/state/workstation` (backup сочетаний, checkpoints);
+- `meta/` — коммит и незакоммиченные изменения.
 
-- user data;
-- нужные Btrfs snapshots только как дополнительный rollback source;
-- текущий rebuild kit;
-- установочный T2-Ubuntu ISO и SHA256.
+Отдельно: пользовательские данные, нужные Btrfs snapshots, установочный
+T2-Ubuntu ISO и его SHA256. Незапушенные коммиты — `git push`.
 
 # 1. Подготовка macOS / T2
 
@@ -46,52 +54,32 @@ amd64
 MacBookPro16,1 / T2
 ```
 
-Использовать актуальный T2-Ubuntu image.
-
-Разметка — только manual.
-
-Apple EFI:
+Актуальный T2-Ubuntu image (t2linux). Разметка — только manual:
 
 ```text
-mount: /boot/efi
-format: NO
+Apple EFI     /boot/efi, не форматировать
+ESP rEFInd    отдельный раздел (сейчас nvme0n1p3), не монтируется
+Linux root    Btrfs
 ```
 
-Linux root — Btrfs.
-
-UUID и имя раздела **не переносить из старого архива вслепую**: после новой разметки они могут измениться.
+UUID и PARTUUID новой установки другие: их записать в
+`nix/hosts/<host>/facts.nix` (`rootUuid`, `refindEspPartuuid`) до `ws system
+apply` — из них собираются `refind_linux.conf`, `refind.conf` и manifest.
+Старые значения — в `boot/blkid.txt` архива.
 
 # 3. Btrfs layout
 
-Итоговая структура:
+Целевая структура:
 
 ```text
-@
-@home
-@root
-@srv
-@cache
-@tmp
-@log
-.snapshots
+@  @home  @root  @srv  @cache  @tmp  @log  .snapshots
+@nix       создаёт bootstrap.sh (раздел 6.0)
 ```
 
-Root должен загружаться с:
-
-```text
-rootflags=subvol=@
-```
-
-В архиве rebuild kit сохранены проверенные вспомогательные scripts:
-
-```text
-reference/t2-ubuntu-btrfs-live-migrate-v2.sh
-reference/t2-ubuntu-btrfs-boot-repair.sh
-```
-
-Использовать их только после проверки актуальных disk/partition names.
-
-После установки проверить:
+Root грузится с `rootflags=subvol=@`. Проверенного скрипта раскладки нет:
+если installer создал не все subvolumes, их создают из live-системы
+(`btrfs subvolume create`, перенос каталогов, строки в fstab) — прежняя
+раскладка и fstab есть в `boot/` архива.
 
 ```bash
 findmnt /
@@ -101,19 +89,23 @@ cat /etc/fstab
 
 # 4. T2 repository, kernel и firmware
 
-Нужны:
-
 ```text
-linux-t2
+linux-t2                  held (патч t2bce под версию ядра, helpws suspend)
 apple-t2-audio-config
 Apple Wi‑Fi/Bluetooth firmware
 ```
 
-Если installer уже подключил T2 repository, повторно его не добавлять.
+T2 repository (t2linux, codename `resolute`) — если installer его не
+подключил. Пакеты — `nix/hosts/mbp16/apt.txt` (ставит `bootstrap.sh`).
 
-Если нет — использовать актуальную T2Linux Ubuntu instruction для codename `resolute`.
+Firmware: `get-apple-firmware.service` (`ws system apply`) берёт её из macOS
+при загрузке. Без macOS — из архива:
 
-После установки:
+```console
+sudo cp -a firmware/* /lib/firmware/brcm/
+```
+
+Проверка:
 
 ```bash
 uname -r
@@ -122,39 +114,25 @@ wpctl status
 bluetoothctl show
 ```
 
-Machine-state archive содержит точный список текущих T2 packages и APT sources.
+Патченые модули t2bce — `ws-suspend t2bce-build && ws-suspend t2bce-install`
+(раздел 8).
 
 # 5. Boot / rEFInd
 
-rEFInd остаётся основным boot menu.
-
-В state archive сохраняются:
-
-- rEFInd config;
-- `refind_linux.conf`, если присутствует;
-- текущий `/proc/cmdline`;
-- `/etc/fstab`;
-- boot inventory.
-
-Текущий рабочий kernel cmdline должен содержать как минимум используемые сейчас параметры:
+rEFInd — основное меню. Всё, что ему нужно, собирается из репозитория
+(`facts.nix`: `kernelParams`, `refindDefaultParams`, `rootUuid`):
 
 ```text
-intel_iommu=on
-iommu=pt
-pm_async=off
+/boot/refind_linux.conf      ставит ws system apply
+EFI/BOOT/refind.conf (ESP)   копируется вручную (helpws workstation, GRAPHICS)
+grub.d drop-ins              ставит ws system apply (GRUB — recovery)
 ```
 
-`pcie_aspm=force` и `pcie_aspm.policy=powersave` **не** добавлять: с ними
-T2 отказывала в stateful suspend (`helpws suspend`).
-
-Не добавлять параметры, которых нет в зафиксированном рабочем `/proc/cmdline`.
-
-Пункт «Ubuntu» добавляет `ws.dgpu=off` (выключение AMD при загрузке), ручной
-пункт «Ubuntu (AMD)» грузит `/boot/ws` без него (`helpws workstation`, GRAPHICS).
-
-После восстановления boot config заменить старые UUID на UUID новой установки там, где это требуется.
-
-Generic Ubuntu kernel оставить как fallback boot option.
+Параметры ядра: `intel_iommu=on iommu=pt pm_async=off`.
+`pcie_aspm=force` и `pcie_aspm.policy=powersave` не добавлять: с ними T2
+отказывала в stateful suspend (`helpws suspend`). Пункт «Ubuntu» добавляет
+`ws.dgpu=off` (AMD выключена), ручной «Ubuntu (AMD)» грузит `/boot/ws` без
+него. Generic Ubuntu kernel остаётся запасным пунктом.
 
 # 6. GNOME baseline
 
@@ -191,7 +169,7 @@ systemctl --user is-active wireplumber
 # 6.0. Bootstrap и слои
 
 После разделов 2–5 (Ubuntu, Btrfs, T2, rEFInd) и штатного GNOME вся
-конфигурация ставится так (`helpws plan-nix`):
+конфигурация ставится так (`helpws layers`):
 
 ```console
 sudo apt install git
@@ -271,7 +249,7 @@ Flatpak: remotes и overrides объявлены в `flatpak/flatpak.nix`, пр�
 в `flatpak/apps.txt` (`wsflatpak install` дописывает туда сам, `ws switch` коммитит); `ws switch` собирает из них
 `~/.local/share/workstation/flatpak/` и ставит `.desktop` Claude, шаг `flatpak`
 в `ws apply` (`wsflatpak apply`) добавляет remotes, ставит приложения и
-применяет overrides (`helpws plan-flatpak`).
+применяет overrides (`helpws flatpak`).
 
 Разделы 6.1–10 ниже описывают те же шаги по отдельности.
 
@@ -340,7 +318,7 @@ sudo apt install --no-install-recommends -y \
 ```
 
 Runtime helper и Fish completion — ссылки home-manager, их создаёт
-`ws switch` (`nix/home/links.nix`, `helpws plan-nix`). Без Nix —
+`ws switch` (`nix/home/links.nix`, `helpws layers`). Без Nix —
 вручную:
 
 ```console
@@ -553,13 +531,6 @@ AMD dGPU       → выключена в rEFInd «Ubuntu» (ws.dgpu=off), render
 Выключение AMD ставит `ws system apply` (`ws-dgpu-off`, `helpws workstation`,
 GRAPHICS). Других AMD power tweaks не воспроизводить.
 
-Machine-state archive содержит:
-
-- текущий kernel cmdline;
-- `lspci -nnk`;
-- relevant `/etc/modprobe.d`;
-- installed packages.
-
 После восстановления проверить реальное распределение GPU, а не только наличие двух adapters.
 
 # 8. Suspend / power
@@ -770,5 +741,5 @@ sudo system-backup-snapshot
 раз: загрузиться в recovery через GRUB и вернуться.
 
 `/nix` лежит в отдельном `@nix`: откат `@` не ломает ссылки home-manager в
-`/nix/store`. Возврат `@` из recovery — `helpws plan-nix`, раздел
+`/nix/store`. Возврат `@` из recovery — `helpws history-nix`, раздел
 «Возврат `@` из recovery».

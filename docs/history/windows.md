@@ -1,10 +1,12 @@
-title: ws-plan-windows
+title: ws-history-windows
 section: 1
 date: 2026-09-28
 source: Workstation
 volume: User Commands
 
 # PLAN — WINDOWS APPS / WINE / STEAM / PROTON
+
+> История: как слой строился и почему так. Действующее описание — `helpws windows`; пути и команды ниже могли с тех пор измениться.
 
 ## Статус
 

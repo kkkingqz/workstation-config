@@ -1,4 +1,4 @@
-title: ws-plan-gnome
+title: ws-history-gnome
 
 **Status:** DONE — GNOME host layer finalized and verified 2026-09-23.
 section: 1
@@ -7,6 +7,8 @@ source: Workstation
 volume: User Commands
 
 # PLAN — GNOME VISUAL / INPUT / PORTALS
+
+> История: как слой строился и почему так. Действующее описание — `helpws gnome`; пути и команды ниже могли с тех пор измениться.
 
 ## Цель
 
@@ -236,7 +238,7 @@ Keyboard layer **завершён и является частью baseline**; G
 Source of truth:
 
 ```text
-docs/keyboard.md
+docs/runbooks/keyboard.md
 keyboard/
 bin/ws-keyboard*
 gnome/extensions/workstation-input-source@local/
@@ -397,3 +399,44 @@ GNOME stage считается завершённым, когда:
 - portals/PipeWire/WirePlumber infrastructure исправна;
 - extension set короткий и осознанный;
 - application-specific integration оставлена соответствующим будущим планам.
+
+# Итог и опись на 2026-09-23
+
+## Статус
+
+GNOME host layer finalized 2026-09-23.
+
+Final state includes the managed Yaru/Dock profile, Retina scale checkpoint,
+host Qt5/Qt6 integration, required extension policy, portals/PipeWire and the
+verified `workstation-dock-spring@local` behavior.
+
+The complete automatic and manual GNOME smoke-test passed.
+
+
+## Опись
+
+На рабочей системе 2026-09-23 подтверждено:
+
+```text
+GNOME Shell            50.1
+Mutter                  50.1-0ubuntu2.4
+session                 Wayland
+internal display        3072x1920@60
+logical scale           1.5
+color scheme            prefer-dark
+accent                  orange
+GTK / icons             Yaru-dark
+Ubuntu Dock             BOTTOM
+portals                  active
+PipeWire / WirePlumber  active
+host Wine               absent
+```
+
+Mutter experimental features сейчас содержат:
+
+```text
+scale-monitor-framebuffer
+xwayland-native-scaling
+```
+
+Они только инвентаризируются и не являются частью `settings.conf`.

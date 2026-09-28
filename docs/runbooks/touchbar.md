@@ -4,7 +4,7 @@ date: 2026-09-26
 source: Workstation
 volume: User Commands
 
-# UBUNTU T2 TOUCH BAR — CURRENT BASELINE
+# UBUNTU T2 TOUCH BAR
 
 ## Текущее состояние
 
@@ -22,7 +22,7 @@ T2 kernel 7.2.7-1-t2-resolute
 
 Touch Bar закреплён в USB configuration 1. Режим дисплея (configuration 2,
 `appletbdrm`, `tiny-dfr`) не используется: на этой машине с ним связаны все
-сбои suspend (см. «Почему не tiny-dfr»).
+сбои suspend (см. «Почему не режим дисплея»).
 
 ## Компоненты
 
@@ -112,35 +112,12 @@ xremap игнорирует `Dynamic Function Row Virtual Input Device`. В ро
 такого устройства нет; исключение оставлено как защита от петли на случай
 возврата `tiny-dfr`.
 
-## Почему не tiny-dfr
+## Почему не режим дисплея
 
-С 2026-09-22 по 2026-09-25 Touch Bar работал в режиме дисплея: сначала через
-`tiny-dfr`, затем, после удаления `tiny-dfr`, его подхватывал GNOME/Mutter как
-второй монитор. Сводка по всем S3-циклам на kernel 7.2.x
-(`/var/log/syslog`, `/var/log/kern.log`):
-
-| Touch Bar | pcie_aspm | S3 циклов | сбои |
-|---|---|---|---|
-| родной (configuration 1) | force | 16 | 0 |
-| родной | default | 4 | 0 |
-| дисплей, работает tiny-dfr | force | 3 | 2 отказа T2 |
-| дисплей, рисует Mutter | force | 7 | 1 отказ T2 |
-| дисплей, никто не рисует | force | 6 | 1 зависание без логов |
-| дисплей, Mutter или никто | default | 13 | 1 зависание без логов |
-
-Зависание 2026-09-25 12:00 (brcmfmac не ушёл в D3, systemd откатился на s2idle)
-в таблицу не включено: к Touch Bar оно не относится.
-
-Отказ T2 — это `t2bce_core: remote rejected stateful suspend payload`; за ним
-драйвер уходил в no-state fallback и падал с NULL dereference в
-`t2bce_dma_reserve_submission` (upstream:
-t2linux/T2-Debian-and-Ubuntu-Kernel#215). Оба зависания без логов случились,
-когда `tiny-dfr` останавливали прямо перед сном.
-
-Кроме того, без udev-правила `tiny-dfr` (`99-touchbar-seat.rules`) GNOME
-использует `appletbdrm` как обычный KMS output. При resume Touch Bar
-переподключается, и так однажды получился чёрный экран с
-`drmModeAtomicCommit: Invalid argument`.
+В режиме дисплея (configuration 2: `tiny-dfr` или Mutter рисуют на Touch Bar
+через `appletbdrm`) случились все сбои S3 на этой машине: отказы T2 и
+зависания без логов; в родном режиме — ни одного. Разбор и таблица циклов —
+`helpws history-suspend`.
 
 ## Безопасность runtime PM
 
@@ -155,36 +132,6 @@ t2linux/T2-Debian-and-Ubuntu-Kernel#215). Оба зависания без ло�
 powertop --auto-tune
 агрессивный USB runtime PM для Touch Bar
 Touch Bar display mode (appletbdrm) вместе с suspend
-```
-
-## Старые эксперименты
-
-Ранее исследовались:
-
-```text
-react-drm
-mac-touchbar-plus
-tiny-dfr (2026-09-22 .. 2026-09-25)
-tiny-dfr-sleep.service (остановка tiny-dfr на время сна)
-```
-
-`react-drm` удавалось запустить с DRM renderer 2008x60, но draggable UI
-(sliders/progress) был недостаточно надёжен. `tiny-dfr` работал, но в режиме
-дисплея suspend был ненадёжен (см. выше).
-
-Эти сведения остаются полезной историей, но **не описывают current baseline**.
-
-## Возврат к tiny-dfr
-
-Не рекомендуется, пока сбои suspend в режиме дисплея не исправлены upstream.
-Если всё же нужно:
-
-```console
-sudo systemctl disable --now ws-touchbar-fn.service
-sudo rm /etc/udev/rules.d/90-touchbar-native.rules /etc/modprobe.d/touchbar-native.conf
-sudo update-initramfs -u
-sudo apt install tiny-dfr
-sudo reboot
 ```
 
 ## Проверка

@@ -127,12 +127,12 @@ Flatpak / Distrobox / Wine settings
 Фактический scale встроенного display сейчас `1.5`; он выбран через GNOME
 Settings и остаётся inventory-only.
 
-Application-specific integration выполняется позже:
+Интеграция приложений — у их слоёв:
 
 ```text
-Flatpak theme / scale / portals  -> plan-flatpak
-Distrobox GUI / Wayland / Qt     -> plan-dev
-Wine                             -> plan-windows, только внутри отдельного Distrobox
+Flatpak theme / scale / portals  -> helpws flatpak
+Distrobox GUI / Wayland / Qt     -> helpws distrobox
+Wine                             -> helpws windows, только внутри Distrobox
 ```
 
 Wine на host не устанавливается.
@@ -161,8 +161,8 @@ Qt5 и Qt6 автоматически используют native Wayland и GNO
 Глобальные `QT_QPA_PLATFORM`, `QT_QPA_PLATFORMTHEME`, `QT_STYLE_OVERRIDE` и
 `QT_SCALE_FACTOR` не задаются.
 
-Это относится только к host applications. Qt внутри Distrobox проверяется
-отдельно в `plan-dev`.
+Это относится только к host applications; Qt в контейнерах этим не
+настраивается.
 
 ---
 
@@ -709,16 +709,21 @@ Micro help-viewer использует true-color scheme и Markdown syntax high
 ## Documentation source
 
 ```text
-~/wsconfig/docs/terminal.md
-~/wsconfig/docs/workstation.md
+~/wsconfig/README.md            входная точка
+~/wsconfig/docs/architecture/   слои и правила, проверки, этот документ
+~/wsconfig/docs/runbooks/       как работает и что делать, по слоям
+~/wsconfig/docs/plans/          roadmap и незавершённые планы
+~/wsconfig/docs/history/        как строились завершённые слои
 ```
+
+`helpws` находит документ по `title:`, не по пути.
 
 ## Man generation
 
 Man pages собирает Nix (`nix/pkgs/man.nix`): `bin/ws-doc-build` —
 `lowdown -s -t man` (lowdown из nixpkgs), по странице на `title:` каждого
 `docs/**/*.md`. `ws switch` ставит их ссылками в `~/.local/share/man/man1`; в git `man/` нет,
-verify предупреждает, если страницы старше `docs/`. После правки документа:
+`ws check home` предупреждает, если страницы старше `docs/`. После правки документа:
 
 ```console
 ws switch
@@ -815,7 +820,7 @@ wsconfig/
 │   ├── ws-workstation-verify  связи между слоями (последний шаг ws check)
 │   ├── ws-check-repo, ws-check-home  ws check repo / home
 │   ├── ws-suspend, ws-suspend-check
-│   ├── ws-baseline, ws-checkpoint
+│   ├── ws-baseline, ws-checkpoint, ws-collect
 │   ├── ws-gnome
 │   ├── ws-gnome-check
 │   ├── ws-gnome-status
@@ -830,10 +835,11 @@ wsconfig/
 │   ├── wswin-check       wswin check
 │   └── ws-gpu            AMD для Proton/Steam, если она есть
 ├── lib/check.bash       общий формат результата проверок (--json для ws check)
-└── docs/
+├── README.md
+└── docs/                architecture/, runbooks/, plans/, history/
 ```
 
-Nix доставляет, владельцы слоёв не меняются (`helpws plan-nix`):
+Nix доставляет, владельцы слоёв не меняются (`helpws layers`):
 home-manager ставит ссылки на checkout (`~/.local/bin`, fish, Ghostty), man pages
 и CLI (fzf, zoxide, eza, micro, nvd, xremap), unit `xremap.service` с
 `xremap.yml` из store, `enabled-extensions` и закреплённые расширения

@@ -99,13 +99,13 @@ t2bce_ver="$(cat /sys/module/t2bce_core/version 2>/dev/null || true)"
 if [[ "$t2bce_ver" == *nostatefix* ]]; then
     pass "patched t2bce loaded: t2bce_core $t2bce_ver"
 else
-    warn "t2bce_core '${t2bce_ver:-not loaded}' is not the patched build; run ws-suspend t2bce-build && ws-suspend t2bce-install (docs/suspend.md)"
+    warn "t2bce_core '${t2bce_ver:-not loaded}' is not the patched build; run ws-suspend t2bce-build && ws-suspend t2bce-install (helpws suspend)"
 fi
 
 if apt-mark showhold 2>/dev/null | grep -qx 'linux-t2'; then
     pass "linux-t2 held (patched t2bce modules exist only for $(uname -r))"
 else
-    warn "linux-t2 is not held: a kernel update would boot the in-tree t2bce (docs/suspend.md)"
+    warn "linux-t2 is not held: a kernel update would boot the in-tree t2bce (helpws suspend)"
 fi
 
 t2bce_sources="$HOME/.local/share/workstation/t2bce/sources"
@@ -119,7 +119,7 @@ section "4. Boot <-> dGPU policy"
 
 # rEFInd "Ubuntu" boots with ws.dgpu=off: ws-dgpu-off.service powers the AMD
 # dGPU off and removes it from the PCI bus. "Ubuntu (AMD)" boots /boot/ws
-# without it (docs/workstation.md, docs/suspend.md).
+# without it (helpws workstation, helpws suspend).
 if grep -Eq '(^| )ws\.dgpu=off( |$)' /proc/cmdline; then
     systemctl is-active --quiet ws-dgpu-off.service 2>/dev/null \
         && pass "booted with ws.dgpu=off: ws-dgpu-off.service succeeded" \

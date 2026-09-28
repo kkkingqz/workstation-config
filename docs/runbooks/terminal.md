@@ -495,8 +495,8 @@ git -C ~/wsconfig
 Markdown — источник истины:
 
 ```text
-docs/terminal.md
-docs/workstation.md
+docs/runbooks/terminal.md
+docs/architecture/workstation.md
 ```
 
 Man pages собирает Nix из `docs/` (`nix/pkgs/man.nix`: `ws-doc-build` с

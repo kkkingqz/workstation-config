@@ -1,5 +1,5 @@
 # MacBookPro16,1 with T2: Touch Bar native mode, T2 network and firmware,
-# the suspend layer (docs/suspend.md), dGPU power-off at boot.
+# the suspend layer (helpws suspend), dGPU power-off at boot.
 { file, ... }:
 {
   files = [
