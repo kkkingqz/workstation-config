@@ -115,7 +115,9 @@ let
       preInitHooks = [ multilibHook ];
       initHooks = [ ntsyncHook ];
       gpu = "amd";
-      windows = { profile = "proton"; };
+      # Proton draws through XWayland (xwayland-native-scaling): LogPixels
+      # 144 for the display scale 1.5, as in wine-wayland.
+      windows = { profile = "proton"; dpi = 144; };
     }
     {
       # Manual kernel/module builds; the t2bce modules themselves are built by
