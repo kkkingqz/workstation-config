@@ -24,10 +24,10 @@ usage() {
     cat <<'USAGE'
 Usage:
   wswin list
-  wswin install [--box BOX] [--prefix NAME] SETUP.exe|.msi [ARG...]
+  wswin install [--box BOX] [--prefix NAME] [--desktop[=WxH]] SETUP.exe|.msi [ARG...]
   wswin portable [--box BOX] [--prefix NAME] FILE.exe|DIR|FILE.zip [APPNAME]
   wswin run APP [ARG...]
-  wswin exec [--box BOX] [--prefix NAME] PROGRAM [ARG...]
+  wswin exec [--box BOX] [--prefix NAME] [--desktop[=WxH]] PROGRAM [ARG...]
   wswin prefix [--box BOX] NAME init [--dpi N]
   wswin prefix [--box BOX] NAME winecfg|regedit|kill|path
   wswin prefix [--box BOX] NAME winetricks [ARG...]
@@ -38,7 +38,10 @@ Usage:
   wswin menu remove ID
 
 BOX defaults to the default_box of apps.ini, NAME to "default" (the
-standard prefix $HOME/.wine of the box).
+standard prefix $HOME/.wine of the box). --desktop runs the program in a
+Wine virtual desktop (one window; the size is asked for, default
+1600x1000, but Wine 10+/Proton under XWayland scaling opens it fullscreen):
+for installers that keep taking the focus back from other windows.
 
 Host menu entries made by install/portable/menu add are kept in the prefix
 (PREFIX/.wswin/menu) and linked into ~/.local/share/applications as
@@ -185,16 +188,22 @@ ensure_prefix() {
     ' _ "$run" "$driver" "$dpi" "$overrides"
 }
 
-# --box BOX --prefix NAME; sets box, pname, rest.
+# --box BOX --prefix NAME --desktop[=WxH]; sets box, pname, desktop, rest.
 parse_target() {
     box="$(default_box)"
     pname=default
+    desktop=""
     rest=()
 
     while (($#)); do
         case "$1" in
             --box) box="${2:?--box needs a value}"; shift 2 ;;
             --prefix) pname="${2:?--prefix needs a value}"; shift 2 ;;
+            --desktop) desktop=1600x1000; shift ;;
+            --desktop=*)
+                desktop="${1#--desktop=}"
+                [[ "$desktop" =~ ^[0-9]+x[0-9]+$ ]] || die "bad --desktop size: $desktop (WxH)"
+                shift ;;
             --) shift; rest+=("$@"); break ;;
             *) rest+=("$@"); break ;;
         esac
@@ -202,6 +211,19 @@ parse_target() {
 
     [[ -n "$box" ]] || die "no box: default_box missing in $apps_ini"
     require_box "$box"
+}
+
+# RUNNER [explorer /desktop=NAME,WxH] PROGRAM...: the command line of a
+# program, inside a Wine virtual desktop when --desktop was given (the
+# desktop window is named after the prefix).
+windows_cmd() {
+    local run="$1"
+    shift
+    if [[ -n "$desktop" ]]; then
+        printf '%s\0' "$run" explorer "/desktop=wswin-$pname,$desktop" "$@"
+    else
+        printf '%s\0' "$run" "$@"
+    fi
 }
 
 # A host file becomes an absolute path (the host HOME, /tmp, /media and /mnt
@@ -423,7 +445,7 @@ offer_lnk_entry() {
 }
 
 cmd_menu() {
-    local box pname rest prefix action entry
+    local box pname desktop rest prefix action entry
     parse_target "$@"
     set -- "${rest[@]}"
     action="${1:-}"
@@ -528,7 +550,7 @@ exe_icon() {
 # A portable program: copied (exe, directory or zip) into
 # PREFIX/drive_c/Portable/NAME, optionally a host menu entry.
 cmd_portable() {
-    local box pname rest src name prefix dest exe icon
+    local box pname desktop rest src name prefix dest exe icon
     local -a exes=()
     parse_target "$@"
     set -- "${rest[@]}"
@@ -584,7 +606,8 @@ cmd_portable() {
 }
 
 cmd_install() {
-    local box pname rest file prefix run
+    local box pname desktop rest file prefix run
+    local -a wcmd=()
     parse_target "$@"
     set -- "${rest[@]}"
     (($#)) || die "installer required"
@@ -601,9 +624,10 @@ cmd_install() {
     before="$(lnk_entries "$prefix")"
 
     case "${file,,}" in
-        *.msi) in_box "$box" "$prefix" "$run" msiexec /i "$file" "$@" ;;
-        *) in_box "$box" "$prefix" "$run" "$file" "$@" ;;
+        *.msi) mapfile -d '' wcmd < <(windows_cmd "$run" msiexec /i "$file" "$@") ;;
+        *) mapfile -d '' wcmd < <(windows_cmd "$run" "$file" "$@") ;;
     esac
+    in_box "$box" "$prefix" "${wcmd[@]}"
 
     printf '\nInstalled into %s/%s (%s).\n' "$box" "$pname" "$prefix"
 
@@ -617,7 +641,8 @@ cmd_install() {
 }
 
 cmd_exec() {
-    local box pname rest prefix program cwd=""
+    local box pname desktop rest prefix program cwd=""
+    local -a wcmd=()
     parse_target "$@"
     set -- "${rest[@]}"
     (($#)) || die "program required"
@@ -628,7 +653,8 @@ cmd_exec() {
     # A program file starts in its own directory (games load data relative
     # to it), as from Explorer.
     [[ -f "$program" ]] && cwd="$(dirname "$program")"
-    WSWIN_CWD="$cwd" in_box "$box" "$prefix" "$(runner "$box")" "$program" "${@:2}"
+    mapfile -d '' wcmd < <(windows_cmd "$(runner "$box")" "$program" "${@:2}")
+    WSWIN_CWD="$cwd" in_box "$box" "$prefix" "${wcmd[@]}"
 }
 
 # The program starts in its own directory, as from Explorer.
@@ -659,7 +685,7 @@ cmd_run() {
 }
 
 cmd_prefix() {
-    local box pname rest prefix run action
+    local box pname desktop rest prefix run action
     parse_target "$@"
     set -- "${rest[@]}"
     (($# >= 2)) || die "usage: wswin prefix [--box BOX] NAME ACTION"
@@ -722,7 +748,7 @@ cmd_prefix() {
 }
 
 cmd_shell() {
-    local box pname rest prefix
+    local box pname desktop rest prefix
     parse_target "$@"
     prefix="$(prefix_path "$box" "$pname")"
     in_box "$box" "$prefix" bash -l

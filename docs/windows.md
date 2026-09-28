@@ -64,10 +64,10 @@ Windows: кодировка `cp1251` для не-Unicode программ. С `C
 
 ```console
 wswin list
-wswin install [--box BOX] [--prefix NAME] SETUP.exe|.msi [ARG...]
+wswin install [--box BOX] [--prefix NAME] [--desktop[=WxH]] SETUP.exe|.msi [ARG...]
 wswin portable [--box BOX] [--prefix NAME] FILE.exe|DIR|FILE.zip [APPNAME]
 wswin run APP [ARG...]
-wswin exec [--box BOX] [--prefix NAME] PROGRAM [ARG...]
+wswin exec [--box BOX] [--prefix NAME] [--desktop[=WxH]] PROGRAM [ARG...]
 wswin prefix [--box BOX] NAME init [--dpi N]
 wswin prefix [--box BOX] NAME winecfg|regedit|kill|path
 wswin prefix [--box BOX] NAME winetricks [ARG...]
@@ -80,6 +80,12 @@ wswin menu remove ID
 
 - По умолчанию `--box wine-wayland` и стандартный prefix (`NAME` = `default`).
 - В `proton` всё идёт через `umu-run` (`GAMEID=umu-default`, если не задан).
+- `--desktop[=WxH]`: программа в виртуальном рабочем столе Wine (`explorer
+  /desktop=wswin-PREFIX,WxH`). Для установщиков, которые под X11 забирают
+  фокус обратно при каждом переключении на другое окно (установщик GOG в
+  Proton; `UseTakeFocus=N` не помогает — программа сама вызывает активацию).
+  Wine 11 / Proton 10 под XWayland с масштабом открывают стол на весь экран,
+  размер игнорируется (проверено 2026-09-28).
 - Файлы из host HOME, `/tmp`, `/media`, `/mnt` видны в контейнере по тому же
   пути.
 
