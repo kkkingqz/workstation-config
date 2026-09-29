@@ -49,7 +49,10 @@ copy-on-write у образов нет контрольных сумм Btrfs и 
 `~/VMs` — только для рук: класть ISO, смотреть файлы. VM должна получать
 пути пула (`/var/lib/libvirt/images/…`, в virt-manager — «Browse» → пул
 `default`): путь через `~/VMs` qemu не откроет (у него нет доступа в HOME,
-AppArmor разрешает пути пула).
+AppArmor разрешает пути пула). virt-manager заводит пул на каждый каталог,
+открытый через «Browse Local»; пул в HOME `ws check virt` отмечает WARN —
+убрать: `virsh -c qemu:///system pool-destroy NAME` и `pool-undefine NAME`
+(файлы остаются).
 
 ## Сеть
 
