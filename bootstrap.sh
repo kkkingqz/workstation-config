@@ -147,6 +147,7 @@ echo "== 3. VM state on @vms, libvirt (helpws virt)"
 #                                     metadata, saved states
 #   swtpm/   /var/lib/libvirt/swtpm   TPM state of each VM
 #   xml/     /etc/libvirt/qemu        VM and network XML, autostart links
+#   firmware/                         template of UEFI variables in qcow2
 vms=/var/lib/vms
 images=/var/lib/libvirt/images
 binds=("images $images" "qemu /var/lib/libvirt/qemu" "swtpm /var/lib/libvirt/swtpm" "xml /etc/libvirt/qemu")
@@ -196,7 +197,7 @@ if [[ "$old_layout" == true ]]; then
     if [[ "$dry_run" == true ]]; then
         echo "would move the top of $vms into $vms/images"
     else
-        sudo find "$vms" -mindepth 1 -maxdepth 1 ! -name images ! -name qemu ! -name swtpm ! -name xml \
+        sudo find "$vms" -mindepth 1 -maxdepth 1 ! -name images ! -name qemu ! -name swtpm ! -name xml ! -name firmware \
             -exec mv -t "$vms/images" {} +
     fi
 fi
@@ -257,6 +258,19 @@ if [[ "$(stat -c '%U:%G %a' "$images" 2>/dev/null)" == "root:libvirt 2775" ]]; t
 else
     run sudo chown root:libvirt "$images"
     run sudo chmod 2775 "$images"
+fi
+# UEFI variables in qcow2: libvirt takes internal snapshots of a UEFI VM
+# only with them and cannot convert the raw template of the ovmf package
+# itself. The descriptor in /etc/qemu/firmware (ws system apply) points
+# new VMs here; rerun after an ovmf update changes the template.
+vars=/usr/share/OVMF/OVMF_VARS_4M.ms.fd
+vars_qcow2="$vms/firmware/OVMF_VARS_4M.ms.qcow2"
+if [[ -r "$vars_qcow2" ]] && qemu-img compare -q -f raw -F qcow2 "$vars" "$vars_qcow2" 2>/dev/null; then
+    echo "$vars_qcow2 matches $vars"
+else
+    run sudo install -d -m 0755 "$vms/firmware"
+    run sudo qemu-img convert -f raw -O qcow2 "$vars" "$vars_qcow2"
+    run sudo chmod 0644 "$vars_qcow2"
 fi
 [[ "$stopped" == false ]] || run sudo systemctl start "${libvirt_units[@]}"
 

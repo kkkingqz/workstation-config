@@ -86,7 +86,10 @@ GUI выбран `virt-manager`: GNOME Boxes работает только с
    not supported»); qcow2-сборок OVMF в Ubuntu нет. С NVRAM, заранее
    переведённой `qemu-img convert -O qcow2` (код прошивки остаётся raw),
    проверено на временной VM: snapshot работающей и выключенной VM, откат к
-   обоим, snapshot ложится и в диск, и в NVRAM.
+   обоим, snapshot ложится и в диск, и в NVRAM. Решение (пользователь,
+   2026-09-29): новые VM сразу с NVRAM в qcow2 — шаблон на `@vms/firmware`
+   (`bootstrap.sh`), описание прошивки в `/etc/qemu/firmware` (системный
+   слой); `ubuntu-test` перевести вручную (`helpws virt`, «Snapshots»).
 
    Проверить:
    - после перезагрузки host bind-монтирования на месте до старта libvirt;

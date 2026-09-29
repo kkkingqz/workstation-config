@@ -29,6 +29,7 @@ libvirt видит его на своих путях через bind-монти�
                                       snapshots, сохранённые состояния
 @vms/swtpm   /var/lib/libvirt/swtpm   состояние TPM каждой VM
 @vms/xml     /etc/libvirt/qemu        описания VM и сетей, autostart
+@vms/firmware                         шаблон переменных UEFI в qcow2
 ~/VMs                                 ссылка на /var/lib/libvirt/images
 virbr0, 192.168.122.0/24              NAT-сеть «default»
 ```
@@ -93,6 +94,39 @@ Mini ISO (`*-mini-iso-*`) скачивает полный образ и держ
 memmap»). На время установки — 16 ГБ и больше (`ubuntu-test` ставилась с
 18 ГБ), потом память можно вернуть. Полный ISO этого не требует.
 
+## Snapshots
+
+Внутренние snapshots qcow2 (virt-manager → «Manage VM snapshots», `virsh
+snapshot-create-as`) — и работающей VM (с памятью), и выключенной; откат —
+`snapshot-revert`. Для VM с UEFI libvirt требует переменные UEFI (NVRAM) в
+qcow2, а шаблон пакета `ovmf` — raw, и переводить его libvirt не умеет.
+Поэтому:
+
+```text
+/var/lib/vms/firmware/OVMF_VARS_4M.ms.qcow2      шаблон в qcow2 (bootstrap.sh)
+/etc/qemu/firmware/30-...-qcow2-vars.json        описание прошивки: код пакета
+                                                 raw, шаблон qcow2; приоритет
+                                                 выше пакетных (ws system apply)
+```
+
+Новая VM с `--boot uefi` (virt-manager — тоже) получает NVRAM
+`NAME_VARS.qcow2` сама. VM, созданная раньше, — перевести один раз
+(выключенной):
+
+```console
+n=/var/lib/libvirt/qemu/nvram/NAME_VARS
+sudo qemu-img convert -f raw -O qcow2 $n.fd $n.qcow2
+virsh -c qemu:///system dumpxml --inactive NAME > /tmp/NAME.xml
+# строка <nvram>: template=/var/lib/vms/firmware/OVMF_VARS_4M.ms.qcow2,
+# templateFormat='qcow2', format='qcow2', путь $n.qcow2
+virsh -c qemu:///system define /tmp/NAME.xml
+```
+
+`ws check virt` отмечает WARN у VM с NVRAM в raw и проверяет, что шаблон
+совпадает с пакетным (после обновления `ovmf` — снова `bootstrap.sh`).
+
+## Устройства
+
 Общая папка с host — virtiofs («Add Hardware → Filesystem», в госте
 `mount -t virtiofs TAG /mnt`); нужна «Shared memory» в памяти VM.
 
@@ -123,4 +157,5 @@ ws check virt
 
 `ws check virt`: KVM, `virt-host-validate` без FAIL, пользователь в
 `libvirt`, `qemu:///system` доступен, `@vms` смонтирован без CoW, пул и сеть
-`default` запущены с автозапуском, OVMF и swtpm на месте, список VM.
+`default` запущены с автозапуском, OVMF и swtpm на месте, шаблон NVRAM в
+qcow2 совпадает с пакетным, у каждой VM NVRAM в qcow2.

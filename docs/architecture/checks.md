@@ -22,7 +22,8 @@ wswin check             Windows-боксы, программы, .exe, ссылк
 ws-suspend check        deep sleep, t2bce stateful sleep, Touch Bar
 ws system check         файлы и units manifest, шаблон grub, nofail, раскладка GDM
 ws check apt            apt-списки против установленного
-ws check virt           KVM, libvirt, @vms без CoW, пул и сеть default, OVMF и swtpm
+ws check virt           KVM, libvirt, @vms без CoW, пул и сеть default, OVMF и swtpm,
+                        NVRAM VM в qcow2
 ws-workstation-verify   связи: GNOME ↔ клавиатура, ядро ↔ t2bce, загрузка ↔ dGPU,
                         Distrobox ↔ NTSync host
 ```

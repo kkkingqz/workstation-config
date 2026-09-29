@@ -1,0 +1,35 @@
+{
+    "description": "OVMF of the ovmf package with Secure Boot, SMM and MS keys; UEFI variables in qcow2 (internal snapshots of UEFI VMs). Template: bootstrap.sh, step 3 (helpws virt)",
+    "interface-types": [
+        "uefi"
+    ],
+    "mapping": {
+        "device": "flash",
+        "executable": {
+            "filename": "/usr/share/OVMF/OVMF_CODE_4M.ms.fd",
+            "format": "raw"
+        },
+        "nvram-template": {
+            "filename": "/var/lib/vms/firmware/OVMF_VARS_4M.ms.qcow2",
+            "format": "qcow2"
+        }
+    },
+    "targets": [
+        {
+            "architecture": "x86_64",
+            "machines": [
+                "pc-q35-*"
+            ]
+        }
+    ],
+    "features": [
+        "acpi-s3",
+        "enrolled-keys",
+        "requires-smm",
+        "secure-boot",
+        "verbose-dynamic"
+    ],
+    "tags": [
+
+    ]
+}
