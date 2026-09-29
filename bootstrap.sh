@@ -183,6 +183,7 @@ if [[ "$old_layout" == true ]]; then
         sudo cp -a /etc/fstab "/etc/fstab.before-vms-layout-$(date +%Y%m%d-%H%M%S)"
         sudo sed -i "\\|^[^#]*[[:space:]]$images[[:space:]]|d" /etc/fstab
     fi
+    run sudo systemctl daemon-reload
 fi
 subvolume_mount @vms "$vms" noatime
 run sudo chmod 0755 "$vms"
