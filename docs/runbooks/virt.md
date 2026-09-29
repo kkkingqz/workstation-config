@@ -8,7 +8,7 @@ volume: User Commands
 
 VM работают на host: KVM, QEMU и libvirt связаны с ядром, устройствами и
 сетью, в контейнер их не унести. Управление — `virt-manager`, подключение —
-`qemu:///system`. План и что ещё не проверено: `helpws plan-virt`.
+`qemu:///system`. Как слой строился и что проверено: `helpws history-virt`.
 
 ## Что где
 
@@ -150,7 +150,8 @@ USB-устройство в гостя — «Redirect USB device» в консо
 Для Windows 11 есть всё на стороне host: OVMF с Secure Boot и ключами
 Microsoft (`OVMF_CODE_4M.secboot.fd`, `OVMF_VARS_4M.ms.fd`) и эмуляция TPM
 (`swtpm`). Понадобятся ещё ISO драйверов virtio-win (в Ubuntu его нет,
-скачивается с fedorapeople) и 8 ГБ+ памяти. Сама VM в план не входит.
+скачивается с fedorapeople) и 8 ГБ+ памяти. Переменные UEFI новой VM — в
+qcow2, как у любой (раздел «Snapshots»). Сама VM в план virt не входила.
 
 ## Проброс GPU
 

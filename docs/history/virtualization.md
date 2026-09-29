@@ -1,10 +1,18 @@
-title: ws-plan-virt
+title: ws-history-virt
 section: 1
 date: 2026-09-28
 source: Workstation
 volume: User Commands
 
 # PLAN — KVM / LIBVIRT
+
+> История: как слой строился и почему так. Действующее описание — `helpws virt`; пути и команды ниже могли с тех пор измениться.
+
+## Статус
+
+**DONE 2026-09-29.** Все проверки шага 4 пройдены, `ws check` без FAIL и
+WARN. Вне плана: backup дисков `@vms` — `helpws plan-final`; Windows VM —
+заложено на host, не сделано.
 
 ## Цель
 
@@ -99,13 +107,14 @@ GUI выбран `virt-manager`: GNOME Boxes работает только с
    работающей VM с virtiofs и откат работают, share после отката
    смонтирована.
 
-   Проверить:
-   - после перезагрузки host bind-монтирования на месте до старта libvirt;
-     откат `@` не трогает VM;
-   - USB redirect (флешка);
-   - suspend host с запущенной VM и resume (T2: `helpws suspend`);
-   - перезагрузка host: пул и сеть поднимаются сами.
-5. Документация по итогам: `helpws virt` — проверенные настройки и
+   USB redirect флешки, suspend host с работающей VM и resume
+   (пользователь, 2026-09-29). Перезагрузка host: bind-монтирования
+   `@vms` поднимаются раньше libvirtd (~6 с и ~11 с после загрузки
+   ядра), пул и сеть `default` — сами, `ws check virt` PASS=19. Откат `@`
+   на практике не проверялся: VM на отдельном subvolume `@vms`, snapshots
+   `@` его не содержат. Старые каталоги `*.before-vms-*` и raw NVRAM
+   `ubuntu-test` удаляются вручную (sudo) после перезагрузки.
+5. **Сделано (2026-09-29).** `helpws virt` — проверенные настройки и
    ограничения; план — в `history/`.
 
 ## DONE WHEN

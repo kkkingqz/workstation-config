@@ -40,8 +40,9 @@ volume: User Commands
 1. `helpws plan-t2`
    Touch ID, fan policy, battery audit, optional hibernate/suspend-then-hibernate.
 
-2. `helpws plan-virt`
-   KVM/libvirt/virt-manager.
+2. Фаза 6 — второе железо (`helpws history-nix`, «ФАЗА 6»)
+   Решение пользователя: после плана virt. Первая машина — VM: чистая
+   Ubuntu 26.04 на generic-ядре, весь путь по `helpws rebuild`.
 
 3. `helpws plan-final`
    Инвентаризация, backups, snapshots, restore checkpoints и финальный
@@ -68,6 +69,7 @@ GNOME host layer        2026-09-23   history-gnome     gnome
 Flatpak                 2026-09-24   history-flatpak   flatpak
 Distrobox / Podman      2026-09-26   history-distrobox distrobox
 Windows / Wine / Steam  2026-09-28   history-windows   windows
+VM: KVM / libvirt       2026-09-29   history-virt      virt
 Nix + home-manager      2026-09-28   history-nix       rebuild, workstation
 ```
 

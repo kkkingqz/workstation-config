@@ -1,7 +1,7 @@
 # Completions for helpws.
 complete -c helpws -f
 
-set -l helpws_topics readme layers architecture checks check workstation system baseline terminal term ghostty fish keyboard keys touchbar touch-bar suspend sleep power gnome desktop rebuild reinstall install distrobox box boxes wsbox flatpak wsflatpak windows wine wswin steam proton virt vm vms libvirt kvm roadmap plans plan-t2 plan-virt plan-final history-gnome history-flatpak history-distrobox history-windows history-nix history-suspend history-touchbar plan-gnome plan-flatpak plan-dev plan-windows plan-nix man help
+set -l helpws_topics readme layers architecture checks check workstation system baseline terminal term ghostty fish keyboard keys touchbar touch-bar suspend sleep power gnome desktop rebuild reinstall install distrobox box boxes wsbox flatpak wsflatpak windows wine wswin steam proton virt vm vms libvirt kvm roadmap plans plan-t2 plan-virt plan-final history-gnome history-flatpak history-distrobox history-windows history-nix history-suspend history-touchbar history-virt plan-gnome plan-flatpak plan-dev plan-windows plan-nix man help
 
 function __helpws_topic -a name desc
     complete -c helpws -n "not __fish_seen_subcommand_from $helpws_topics" -a $name -d $desc
@@ -23,7 +23,6 @@ __helpws_topic windows 'Wine / Proton / Steam'
 __helpws_topic virt 'Virtual machines: KVM, libvirt, virt-manager'
 __helpws_topic roadmap 'What is left'
 __helpws_topic plan-t2 'T2 optional / power / auth'
-__helpws_topic plan-virt 'KVM / libvirt / virt-manager'
 __helpws_topic plan-final 'Backup / inventory / finalization'
 __helpws_topic history-gnome 'How the GNOME layer was built'
 __helpws_topic history-flatpak 'How the Flatpak layer was built'
@@ -31,6 +30,7 @@ __helpws_topic history-distrobox 'How the Distrobox layer was built'
 __helpws_topic history-windows 'How the Windows layer was built'
 __helpws_topic history-nix 'Nix + home-manager migration'
 __helpws_topic history-suspend 'Suspend / Touch Bar failures and fixes'
+__helpws_topic history-virt 'How the VM layer was built'
 __helpws_topic man 'Open generated man page in Micro'
 
 functions -e __helpws_topic
