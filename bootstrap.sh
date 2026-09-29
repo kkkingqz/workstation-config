@@ -271,6 +271,7 @@ else
     run sudo install -d -m 0755 "$vms/firmware"
     run sudo qemu-img convert -f raw -O qcow2 "$vars" "$vars_qcow2"
     run sudo chmod 0644 "$vars_qcow2"
+    echo "$vars_qcow2 made from $vars"
 fi
 [[ "$stopped" == false ]] || run sudo systemctl start "${libvirt_units[@]}"
 
