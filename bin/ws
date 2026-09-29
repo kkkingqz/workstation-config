@@ -785,7 +785,7 @@ cmd_check() {
         apt) shift; cmd_check_apt "$@"; return ;;
         repo) shift; exec "$repo/bin/ws-check-repo" "$@" ;;
         home) shift; exec "$repo/bin/ws-check-home" "$@" ;;
-        virt) shift; exec "$repo/bin/ws-check-virt" "$@" ;;
+        virt|vm) shift; exec "$repo/bin/ws-check-virt" "$@" ;;
         -v|--verbose) verbose=true ;;
         "") ;;
         *) die "unknown check option: $1" ;;

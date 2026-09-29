@@ -169,7 +169,7 @@ if [[ "$layout_done" == false ]] && systemctl is-active --quiet libvirtd.service
     # root: the user may not have the libvirt group in this session yet.
     running="$(sudo virsh -q -c qemu:///system list --name 2>/dev/null || true)"
     running="$(sed '/^$/d' <<<"$running")"
-    [[ -z "$running" ]] || die "shut down the running VMs first: $(echo $running)"
+    [[ -z "$running" ]] || die "shut down the running VMs first and wait for \"shut off\" (virsh -c qemu:///system domstate NAME): $(echo $running)"
     run sudo systemctl stop "${libvirt_units[@]}"
     stopped=true
 fi
