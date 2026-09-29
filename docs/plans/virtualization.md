@@ -93,12 +93,16 @@ GUI выбран `virt-manager`: GNOME Boxes работает только с
    Сделано 2026-09-29: новая VM (`virt-install --boot uefi`) получает
    `NAME_VARS.qcow2` сама; `ubuntu-test` переведена, snapshot работающей VM
    (с TPM) и откат: файл, созданный после snapshot, пропал, гость вернулся в
-   память на момент snapshot (~5 с).
+   память на момент snapshot (~5 с). Snapshot выключенной `ubuntu-test` и
+   откат: файл, созданный после snapshot, пропал. virtiofs
+   (`~/VMs/share`): чтение и запись в обе стороны, UID как есть; snapshot
+   работающей VM с virtiofs и откат работают, share после отката
+   смонтирована.
 
    Проверить:
    - после перезагрузки host bind-монтирования на месте до старта libvirt;
      откат `@` не трогает VM;
-   - USB redirect (флешка), virtiofs-папка;
+   - USB redirect (флешка);
    - suspend host с запущенной VM и resume (T2: `helpws suspend`);
    - перезагрузка host: пул и сеть поднимаются сами.
 5. Документация по итогам: `helpws virt` — проверенные настройки и

@@ -127,8 +127,21 @@ virsh -c qemu:///system define /tmp/NAME.xml
 
 ## Устройства
 
-Общая папка с host — virtiofs («Add Hardware → Filesystem», в госте
-`mount -t virtiofs TAG /mnt`); нужна «Shared memory» в памяти VM.
+Общая папка с host — virtiofs. Папка — в пуле (`~/VMs/share` =
+`/var/lib/libvirt/images/share`, на `@vms`); в VM (выключенной) — общая
+память и устройство (в virt-manager: «Memory → Enable shared memory»,
+«Add Hardware → Filesystem», driver virtiofs, target — метка):
+
+```console
+virt-xml --connect qemu:///system NAME --edit --memorybacking source.type=memfd,access.mode=shared
+virt-xml --connect qemu:///system NAME --add-device --filesystem driver.type=virtiofs,source.dir=/var/lib/libvirt/images/share,target.dir=share
+```
+
+В госте: `sudo mount -t virtiofs share /mnt/share` (постоянно — строка
+`share /mnt/share virtiofs defaults,nofail 0 0` в fstab гостя). Владельцы
+файлов передаются как есть (UID): пользователь гостя с UID 1000 пишет файлы
+`king`, root гостя — root. Snapshots работающей VM с virtiofs делаются и
+откатываются; содержимое папки в snapshot не входит.
 
 USB-устройство в гостя — «Redirect USB device» в консоли (SPICE).
 
