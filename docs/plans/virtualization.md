@@ -90,6 +90,10 @@ GUI выбран `virt-manager`: GNOME Boxes работает только с
    2026-09-29): новые VM сразу с NVRAM в qcow2 — шаблон на `@vms/firmware`
    (`bootstrap.sh`), описание прошивки в `/etc/qemu/firmware` (системный
    слой); `ubuntu-test` перевести вручную (`helpws virt`, «Snapshots»).
+   Сделано 2026-09-29: новая VM (`virt-install --boot uefi`) получает
+   `NAME_VARS.qcow2` сама; `ubuntu-test` переведена, snapshot работающей VM
+   (с TPM) и откат: файл, созданный после snapshot, пропал, гость вернулся в
+   память на момент snapshot (~5 с).
 
    Проверить:
    - после перезагрузки host bind-монтирования на месте до старта libvirt;
