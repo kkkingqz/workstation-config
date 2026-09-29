@@ -1,5 +1,6 @@
 # apt packages every host needs on top of a standard Ubuntu desktop.
-# One package per line; `ppa:OWNER/NAME` adds an Ubuntu PPA first.
+# One package per line; `ppa:OWNER/NAME` adds an Ubuntu PPA first;
+# `snap-remove:NAME` removes a snap of the standard install.
 # Installed by bootstrap.sh; `ws check apt` compares with apt-mark showmanual.
 # Host packages: nix/hosts/<name>/apt.txt.
 

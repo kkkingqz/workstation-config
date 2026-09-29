@@ -196,6 +196,12 @@ cmd_capture() {
         cat "$repo/nix/hosts/apt.txt" "$repo/nix/hosts/$h/apt.txt" 2>/dev/null \
             | sed -e 's/#.*//' -e 's/[[:space:]]//g' -e '/^$/d' -e '/^ppa:/d' | sort -u \
             | while read -r pkg; do
+                if [[ "$pkg" == snap-remove:* ]]; then
+                    snap list "${pkg#snap-remove:}" >/dev/null 2>&1 \
+                        && printf 'snap-remove\t%s\tINSTALLED\n' "${pkg#snap-remove:}" \
+                        || printf 'snap-remove\t%s\tremoved\n' "${pkg#snap-remove:}"
+                    continue
+                fi
                 printf 'apt\t%s\t%s\n' "$pkg" \
                     "$(dpkg-query -W -f='${Version}' "$pkg" 2>/dev/null || echo MISSING)"
             done

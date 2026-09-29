@@ -111,7 +111,8 @@ subvolume_mount @nix /nix noatime,compress=zstd:1
 echo
 echo "== 2. apt"
 mapfile -t ppas < <(apt_lines | sed -n 's/^ppa://p')
-mapfile -t packages < <(apt_lines | grep -v '^ppa:')
+mapfile -t packages < <(apt_lines | grep -v '^ppa:\|^snap-remove:')
+mapfile -t snaps_remove < <(apt_lines | sed -n 's/^snap-remove://p')
 added=false
 for ppa in "${ppas[@]}"; do
     if grep -rqsF "ppa.launchpadcontent.net/$ppa/" /etc/apt/sources.list.d/; then
@@ -134,6 +135,13 @@ else
     [[ "$added" == false ]] || run sudo apt-get update
     echo "all ${#packages[@]} packages installed"
 fi
+for snap in "${snaps_remove[@]}"; do
+    if snap list "$snap" >/dev/null 2>&1; then
+        run sudo snap remove "$snap"
+    else
+        echo "snap not installed: $snap"
+    fi
+done
 
 echo
 echo "== 3. VM state on @vms, libvirt (helpws virt)"
