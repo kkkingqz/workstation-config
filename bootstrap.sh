@@ -3,7 +3,8 @@ set -euo pipefail
 
 # First steps on a fresh Ubuntu (helpws rebuild, helpws history-nix):
 # @nix subvolume at /nix → apt packages (nix/hosts/apt.txt, nix/hosts/<host>/apt.txt)
-# → VM storage @vms at /var/lib/libvirt/images, pool and network → groups
+# → VM state on @vms (images, nvram, qemu XML bound into libvirt), pool and
+# network → groups
 # nix-users, libvirt → fish as login shell → first `ws switch`.
 #
 # Runs as the desktop user from the checkout at ~/<wsconfig of
@@ -135,13 +136,116 @@ else
 fi
 
 echo
-echo "== 3. VM storage and libvirt (helpws virt)"
-# Disk images on their own subvolume: outside the snapshots of @ (a rollback
-# of @ leaves the VMs alone), without copy-on-write (qcow2 on CoW Btrfs
-# fragments). The directory is libvirt's default pool; the libvirt group
-# may add images and ISOs there (~/VMs links to it).
+echo "== 3. VM state on @vms, libvirt (helpws virt)"
+# Everything a VM is made of lives on the subvolume @vms, outside the
+# snapshots of @: a rollback of @ leaves disks, definitions and UEFI
+# variables alone. @vms is mounted at /var/lib/vms; libvirt sees its own
+# paths through bind mounts:
+#   images/  /var/lib/libvirt/images  disks, ISOs (pool default; no CoW,
+#                                     qcow2 on CoW Btrfs fragments)
+#   qemu/    /var/lib/libvirt/qemu    UEFI variables (nvram/), snapshot
+#                                     metadata, saved states
+#   swtpm/   /var/lib/libvirt/swtpm   TPM state of each VM
+#   xml/     /etc/libvirt/qemu        VM and network XML, autostart links
+vms=/var/lib/vms
 images=/var/lib/libvirt/images
-subvolume_mount @vms "$images" noatime
+binds=("images $images" "qemu /var/lib/libvirt/qemu" "swtpm /var/lib/libvirt/swtpm" "xml /etc/libvirt/qemu")
+virsh=(sudo virsh -q -c qemu:///system)
+libvirt_units=(libvirtd.service libvirtd.socket libvirtd-ro.socket libvirtd-admin.socket)
+
+bound() {
+    [[ "$(findmnt -no SOURCE "$2" 2>/dev/null)" == *"[/@vms/$1]" ]]
+}
+layout_done=true
+for b in "${binds[@]}"; do
+    bound $b || layout_done=false
+done
+# Layout of 2026-09-28: @vms mounted at the images directory itself.
+old_layout=false
+[[ "$(findmnt -no SOURCE "$images" 2>/dev/null)" == *"[/@vms]" ]] && old_layout=true
+
+stopped=false
+if [[ "$layout_done" == false ]] && systemctl is-active --quiet libvirtd.service 2>/dev/null; then
+    # root: the user may not have the libvirt group in this session yet.
+    running="$(sudo virsh -q -c qemu:///system list --name 2>/dev/null || true)"
+    running="$(sed '/^$/d' <<<"$running")"
+    [[ -z "$running" ]] || die "shut down the running VMs first: $(echo $running)"
+    run sudo systemctl stop "${libvirt_units[@]}"
+    stopped=true
+fi
+
+if [[ "$old_layout" == true ]]; then
+    echo "moving @vms from $images to $vms"
+    run sudo umount "$images"
+    if [[ "$dry_run" == true ]]; then
+        echo "would drop the fstab line of $images"
+    else
+        sudo cp -a /etc/fstab "/etc/fstab.before-vms-layout-$(date +%Y%m%d-%H%M%S)"
+        sudo sed -i "\\|^[^#]*[[:space:]]$images[[:space:]]|d" /etc/fstab
+    fi
+fi
+subvolume_mount @vms "$vms" noatime
+run sudo chmod 0755 "$vms"
+
+if [[ "$old_layout" == true ]]; then
+    # The images were the top of @vms: move them into images/ (same
+    # subvolume, so a rename; files keep their no-CoW attribute).
+    run sudo install -d "$vms/images"
+    run sudo chattr +C "$vms/images"
+    if [[ "$dry_run" == true ]]; then
+        echo "would move the top of $vms into $vms/images"
+    else
+        sudo find "$vms" -mindepth 1 -maxdepth 1 ! -name images ! -name qemu ! -name swtpm ! -name xml \
+            -exec mv -t "$vms/images" {} +
+    fi
+fi
+
+# Bind SUBDIR of @vms onto TARGET. The first time, what the package or an
+# earlier install left in TARGET is moved into @vms; the old directory stays
+# as TARGET.before-vms.
+for b in "${binds[@]}"; do
+    set -- $b
+    sub="$1" target="$2" store="$vms/$1"
+    if bound "$sub" "$target"; then
+        echo "$target is @vms/$sub"
+        continue
+    fi
+    if [[ "$dry_run" == true ]]; then
+        echo "would bind $store onto $target (moving its content into @vms first)"
+    else
+        sudo install -d "$store" "$target"
+        if [[ -z "$(sudo find "$store" -mindepth 1 -maxdepth 1 -print -quit)" ]]; then
+            sudo chown --reference="$target" "$store"
+            sudo chmod --reference="$target" "$store"
+            # Sockets of earlier runs (libvirt stopped, VMs off) are stale.
+            sudo find "$target" -type s -delete
+            sudo cp -a "$target"/. "$store"/
+        elif [[ -n "$(sudo find "$target" -mindepth 1 -maxdepth 1 -print -quit)" ]]; then
+            die "both $store and $target hold data; merge them by hand"
+        fi
+        if [[ -n "$(sudo find "$target" -mindepth 1 -maxdepth 1 -print -quit)" ]]; then
+            old="$target.before-vms-$(date +%Y%m%d-%H%M%S)"
+            sudo mv "$target" "$old"
+            sudo install -d "$target"
+            sudo chown --reference="$old" "$target"
+            sudo chmod --reference="$old" "$target"
+            echo "old $target kept as $old"
+        fi
+    fi
+    if grep -Eq "^[^#]*[[:space:]]$target[[:space:]]" /etc/fstab; then
+        echo "$target already in fstab"
+    else
+        line="$store  $target  none  bind,x-systemd.requires-mounts-for=$vms  0 0"
+        if [[ "$dry_run" == true ]]; then
+            echo "would append to /etc/fstab: $line"
+        else
+            printf '%s\n' "$line" | sudo tee -a /etc/fstab >/dev/null
+        fi
+    fi
+    run sudo systemctl daemon-reload
+    run sudo mount "$target"
+done
+
 if [[ "$dry_run" == false ]] && lsattr -d "$images" 2>/dev/null | cut -d' ' -f1 | grep -q C; then
     echo "$images: no copy-on-write"
 else
@@ -153,7 +257,8 @@ else
     run sudo chown root:libvirt "$images"
     run sudo chmod 2775 "$images"
 fi
-virsh=(sudo virsh -q -c qemu:///system)
+[[ "$stopped" == false ]] || run sudo systemctl start "${libvirt_units[@]}"
+
 # Output first, then grep: grep -q stops reading, virsh gets SIGPIPE, and
 # pipefail would count the match as a failure.
 info_of() {

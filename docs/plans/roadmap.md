@@ -47,6 +47,8 @@ volume: User Commands
    Инвентаризация, backups, snapshots, restore checkpoints и финальный
    smoke-test. Уже есть: `ws collect` (состояние машины для rebuild),
    `ws checkpoint` (коммит ↔ рабочее состояние), `ws baseline`.
+   Обязательно: backup `@vms` (диски VM не входят ни в snapshots `@`, ни в
+   `ws collect`).
 
 Отложено:
 

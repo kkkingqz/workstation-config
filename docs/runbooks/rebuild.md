@@ -74,7 +74,7 @@ apply` — из них собираются `refind_linux.conf`, `refind.conf` �
 ```text
 @  @home  @root  @srv  @cache  @tmp  @log  .snapshots
 @nix       создаёт bootstrap.sh (раздел 6.0)
-@vms       диски VM в /var/lib/libvirt/images, создаёт bootstrap.sh
+@vms       состояние VM в /var/lib/vms, создаёт bootstrap.sh; backup — отдельно
 ```
 
 Root грузится с `rootflags=subvol=@`. Проверенного скрипта раскладки нет:
@@ -187,7 +187,8 @@ ws check            # проверки всех владельцев и verify (
 `bootstrap.sh` (от пользователя, sudo вызывает сам; `--dry-run` только
 показывает шаги): subvolume `@nix` и строка `/nix` в fstab → пакеты из
 `nix/hosts/apt.txt` и `nix/hosts/<host>/apt.txt` (с PPA fish) → `@vms` в
-`/var/lib/libvirt/images`, пул и сеть libvirt `default` → группы `nix-users`,
+`/var/lib/vms` с bind-монтированиями в пути libvirt, пул и сеть `default` →
+группы `nix-users`,
 `libvirt` → fish
 как login shell → первый `ws switch` (заменяемые файлы сохраняются как
 `*.pre-hm`). Хост определяется по hostname (`ws host`); для новой машины —

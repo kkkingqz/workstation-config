@@ -55,7 +55,6 @@ Snapshots root не являются backup.
 
 ```text
 ~/Projects
-~/VMs
 ~/Games / saves
 Wine HOME/prefixes
 important ~/.var/app
@@ -67,6 +66,30 @@ T2-specific config files
 ```
 
 Не backup'ить автоматически огромные caches/runtimes, если они восстанавливаются установкой.
+
+---
+
+# 2a. Backup VM — @vms (обязательно)
+
+Всё состояние VM — на subvolume `@vms` (`/var/lib/vms`, `helpws virt`):
+диски, NVRAM, TPM, описания. Root snapshots его не содержат, `ws collect`
+дисков не содержит. Без отдельного backup потеря диска или переустановка —
+это потеря VM. Решить и проверить:
+
+- что копируется: весь `@vms` или только выбранные VM (тестовые VM,
+  пересоздаваемые с ISO, можно не хранить);
+- как: read-only snapshot `@vms` (согласованная копия; VM выключены или
+  `virsh domfsfreeze`/managedsave) → `btrfs send` (полный, затем
+  инкрементальный от прошлого snapshot) на внешний диск с Btrfs; или
+  `qemu-img convert -c` отдельных дисков плюс `virt/` из `ws collect`;
+- куда и как часто; сколько копий хранить;
+- NOCOW: у образов нет контрольных сумм Btrfs, поэтому копия проверяется
+  отдельно (`qemu-img check`, загрузка VM из копии);
+- restore test: вернуть одну VM из backup на чистый `@vms` и загрузить её с
+  прежними NVRAM и TPM.
+
+Команда (`ws vms backup` или часть общего backup) — по итогам решения;
+`ws check virt` тогда предупреждает о слишком старом backup.
 
 ---
 
@@ -95,7 +118,8 @@ Snapshot делать перед:
 4. выполнить документированный rollback;
 5. убедиться, что root возвращён корректно.
 
-Отдельно помнить: rollback root не восстанавливает внешний backup HOME/VM/projects.
+Отдельно помнить: rollback root не восстанавливает HOME, `@vms` и projects —
+у них свой backup.
 
 ---
 
@@ -195,6 +219,7 @@ podman ps -a
 - весь используемый software имеет понятный installation boundary;
 - host inventory сохранён;
 - user data backup определён;
+- backup `@vms` определён и восстановление VM из него проверено;
 - Btrfs rollback документирован и проверен;
 - final smoke-test проходит;
 - восстановление не зависит от памяти о старых чатах.

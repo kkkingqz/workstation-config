@@ -23,10 +23,13 @@ host: она связана с ядром, устройствами и сеть�
 подключение    qemu:///system; группа libvirt (bootstrap.sh), kvm не нужна
 GUI            virt-manager: мастер создания, консоль SPICE (буфер обмена,
                подгонка экрана, USB redirect), snapshots, настройки VM
-хранение       subvolume @vms в /var/lib/libvirt/images (пул default), без CoW,
-               вне snapshots @; ~/VMs — ссылка (virt/virt.nix)
+хранение       всё состояние VM на subvolume @vms (/var/lib/vms), вне snapshots
+               @: images (пул default, без CoW), qemu (NVRAM, snapshots),
+               swtpm, xml — bind-монтированиями в пути libvirt; ~/VMs — ссылка
+backup         диски не входят в ws collect: backup @vms — plan-final
 сеть           NAT default (virbr0); bridge нет: Wi-Fi не мостится
-описания VM    состояние libvirt, не в репозитории; ws collect сохраняет XML
+описания VM    состояние libvirt, не в репозитории; на @vms, ws collect
+               сохраняет XML, NVRAM и TPM для переустановки
 проверка       ws check virt
 Windows        заложено на host (OVMF Secure Boot + ключи Microsoft, swtpm),
                сама VM вне плана
@@ -57,7 +60,16 @@ GUI выбран `virt-manager`: GNOME Boxes работает только с
 4. Тестовая VM `ubuntu-test` создана (2026-09-28, `virt-install`, mini ISO
    26.04): q35, OVMF Secure Boot + TPM, 4 vCPU, 8 ГБ, 40 ГБ qcow2 без CoW,
    virtio, SPICE. Найдено: путь через `~/VMs` qemu не открывает — только
-   пути пула; NVRAM лежит на `@` — добавлен в `ws collect`. Проверить:
+   пути пула; NVRAM лежит на `@` — добавлен в `ws collect`.
+   **2026-09-29:** по замечанию пользователя всё постоянное состояние VM
+   перенесено на `@vms`: `@vms` в `/var/lib/vms`, bind-монтирования
+   `images`, `qemu` (NVRAM, snapshots), `swtpm`, `xml` (`/etc/libvirt/qemu`).
+   Прежняя раскладка (`@vms` прямо в `images`) переносится `bootstrap.sh`
+   при выключенных VM.
+
+   Проверить:
+   - переход на новую раскладку (`bootstrap.sh`), VM загружается с прежними
+     NVRAM и TPM; откат `@` не трогает VM;
    - установка и загрузка, сеть через NAT, SSH с host на гостя;
    - snapshot работающей и выключенной VM и откат к нему (UEFI-прошивка и
      внутренние snapshots qcow2 в libvirt исторически несовместимы —
@@ -75,5 +87,5 @@ GUI выбран `virt-manager`: GNOME Boxes работает только с
 - `virt-manager` открывается и управляет VM без ручной настройки;
 - тестовая UEFI VM ставится, загружается, откатывается к snapshot;
 - suspend host с работающей VM проходит;
-- `ws collect` сохраняет описания VM, а их диски лежат в `@vms` вне
-  snapshots `@`.
+- состояние VM целиком на `@vms` (`ws check virt`), `ws collect` сохраняет
+  описания, NVRAM и TPM, для дисков есть backup (`plan-final`).

@@ -14,25 +14,37 @@ VM работают на host: KVM, QEMU и libvirt связаны с ядром
 
 ```text
 nix/hosts/apt.txt           qemu, libvirt, virt-manager, SPICE, OVMF, swtpm, virtiofsd
-bootstrap.sh, шаг 3         @vms, пул и сеть default, группа libvirt
+bootstrap.sh, шаг 3         @vms и bind-монтирования, пул и сеть default, группа libvirt
 virt/virt.nix               ~/VMs -> /var/lib/libvirt/images
 bin/ws-check-virt           ws check virt
 ```
 
+Всё состояние VM — на subvolume `@vms` (смонтирован в `/var/lib/vms`),
+libvirt видит его на своих путях через bind-монтирования (fstab):
+
 ```text
-/var/lib/libvirt/images     диски и ISO: subvolume @vms, без copy-on-write,
-                            root:libvirt 2775, пул libvirt «default»
-~/VMs                       ссылка туда же
-/etc/libvirt/qemu/*.xml     описания VM (libvirt, на @)
-/var/lib/libvirt/qemu/nvram переменные UEFI каждой VM (на @)
-virbr0, 192.168.122.0/24    NAT-сеть «default»
+@vms/images  /var/lib/libvirt/images  диски и ISO: без copy-on-write,
+                                      root:libvirt 2775, пул «default»
+@vms/qemu    /var/lib/libvirt/qemu    переменные UEFI (nvram/), метаданные
+                                      snapshots, сохранённые состояния
+@vms/swtpm   /var/lib/libvirt/swtpm   состояние TPM каждой VM
+@vms/xml     /etc/libvirt/qemu        описания VM и сетей, autostart
+~/VMs                                 ссылка на /var/lib/libvirt/images
+virbr0, 192.168.122.0/24              NAT-сеть «default»
 ```
 
-`@vms` не входит в snapshots `@`: откат `@` не трогает диски, snapshots не
-раздуваются. Без copy-on-write у образов нет контрольных сумм Btrfs и
-сжатия — обычная цена за qcow2 без фрагментации. Описания VM лежат на `@`;
-их и NVRAM сохраняет `ws collect` (`virt/domain-*.xml`, `virt/nvram/`),
-вернуть — `virsh -c qemu:///system define FILE` и NVRAM на прежний путь.
+`@vms` не входит в snapshots `@`: откат `@` не трогает ни диски, ни
+описания, ни UEFI и TPM, а snapshots не раздуваются. Если откатить `@` на
+состояние до `@vms` (без его строк в fstab), libvirt увидит старые пустые
+каталоги `@` — VM не пропадут, вернутся с `bootstrap.sh`. Без
+copy-on-write у образов нет контрольных сумм Btrfs и сжатия — обычная цена
+за qcow2 без фрагментации.
+
+Переустановка `@vms` не сохраняет: диски — backup `@vms`
+(`helpws plan-final`), описания, NVRAM и TPM — ещё и `ws collect`
+(`virt/`), вернуть — `virsh -c qemu:///system define FILE`, NVRAM и
+`swtpm/` на прежние пути. Кэш DHCP (`/var/lib/libvirt/dnsmasq`) остаётся на
+`@`: он пересоздаётся.
 
 `~/VMs` — только для рук: класть ISO, смотреть файлы. VM должна получать
 пути пула (`/var/lib/libvirt/images/…`, в virt-manager — «Browse» → пул

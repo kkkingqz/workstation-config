@@ -41,7 +41,7 @@ Root работает на **Btrfs**.
 @tmp
 @log
 @nix          /nix: Nix store, отдельно от @ (откат @ не трогает /nix)
-@vms          /var/lib/libvirt/images: диски VM, без CoW, вне snapshots @
+@vms          /var/lib/vms: состояние VM (диски, UEFI, TPM, XML), вне snapshots @
 .snapshots
 ```
 

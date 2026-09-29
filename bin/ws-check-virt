@@ -2,8 +2,9 @@
 set -u
 set -o pipefail
 
-# Virtual machines (helpws virt): KVM, libvirt qemu:///system, the VM storage
-# @vms that bootstrap.sh sets up, the NAT network, UEFI and TPM for guests.
+# Virtual machines (helpws virt): KVM, libvirt qemu:///system, the VM state on
+# @vms that bootstrap.sh sets up (disks, UEFI variables, TPM, XML), the NAT
+# network, UEFI and TPM for guests.
 # Read-only. ws check virt; ws check runs it with --json (lib/check.bash).
 
 repo="${WSCONFIG:-$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)}"
@@ -63,11 +64,21 @@ fi
 
 section "3. Storage"
 
-if findmnt -no OPTIONS "$images" 2>/dev/null | tr ',' '\n' | grep -qx 'subvol=/@vms'; then
-    pass "$images is subvolume @vms"
+# All VM state lives on @vms (outside the snapshots of @), bound into the
+# paths libvirt uses.
+if findmnt -no OPTIONS /var/lib/vms 2>/dev/null | tr ',' '\n' | grep -qx 'subvol=/@vms'; then
+    pass "/var/lib/vms is subvolume @vms"
 else
-    fail "$images is not mounted from @vms (bootstrap.sh)"
+    fail "/var/lib/vms is not mounted from @vms (bootstrap.sh)"
 fi
+for b in "images $images" "qemu /var/lib/libvirt/qemu" "swtpm /var/lib/libvirt/swtpm" "xml /etc/libvirt/qemu"; do
+    set -- $b
+    if [[ "$(findmnt -no SOURCE "$2" 2>/dev/null)" == *"[/@vms/$1]" ]]; then
+        pass "$2 is @vms/$1"
+    else
+        fail "$2 is not bound from @vms/$1: that VM state is on @ (bootstrap.sh)"
+    fi
+done
 lsattr -d "$images" 2>/dev/null | cut -d' ' -f1 | grep -q C \
     && pass "$images without copy-on-write (+C)" \
     || fail "$images has copy-on-write; qcow2 images fragment (sudo chattr +C, then copy images anew)"

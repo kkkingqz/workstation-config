@@ -78,7 +78,8 @@ Distrobox ↔ NTSync) проверяет `ws-workstation-verify`. Формат �
 ~/.local/state/workstation      состояние: backup сочетаний, baseline, checkpoints,
                                 применённое системное дерево
 ~/distrobox/<имя>               HOME каждого контейнера
-/var/lib/libvirt/images         диски VM: subvolume @vms вне snapshots @ (~/VMs)
+/var/lib/vms                    всё состояние VM: subvolume @vms вне snapshots @
+                                (диски, UEFI, TPM, XML; bind в пути libvirt; ~/VMs)
 ```
 
 Путь checkout — `wsconfig` в `facts.nix`; скрипты находят его по своему
