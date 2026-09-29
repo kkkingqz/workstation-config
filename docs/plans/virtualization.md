@@ -75,14 +75,22 @@ GUI выбран `virt-manager`: GNOME Boxes работает только с
    запускается с перенесёнными NVRAM и TPM; старые каталоги —
    `*.before-vms-20260929-*`, удалить после перезагрузки host.
 
+   Проверено 2026-09-29: `ubuntu-test` (mini ISO 26.04) ставится и
+   загружается, NAT (DHCP), SSH с host, qemu-guest-agent, буфер обмена и
+   подгонка экрана (spice-vdagent).
+
+   Snapshots: libvirt 12 не делает внутренний snapshot VM с UEFI, пока
+   NVRAM в raw («internal snapshots of a VM with pflash based firmware
+   require QCOW2 nvram format»), а сам переводить шаблон raw в qcow2 не
+   умеет («conversion of the nvram template to another target format is
+   not supported»); qcow2-сборок OVMF в Ubuntu нет. С NVRAM, заранее
+   переведённой `qemu-img convert -O qcow2` (код прошивки остаётся raw),
+   проверено на временной VM: snapshot работающей и выключенной VM, откат к
+   обоим, snapshot ложится и в диск, и в NVRAM.
+
    Проверить:
    - после перезагрузки host bind-монтирования на месте до старта libvirt;
      откат `@` не трогает VM;
-   - установка и загрузка, сеть через NAT, SSH с host на гостя;
-   - snapshot работающей и выключенной VM и откат к нему (UEFI-прошивка и
-     внутренние snapshots qcow2 в libvirt исторически несовместимы —
-     проверить, что умеет libvirt 12; запасной путь — копия диска
-     выключенной VM);
    - USB redirect (флешка), virtiofs-папка;
    - suspend host с запущенной VM и resume (T2: `helpws suspend`);
    - перезагрузка host: пул и сеть поднимаются сами.
