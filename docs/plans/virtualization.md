@@ -67,6 +67,10 @@ GUI выбран `virt-manager`: GNOME Boxes работает только с
    Прежняя раскладка (`@vms` прямо в `images`) переносится `bootstrap.sh`
    при выключенных VM.
 
+   Установка с mini ISO упала в debug shell («failed to determine size
+   reservation for memmap») при 8 ГБ: образ целиком в RAM. С 18 ГБ пошла
+   (пользователь, 2026-09-29).
+
    Перенос выполнен 2026-09-29: `ws check virt` без FAIL, `ubuntu-test`
    запускается с перенесёнными NVRAM и TPM; старые каталоги —
    `*.before-vms-20260929-*`, удалить после перезагрузки host.

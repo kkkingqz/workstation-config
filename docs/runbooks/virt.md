@@ -85,6 +85,11 @@ virt-install --connect qemu:///system --name NAME --osinfo ubuntu25.10 \
 В osinfo Ubuntu 26.04 пока нет — ближайший `ubuntu25.10`. Размеры (4 vCPU,
 8 ГБ, 40 ГБ) — наши; host: 12 потоков, 32 ГБ.
 
+Mini ISO (`*-mini-iso-*`) скачивает полный образ и держит его в RAM: с 8 ГБ
+установка падает в debug shell («failed to determine size reservation for
+memmap»). На время установки — 16 ГБ и больше (`ubuntu-test` ставилась с
+18 ГБ), потом память можно вернуть. Полный ISO этого не требует.
+
 Общая папка с host — virtiofs («Add Hardware → Filesystem», в госте
 `mount -t virtiofs TAG /mnt`); нужна «Shared memory» в памяти VM.
 
