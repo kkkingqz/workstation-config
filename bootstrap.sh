@@ -317,11 +317,19 @@ fi
 
 echo
 echo "== 4. Nix daemon and groups"
-if systemctl is-enabled --quiet nix-daemon.socket 2>/dev/null \
-    && systemctl is-active --quiet nix-daemon.socket; then
-    echo "nix-daemon.socket enabled and active"
+if systemctl is-enabled --quiet nix-daemon.socket 2>/dev/null; then
+    echo "nix-daemon.socket enabled"
 else
-    run sudo systemctl enable --now nix-daemon.socket
+    run sudo systemctl enable nix-daemon.socket
+fi
+if systemctl is-active --quiet nix-daemon.socket; then
+    echo "nix-daemon.socket active"
+else
+    # The postinst of nix-setup-systemd starts nix-daemon.service before the
+    # socket, which then refuses to listen ("service already active"): hand
+    # the daemon over to socket activation, as after a reboot.
+    run sudo systemctl stop nix-daemon.service
+    run sudo systemctl start nix-daemon.socket
 fi
 user="$(id -un)"
 for group in nix-users libvirt; do
