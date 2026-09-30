@@ -1,5 +1,5 @@
-# Keyboard layer data: the GNOME shortcuts of the macOS-style profile and the
-# private Tiling Assistant chords. Not dconf.settings: ws-keyboard-apply sets
+# Keyboard layer data: the GNOME shortcuts and input sources of the
+# macOS-style profile and the private Tiling Assistant chords. Not dconf.settings: ws-keyboard-apply sets
 # the shortcuts only after its preflight and after xremap started (some
 # bindings depend on xremap), saves the originals once and `ws-keyboard
 # restore` puts them back; home-manager would write them on every switch.
@@ -17,6 +17,9 @@
 # backup (~/.local/state/workstation/keyboard/gsettings-backup.tsv).
 { lib, ... }:
 let
+  # GVariant text as it is, for values that are not strings or string arrays.
+  raw = text: { gvariant = text; };
+
   # SCHEMA = { KEY = VALUE; }: list = string array, "" = empty string.
   shortcuts = {
     "org.gnome.desktop.wm.keybindings" = {
@@ -74,6 +77,11 @@ let
 
     # Ubuntu Dock numeric hot keys (Super+number); only where the Dock has it.
     "org.gnome.shell.extensions.dash-to-dock".hot-keys = false;
+
+    # Exactly EN, RU, UA in this order: workstation-input-source switches
+    # among them (helpws keyboard). The installer leaves only its own layout.
+    "org.gnome.desktop.input-sources".sources =
+      raw "[('xkb', 'us'), ('xkb', 'ru'), ('xkb', 'ua')]";
   };
 
   optional = [ "org.gnome.shell.extensions.dash-to-dock/hot-keys" ];
@@ -98,7 +106,8 @@ let
   # GVariant text exactly as `gsettings get` prints it.
   quote = s: "'" + lib.replaceStrings [ "\\" "'" ] [ "\\\\" "\\'" ] s + "'";
   gvariant = v:
-    if lib.isBool v then lib.boolToString v
+    if lib.isAttrs v then v.gvariant
+    else if lib.isBool v then lib.boolToString v
     else if lib.isString v then quote v
     else if v == [ ] then "@as []"
     else "[" + lib.concatMapStringsSep ", " quote v + "]";
