@@ -34,13 +34,22 @@ complete -c wsflatpak -n '__wsflatpak_needs_command' -a test -d 'Run integration
 complete -c wsflatpak -n '__wsflatpak_needs_command' -a apply -d 'Apply managed Flatpak state'
 complete -c wsflatpak -n '__wsflatpak_needs_command' -a manage -d 'Add installed app to flatpak/apps.txt'
 complete -c wsflatpak -n '__wsflatpak_needs_command' -a unmanage -d 'Remove app from flatpak/apps.txt'
+complete -c wsflatpak -n '__wsflatpak_needs_command' -a filesystem -d 'Add filesystem override to flatpak/overrides.txt'
+complete -c wsflatpak -n '__wsflatpak_needs_command' -a unfilesystem -d 'Remove filesystem override'
+complete -c wsflatpak -n '__wsflatpak_needs_command' -a host -d 'Add filesystem=host override'
+complete -c wsflatpak -n '__wsflatpak_needs_command' -a unhost -d 'Remove filesystem=host override'
+complete -c wsflatpak -n '__wsflatpak_needs_command' -a env -d 'Add environment override'
+complete -c wsflatpak -n '__wsflatpak_needs_command' -a unenv -d 'Remove environment override'
+complete -c wsflatpak -n '__wsflatpak_needs_command' -a talk -d 'Add session bus talk override'
+complete -c wsflatpak -n '__wsflatpak_needs_command' -a untalk -d 'Remove session bus talk override'
 
 for cmd in remove uninstall
     complete -c wsflatpak -n "__wsflatpak_using_command $cmd" \
         -l keep-data -d 'Keep application data'
 end
 
-for cmd in permissions reset-permissions info run remove uninstall manage unmanage
+for cmd in permissions reset-permissions info run remove uninstall manage unmanage \
+        filesystem unfilesystem host unhost env unenv talk untalk
     complete -c wsflatpak \
         -n "__wsflatpak_using_command $cmd" \
         -a '(__wsflatpak_user_apps)'

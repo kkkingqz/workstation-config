@@ -34,6 +34,15 @@ ws switch
 wsflatpak apply
 ```
 
+**2026-09-30: overrides — `flatpak/overrides.txt`** (`APP filesystem SPEC`,
+`APP env KEY=VALUE`, `APP talk BUS` по строке), его читает `flatpak.nix`.
+`filesystem`, `host`, `env`, `talk` и их `un…` снова правят файл сами, как
+`install` — `apps.txt`; `ws switch` коммитит и его. Печатает строку для
+`flatpak.nix` только `remote-add`. Повод — `home:ro` для Notesnook:
+Electron при drag-and-drop из Nautilus берёт путь хоста, а не document
+portal, и без доступа к файлу видит размер 0 (Notesnook 3.4.6 показывает на
+это ошибку лимита 5GB).
+
 nix-flatpak не используется: он вызывает `flatpak` из nixpkgs, а не
 системный из apt, и заменил бы проверки `wsflatpak check`. Разделы ниже
 описывают реализацию и проверки; примеры команд обновлены под Nix.

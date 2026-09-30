@@ -1,0 +1,14 @@
+# Flatpak overrides of apps: APP KIND VALUE, one per line; read by flatpak.nix.
+#   APP filesystem SPEC     Context.filesystems: host, home:ro, xdg-download, /path
+#   APP env KEY=VALUE       Environment
+#   APP talk BUS            Session Bus Policy, talk
+# `wsflatpak filesystem|host|env|talk` and `un…` add or drop a line; then
+# `ws switch` (commits it) and `wsflatpak apply`.
+
+# Host files; flatpak-spawn --host for Claude Code.
+com.anthropic.ClaudeDesktop filesystem host
+com.anthropic.ClaudeDesktop talk org.freedesktop.Flatpak
+
+# HiDPI scale; tray icon.
+com.anydesk.Anydesk env GDK_SCALE=2
+com.anydesk.Anydesk talk org.kde.StatusNotifierWatcher

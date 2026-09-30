@@ -1,13 +1,14 @@
 # Flatpak declarations: user remotes, managed apps (apps.txt), per-app
-# overrides and desktop overrides. wsflatpak stays the owner of apply/check
+# overrides (overrides.txt) and desktop overrides. wsflatpak stays the owner of apply/check
 # and reads what is built here from ~/.local/share/workstation/flatpak (one link to the store):
 #
 #   remotes.conf      NAME URL
 #   apps.conf         REMOTE APP
 #   overrides/APP.conf, desktop/APP.desktop
 #
-# Change: edit this file or apps.txt, `ws switch`, `wsflatpak apply` (or
-# `ws apply`).
+# Change: apps.txt and overrides.txt through wsflatpak (install, manage,
+# filesystem, env, talk, ...), the rest here; then `ws switch`,
+# `wsflatpak apply` (or `ws apply`).
 # apply resets the overrides of every managed app before setting the declared
 # ones, so a key removed here disappears too. Desktop overrides are linked
 # into ~/.local/share/applications by home-manager.
@@ -29,20 +30,34 @@ let
     else [ { remote = lib.elemAt m 0; app = lib.elemAt m 1; } ]
   ) (lib.splitString "\n" (builtins.readFile ./apps.txt));
 
-  # Supported: Context.filesystems (list), Environment, "Session Bus Policy"
-  # (talk only) — the keys `wsflatpak apply` sets with `flatpak override`.
-  overrides = {
-    "com.anthropic.ClaudeDesktop" = {
-      # Host files; flatpak-spawn --host for Claude Code.
-      Context.filesystems = [ "host" ];
-      "Session Bus Policy"."org.freedesktop.Flatpak" = "talk";
-    };
-    "com.anydesk.Anydesk" = {
-      Environment.GDK_SCALE = "2"; # HiDPI scale
-      # Tray icon.
-      "Session Bus Policy"."org.kde.StatusNotifierWatcher" = "talk";
-    };
-  };
+  # APP KIND VALUE lines of overrides.txt; wsflatpak edits that file. Built
+  # into the keys `wsflatpak apply` sets with `flatpak override`:
+  # Context.filesystems, Environment, "Session Bus Policy" (talk only).
+  overrideLines = lib.concatMap (raw:
+    let
+      line = lib.head (lib.splitString "#" raw);
+      m = builtins.match "[[:space:]]*([^[:space:]]+)[[:space:]]+(filesystem|env|talk)[[:space:]]+([^[:space:]]+)[[:space:]]*" line;
+    in
+    if builtins.match "[[:space:]]*" line != null then [ ]
+    else if m == null then throw "flatpak/overrides.txt: invalid line: ${raw}"
+    else [ { app = lib.elemAt m 0; kind = lib.elemAt m 1; value = lib.elemAt m 2; } ]
+  ) (lib.splitString "\n" (builtins.readFile ./overrides.txt));
+
+  overrides = lib.mapAttrs (app: entries:
+    let
+      values = kind: map (x: x.value) (lib.filter (x: x.kind == kind) entries);
+      fs = values "filesystem";
+      env = lib.listToAttrs (map (v:
+        let kv = builtins.match "([^=]+)=(.*)" v; in
+        if kv == null then throw "flatpak/overrides.txt: ${app} env needs KEY=VALUE: ${v}"
+        else lib.nameValuePair (lib.elemAt kv 0) (lib.elemAt kv 1)
+      ) (values "env"));
+      bus = lib.genAttrs (values "talk") (_: "talk");
+    in
+    lib.optionalAttrs (fs != [ ]) { Context.filesystems = fs; }
+    // lib.optionalAttrs (env != { }) { Environment = env; }
+    // lib.optionalAttrs (bus != { }) { "Session Bus Policy" = bus; }
+  ) (lib.groupBy (x: x.app) overrideLines);
 
   # Full files, ours: Claude on Wayland at scale 1.5 with its URL handler;
   # Steam through ws-gpu (the AMD dGPU when the boot has it, Intel otherwise),

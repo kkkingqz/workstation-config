@@ -797,7 +797,7 @@ wsconfig/
 ├── gnome/                gnome.nix, gnome-extensions.nix, extensions/<uuid>/
 ├── keyboard/             keyboard.nix, xremap.nix, xremap.yml
 ├── terminal/             fish/, ghostty/, micro-help/, xdg-terminals/
-├── flatpak/              flatpak.nix, desktop/
+├── flatpak/              flatpak.nix, apps.txt, overrides.txt, desktop/
 ├── distrobox/            distrobox.nix, arch/ (wsbox-host-ntsync, хуки), wine/
 ├── windows/              apps.nix (Windows-программы с launcher)
 ├── bin/

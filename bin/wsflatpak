@@ -11,13 +11,16 @@ import sys
 # Declarations live in flatpak/flatpak.nix; home-manager builds them into
 # ~/.local/share/workstation/flatpak, which wsflatpak reads. The managed app
 # list is flatpak/apps.txt in the checkout: install, manage and unmanage edit
-# it, `ws switch` builds it.
+# it; the overrides are flatpak/overrides.txt: filesystem, host, env, talk and
+# their un… edit it. `ws switch` builds both and commits them.
 SOURCE = "flatpak/flatpak.nix"
 REPO = Path(
     os.environ.get("WSCONFIG")
     or Path(os.path.realpath(__file__)).parent.parent
 )
 APPS_LIST = REPO / "flatpak/apps.txt"
+OVERRIDES_LIST = REPO / "flatpak/overrides.txt"
+OVERRIDE_KINDS = ("filesystem", "env", "talk")
 CFG = Path(
     os.environ.get(
         "WSFLATPAK_CONFIG",
@@ -147,11 +150,134 @@ def list_remove(app):
         "then: ws switch (commits it)"
     )
 
-    desktop = DESKTOP_OVERRIDES / f"{app}.desktop"
-    if override_file(app).exists() or desktop.exists():
-        print(
-            f"NOTE: {app} still has overrides or a desktop file in {SOURCE}"
+    if app in listed_override_apps():
+        print(f"NOTE: {app} still has overrides in {OVERRIDES_LIST}")
+
+    if (DESKTOP_OVERRIDES / f"{app}.desktop").exists():
+        print(f"NOTE: {app} still has a desktop file in {SOURCE}")
+
+
+def parse_override_line(raw):
+    line = raw.split("#", 1)[0].strip()
+    if not line:
+        return None
+
+    parts = line.split()
+
+    if len(parts) != 3 or parts[1] not in OVERRIDE_KINDS:
+        raise SystemExit(
+            f"wsflatpak: invalid line in {OVERRIDES_LIST}: {raw.rstrip()}"
         )
+
+    return tuple(parts)
+
+
+def override_key(entry):
+    # An env line is keyed by its name: a new value replaces the old one.
+    app, kind, value = entry
+    return app, kind, value.split("=", 1)[0] if kind == "env" else value
+
+
+def listed_override_apps():
+    return {
+        e[0] for e in map(parse_override_line,
+                          OVERRIDES_LIST.read_text().splitlines())
+        if e
+    }
+
+
+def override_app(query):
+    # un… also works for an app that is no longer installed.
+    if query in listed_override_apps():
+        return query
+
+    return resolve_user_app(query)
+
+
+def overrides_add(entry):
+    lines = OVERRIDES_LIST.read_text().splitlines(keepends=True)
+    parsed = [parse_override_line(x) for x in lines]
+    text = " ".join(entry)
+
+    if entry in parsed:
+        print(f"Already in {OVERRIDES_LIST}: {text}")
+        return
+
+    same = [
+        i for i, e in enumerate(parsed)
+        if e and override_key(e) == override_key(entry)
+    ]
+    of_app = [i for i, e in enumerate(parsed) if e and e[0] == entry[0]]
+
+    if lines and not lines[-1].endswith("\n"):
+        lines[-1] += "\n"
+
+    if same:
+        lines[same[0]] = text + "\n"
+        action = "Replaced in"
+    elif of_app:
+        # Next to the app's other lines.
+        lines.insert(of_app[-1] + 1, text + "\n")
+        action = "Added to"
+    else:
+        if lines and lines[-1].strip():
+            lines.append("\n")
+        lines.append(text + "\n")
+        action = "Added to"
+
+    OVERRIDES_LIST.write_text("".join(lines))
+    print(
+        f"{action} {OVERRIDES_LIST}: {text}\n"
+        "then: ws switch (commits it) && wsflatpak apply"
+    )
+
+
+def overrides_remove(key):
+    lines = OVERRIDES_LIST.read_text().splitlines(keepends=True)
+    keep = [
+        x for x in lines
+        if not (e := parse_override_line(x)) or override_key(e) != key
+    ]
+
+    if len(keep) == len(lines):
+        raise SystemExit(
+            f"wsflatpak: not in {OVERRIDES_LIST}: {' '.join(key)}"
+        )
+
+    OVERRIDES_LIST.write_text("".join(keep))
+    print(
+        f"Removed from {OVERRIDES_LIST}: {' '.join(key)}\n"
+        "then: ws switch (commits it) && wsflatpak apply"
+    )
+
+
+def cmd_override(ns):
+    need_flatpak()
+    remove = ns.cmd.startswith("un")
+    kind = ns.cmd[2:] if remove else ns.cmd
+    app = override_app(ns.app) if remove else resolve_user_app(ns.app)
+
+    if kind == "host":
+        kind, value = "filesystem", "host"
+    elif kind == "env" and not remove:
+        if ns.value is not None:
+            value = f"{ns.key}={ns.value}"
+        elif "=" in ns.key:
+            value = ns.key
+        else:
+            raise SystemExit("wsflatpak: env needs KEY VALUE or KEY=VALUE")
+    else:
+        value = ns.key if kind == "env" else ns.value
+
+    if not value or any(c.isspace() or c == "#" for c in value):
+        raise SystemExit(
+            f"wsflatpak: {kind} value must be one word without #: {value!r}"
+        )
+
+    if remove:
+        overrides_remove((app, kind, value))
+    else:
+        overrides_add((app, kind, value))
 
 
 def managed_remote(app):
@@ -500,7 +626,7 @@ def cmd_reset_permissions(app):
 
     if override_file(app).exists():
         print(
-            f"NOTE: {app} has declared overrides in {SOURCE}; "
+            f"NOTE: {app} has declared overrides in {OVERRIDES_LIST}; "
             "`wsflatpak apply` sets them again"
         )
 
@@ -1007,37 +1133,12 @@ def cmd_apply():
 
 DECLARE = {
     "remote-add": ("Add to remotes", '{0} = "{1}";'),
-    "host": ("Add to overrides", '"{0}".Context.filesystems = [ "host" ];'),
-    "unhost": ("Remove from overrides", '"{0}".Context.filesystems "host"'),
-    "filesystem": (
-        "Add to overrides",
-        '"{0}".Context.filesystems = [ "{1}" ];',
-    ),
-    "unfilesystem": (
-        "Remove from overrides",
-        '"{0}".Context.filesystems "{1}"',
-    ),
-    "env": ("Add to overrides", '"{0}".Environment.{1} = "{2}";'),
-    "unenv": ("Remove from overrides", '"{0}".Environment.{1}'),
-    "talk": (
-        "Add to overrides",
-        '"{0}"."Session Bus Policy"."{1}" = "talk";',
-    ),
-    "untalk": (
-        "Remove from overrides",
-        '"{0}"."Session Bus Policy"."{1}"',
-    ),
 }
 
 
 def cmd_declare(cmd, args):
     action, snippet = DECLARE[cmd]
     args = list(args) + ["..."] * 3
-
-    if cmd != "remote-add" and args[0] != "...":
-        need_flatpak()
-        args[0] = resolve_user_app(args[0])
-
     declare_hint(action, snippet.format(*args))
 
 
@@ -1074,7 +1175,27 @@ def build_parser():
         q = sp.add_parser(name)
         q.add_argument("app")
 
-    # Former commands that wrote flatpak/: print what to declare.
+    # Lines of flatpak/overrides.txt.
+    for name, arg in (
+        ("filesystem", "spec"),
+        ("talk", "bus"),
+    ):
+        for cmd in (name, "un" + name):
+            q = sp.add_parser(cmd)
+            q.add_argument("app")
+            q.add_argument("value", metavar=arg.upper())
+    for cmd in ("host", "unhost"):
+        q = sp.add_parser(cmd)
+        q.add_argument("app")
+    q = sp.add_parser("env")
+    q.add_argument("app")
+    q.add_argument("key", metavar="KEY[=VALUE]")
+    q.add_argument("value", nargs="?")
+    q = sp.add_parser("unenv")
+    q.add_argument("app")
+    q.add_argument("key", metavar="KEY")
+
+    # Remotes are declared in flatpak.nix: print what to declare.
     for name in DECLARE:
         q = sp.add_parser(name)
         q.add_argument("args", nargs="*")
@@ -1125,6 +1246,8 @@ def main():
         list_remove(ns.app)
     elif ns.cmd in DECLARE:
         cmd_declare(ns.cmd, ns.args)
+    elif ns.cmd.removeprefix("un") in ("host", "filesystem", "env", "talk"):
+        cmd_override(ns)
     elif ns.cmd in ("remove", "uninstall"):
         cmd_remove(ns)
     elif ns.cmd == "permissions":

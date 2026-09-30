@@ -24,7 +24,8 @@ Usage:
   ws news
 
 switch    home-manager switch for this user and host (pinned by flake.lock);
-          after a successful switch commits flatpak/apps.txt if it changed
+          after a successful switch commits flatpak/apps.txt and
+          flatpak/overrides.txt if they changed
 news      home-manager news of this flake (switch does not notify about them)
 diff      build the home generation without activating it and show the
           package difference against the current one (nvd)
@@ -163,16 +164,20 @@ current_generation() {
     done
 }
 
-# Lists that commands edit in the checkout (wsflatpak install/manage/unmanage):
-# switch adds them before the build and commits them after a successful one.
-tool_lists=(flatpak/apps.txt)
+# Lists that commands edit in the checkout (wsflatpak install/manage/unmanage,
+# filesystem/env/talk and un…): switch adds them before the build and commits
+# them after a successful one.
+tool_lists=(flatpak/apps.txt flatpak/overrides.txt)
 
 commit_tool_lists() {
     local f changes
     for f in "${tool_lists[@]}"; do
         git -C "$repo" diff --quiet HEAD -- "$f" && continue
+        # apps.txt: +APP, -APP; overrides.txt: +APP KIND VALUE, -...
         changes="$(git -C "$repo" diff HEAD -- "$f" |
-            sed -n 's/^\([+-]\)[^+#-][^ ]* \([^ ]*\)$/\1\2/p' | paste -sd' ')"
+            sed -n -e 's/^\([+-]\)[^+#-][^ ]* \([^ ]*\)$/\1\2/p' \
+                -e 's/^\([+-]\)\([^+# -][^ ]* [^ ]* [^ #]*\).*$/\1\2/p' |
+            paste -sd, | sed 's/,/, /g')"
         git -C "$repo" commit -q -m "$f: ${changes:-edited} (ws switch)" -- "$f"
         echo "committed $f: ${changes:-edited}"
     done

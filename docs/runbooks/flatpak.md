@@ -13,7 +13,8 @@ GUI-приложения — Flatpak (user installation), host остаётся 
 
 ```text
 flatpak/apps.txt        управляемые приложения: REMOTE APP, по строке
-flatpak/flatpak.nix     remotes, overrides приложений, свои .desktop
+flatpak/overrides.txt   overrides приложений: APP KIND VALUE, по строке
+flatpak/flatpak.nix     remotes, свои .desktop; читает оба списка
 flatpak/desktop/*.desktop  полные .desktop, заменяющие штатные
 bin/wsflatpak           владелец: install, apply, check
 ```
@@ -22,7 +23,7 @@ bin/wsflatpak           владелец: install, apply, check
 `apps.conf`, `overrides/`, `desktop/`) и ставит свои `.desktop` в
 `~/.local/share/applications`. `wsflatpak apply` добавляет remotes, ставит
 приложения и применяет overrides; overrides управляемого приложения сначала
-сбрасываются, так что ключ, убранный из `flatpak.nix`, исчезает.
+сбрасываются, так что строка, убранная из `overrides.txt`, исчезает.
 
 Remotes: `flathub`, `flatpark` (Claude Desktop).
 
@@ -37,15 +38,28 @@ wsflatpak remove APP                 # управляемое — сначала
 ws switch                            # собирает и коммитит apps.txt
 ```
 
-`ws switch` добавляет изменённый `apps.txt` в сборку и после успешного
-switch коммитит его (без push).
+`ws switch` добавляет изменённые `apps.txt` и `overrides.txt` в сборку и
+после успешного switch коммитит их (без push).
 
 ## Разрешения и окружение
 
-Постоянные — в `overrides` `flatpak/flatpak.nix` (`Context.filesystems`,
-`Environment`, `Session Bus Policy` с `talk`), затем `ws switch` и
-`wsflatpak apply`. Команды `host`, `filesystem`, `env`, `talk` (и `un…`)
-печатают строку для `flatpak.nix`, а не меняют систему.
+Постоянные — строки `flatpak/overrides.txt`: `APP filesystem SPEC`
+(`Context.filesystems`), `APP env KEY=VALUE` (`Environment`), `APP talk BUS`
+(`Session Bus Policy`, только `talk`). Их добавляют и убирают команды, как
+`install` — `apps.txt`; систему они не меняют:
+
+```console
+wsflatpak filesystem APP SPEC        # home:ro, xdg-download, /mnt/x:ro, ...
+wsflatpak host APP                   # = filesystem APP host
+wsflatpak env APP KEY VALUE          # или KEY=VALUE; новое значение заменяет
+wsflatpak talk APP BUS
+wsflatpak unfilesystem|unhost|unenv|untalk APP ...
+ws switch                            # собирает и коммитит overrides.txt
+wsflatpak apply                      # применяет
+```
+
+APP — ID, имя или часть имени установленного приложения. Значение — одно
+слово без `#`.
 
 ```console
 wsflatpak permissions APP

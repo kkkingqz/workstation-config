@@ -250,8 +250,9 @@ checkpoint/NAME`, `ws switch`, `ws system apply`, загрузка записа�
 ссылку `applied` на поставленное дерево и строку в `history` (дата, коммит,
 дерево, результат).
 
-Flatpak: remotes и overrides объявлены в `flatpak/flatpak.nix`, приложения —
-в `flatpak/apps.txt` (`wsflatpak install` дописывает туда сам, `ws switch` коммитит); `ws switch` собирает из них
+Flatpak: remotes объявлены в `flatpak/flatpak.nix`, приложения — в
+`flatpak/apps.txt`, overrides — в `flatpak/overrides.txt` (оба правит
+`wsflatpak`, `ws switch` коммитит); `ws switch` собирает из них
 `~/.local/share/workstation/flatpak/` и ставит `.desktop` Claude, шаг `flatpak`
 в `ws apply` (`wsflatpak apply`) добавляет remotes, ставит приложения и
 применяет overrides (`helpws flatpak`).

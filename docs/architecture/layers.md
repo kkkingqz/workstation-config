@@ -37,7 +37,7 @@ ws check           проверки всех владельцев и связе�
 apt              nix/hosts/*apt.txt                    bootstrap.sh, apt    ws check apt
 клавиатура       keyboard/*.nix, xremap.yml            ws switch, ws-keyboard apply   ws-keyboard check
 GNOME            gnome/gnome.nix, gnome-extensions.nix ws switch, ws apply extensions ws-gnome check
-Flatpak          flatpak/apps.txt, flatpak.nix         wsflatpak apply      wsflatpak check
+Flatpak          flatpak/*.txt, flatpak.nix            wsflatpak apply      wsflatpak check
 Distrobox        distrobox/distrobox.nix               wsbox apply          wsbox check
 Windows          windows/apps.nix (+ боксы Distrobox)  ws switch, wswin     wswin check
 suspend / T2     system/hardware, system/kernel/t2bce  ws system apply, ws-suspend t2bce-*   ws-suspend check
@@ -56,7 +56,7 @@ Distrobox ↔ NTSync) проверяет `ws-workstation-verify`. Формат �
   из Nix, и не держат своих копий списков. Родные форматы программ остаются
   (`xremap.yml`, ghostty, fish, udev/modprobe, `*.gschema.xml`,
   `containers.ini`); простой текст — `nix/hosts/*apt.txt` (его читает
-  `bootstrap.sh` до Nix) и `flatpak/apps.txt` (его правит `wsflatpak`).
+  `bootstrap.sh` до Nix) и `flatpak/apps.txt`, `flatpak/overrides.txt` (их правит `wsflatpak`).
 - **Владелец выдаёт список.** Системный слой — `ws system manifest`,
   пользовательский — активное поколение home-manager, Distrobox —
   `containers.ini`, расширения — собранный список. Проверки, baseline и
