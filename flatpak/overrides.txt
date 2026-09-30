@@ -12,3 +12,5 @@ com.anthropic.ClaudeDesktop talk org.freedesktop.Flatpak
 # HiDPI scale; tray icon.
 com.anydesk.Anydesk env GDK_SCALE=2
 com.anydesk.Anydesk talk org.kde.StatusNotifierWatcher
+
+com.notesnook.Notesnook filesystem home:rw
