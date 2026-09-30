@@ -49,8 +49,7 @@ host="$("$repo/bin/ws" host)"
 host_list="$repo/nix/hosts/$host/apt.txt"
 [[ -r "$repo/nix/hosts/$host/facts.nix" ]] || die "no nix/hosts/$host/facts.nix"
 # The checkout path is a fact of the host: home-manager links point there.
-expected="$HOME/$(sed -nE 's/^[[:space:]]*wsconfig = "([^"]+)";.*/\1/p' "$repo/nix/hosts/$host/facts.nix")"
-[[ "$expected" != "$HOME/" ]] || die "no wsconfig in nix/hosts/$host/facts.nix"
+expected="$HOME/$("$repo/bin/ws" fact wsconfig)" || die "no wsconfig in nix/hosts/$host/facts.nix"
 [[ "$repo" == "$expected" ]] \
     || die "checkout must be $expected (wsconfig in nix/hosts/$host/facts.nix), not $repo"
 echo "Host: $host"

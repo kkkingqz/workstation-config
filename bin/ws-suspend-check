@@ -18,6 +18,19 @@ case "${1:-}" in
     *) echo "ws-suspend check: unknown argument: $1" >&2; exit 64 ;;
 esac
 
+# The suspend layer (deep-only sleep, t2bce, Touch Bar) is part of the T2
+# hardware profile (system/hardware/t2-mbp16.nix).
+hardware="$(host_fact hardware)"
+if [[ -z "$hardware" ]]; then
+    fail "unknown host: no hardware fact (ws fact hardware)"
+    check_finish
+    exit
+elif [[ "$hardware" != t2-mbp16 ]]; then
+    info "hardware $hardware: no suspend layer (T2 only, helpws suspend)"
+    check_finish
+    exit
+fi
+
 section "1. Sleep"
 
 grep -Fq '[deep]' /sys/power/mem_sleep 2>/dev/null \

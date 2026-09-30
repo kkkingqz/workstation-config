@@ -1,21 +1,24 @@
-# User layer of mbp16: links into the checkout and terminal CLI; layer owners
-# (wsflatpak reads flatpak/flatpak.nix; wsbox, wswin, ws-gnome, ws-keyboard*, ws-suspend) stay as they are.
-{ facts, ... }:
+# User layer of every host: links into the checkout and terminal CLI; layer
+# owners (wsflatpak reads flatpak/flatpak.nix; wsbox, wswin, ws-gnome,
+# ws-keyboard*, ws-suspend) stay as they are. What differs between hosts
+# comes from facts (nix/hosts/<host>/facts.nix).
+{ lib, facts, ... }:
 {
   imports = [
-    ../../home/links.nix
-    ../../home/cli.nix
-    ../../../keyboard/xremap.nix
-    ../../home/man.nix
-    ../../../gnome/gnome-extensions.nix
-    ../../../flatpak/flatpak.nix
-    ../../../gnome/gnome.nix
-    ../../../keyboard/keyboard.nix
-    ../../../distrobox/distrobox.nix
-    ../../../windows/apps.nix
-    ../../../virt/virt.nix
-    ../../../system/kernel/t2bce/t2bce.nix
-  ];
+    ./links.nix
+    ./cli.nix
+    ../../keyboard/xremap.nix
+    ./man.nix
+    ../../gnome/gnome-extensions.nix
+    ../../flatpak/flatpak.nix
+    ../../gnome/gnome.nix
+    ../../keyboard/keyboard.nix
+    ../../distrobox/distrobox.nix
+    ../../windows/apps.nix
+    ../../virt/virt.nix
+  ]
+  # Pinned sources of the patched t2bce modules (helpws suspend).
+  ++ lib.optional (facts.hardware == "t2-mbp16") ../../system/kernel/t2bce/t2bce.nix;
 
   home.username = facts.user;
   home.homeDirectory = "/home/${facts.user}";

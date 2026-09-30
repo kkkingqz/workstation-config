@@ -7,7 +7,8 @@ set -o pipefail
 #   ws check repo / home, ws-keyboard check, ws-gnome check, wsflatpak check,
 #   wsbox check, wswin check, ws-suspend check, ws system check, ws check apt.
 # Here: GNOME <-> keyboard, kernel <-> t2bce, boot <-> dGPU policy,
-# Distrobox <-> host NTSync. Read-only.
+# Distrobox <-> host NTSync. The T2 and dGPU sections run only on hardware
+# t2-mbp16, /boot/ws only with boot refind-grub-recovery (ws fact). Read-only.
 # Exit codes: 0 = no FAIL, 1 = FAIL, 2 = warnings with --strict.
 
 repo="${WSCONFIG:-$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)}"
@@ -34,12 +35,24 @@ while (($#)); do
     shift
 done
 
+hardware="$(host_fact hardware)"
+boot="$(host_fact boot)"
+t2=false
+[[ "$hardware" == t2-mbp16 ]] && t2=true
+
 section "1. Host / session"
 
+[[ -n "$hardware" ]] \
+    && info "host $("$repo/bin/ws" host): hardware $hardware, boot ${boot:-unknown}" \
+    || fail "unknown host: no hardware fact (ws fact hardware)"
 model="$(cat /sys/class/dmi/id/product_name 2>/dev/null || true)"
-[[ "$model" == "MacBookPro16,1" ]] \
-    && pass "hardware: $model" \
-    || warn "hardware: ${model:-unknown} (expected MacBookPro16,1 for this workstation)"
+if [[ "$t2" == true ]]; then
+    [[ "$model" == "MacBookPro16,1" ]] \
+        && pass "hardware: $model" \
+        || warn "hardware: ${model:-unknown} (expected MacBookPro16,1 for t2-mbp16)"
+else
+    info "hardware: ${model:-unknown}"
+fi
 
 desktop="${XDG_CURRENT_DESKTOP:-unknown}"
 [[ "$desktop" == *GNOME* ]] && pass "desktop: $desktop" || fail "desktop is not GNOME: $desktop"
@@ -55,7 +68,11 @@ else
 fi
 
 kernel="$(uname -r)"
-[[ "$kernel" == *t2* ]] && pass "T2 kernel: $kernel" || warn "kernel is not T2-labelled: $kernel"
+if [[ "$t2" == true ]]; then
+    [[ "$kernel" == *t2* ]] && pass "T2 kernel: $kernel" || warn "kernel is not T2-labelled: $kernel"
+else
+    info "kernel: $kernel"
+fi
 
 section "2. GNOME <-> keyboard"
 
@@ -95,24 +112,28 @@ section "3. Kernel <-> t2bce"
 
 # The patched t2bce modules exist per kernel release (system/kernel/t2bce):
 # the running kernel must have them, and apt must not bring a newer one.
-t2bce_ver="$(cat /sys/module/t2bce_core/version 2>/dev/null || true)"
-if [[ "$t2bce_ver" == *nostatefix* ]]; then
-    pass "patched t2bce loaded: t2bce_core $t2bce_ver"
-else
-    warn "t2bce_core '${t2bce_ver:-not loaded}' is not the patched build; run ws-suspend t2bce-build && ws-suspend t2bce-install (helpws suspend)"
-fi
+if [[ "$t2" == true ]]; then
+    t2bce_ver="$(cat /sys/module/t2bce_core/version 2>/dev/null || true)"
+    if [[ "$t2bce_ver" == *nostatefix* ]]; then
+        pass "patched t2bce loaded: t2bce_core $t2bce_ver"
+    else
+        warn "t2bce_core '${t2bce_ver:-not loaded}' is not the patched build; run ws-suspend t2bce-build && ws-suspend t2bce-install (helpws suspend)"
+    fi
 
-if apt-mark showhold 2>/dev/null | grep -qx 'linux-t2'; then
-    pass "linux-t2 held (patched t2bce modules exist only for $(uname -r))"
-else
-    warn "linux-t2 is not held: a kernel update would boot the in-tree t2bce (helpws suspend)"
-fi
+    if apt-mark showhold 2>/dev/null | grep -qx 'linux-t2'; then
+        pass "linux-t2 held (patched t2bce modules exist only for $(uname -r))"
+    else
+        warn "linux-t2 is not held: a kernel update would boot the in-tree t2bce (helpws suspend)"
+    fi
 
-t2bce_sources="$HOME/.local/share/workstation/t2bce/sources"
-if awk -v k="$(uname -r)" '!/^#/ && $1 == k { found = 1 } END { exit !found }' "$t2bce_sources" 2>/dev/null; then
-    pass "system/kernel/t2bce/t2bce.nix pins sources for $(uname -r)"
+    t2bce_sources="$HOME/.local/share/workstation/t2bce/sources"
+    if awk -v k="$(uname -r)" '!/^#/ && $1 == k { found = 1 } END { exit !found }' "$t2bce_sources" 2>/dev/null; then
+        pass "system/kernel/t2bce/t2bce.nix pins sources for $(uname -r)"
+    else
+        warn "system/kernel/t2bce/t2bce.nix has no entry for $(uname -r)"
+    fi
 else
-    warn "system/kernel/t2bce/t2bce.nix has no entry for $(uname -r)"
+    info "no T2 (hardware ${hardware:-unknown}): nothing to check"
 fi
 
 section "4. Boot <-> dGPU policy"
@@ -120,7 +141,9 @@ section "4. Boot <-> dGPU policy"
 # rEFInd "Ubuntu" boots with ws.dgpu=off: ws-dgpu-off.service powers the AMD
 # dGPU off and removes it from the PCI bus. "Ubuntu (AMD)" boots /boot/ws
 # without it (helpws workstation, helpws suspend).
-if grep -Eq '(^| )ws\.dgpu=off( |$)' /proc/cmdline; then
+if [[ "$t2" != true ]]; then
+    info "no dGPU policy (hardware ${hardware:-unknown})"
+elif grep -Eq '(^| )ws\.dgpu=off( |$)' /proc/cmdline; then
     systemctl is-active --quiet ws-dgpu-off.service 2>/dev/null \
         && pass "booted with ws.dgpu=off: ws-dgpu-off.service succeeded" \
         || fail "booted with ws.dgpu=off but ws-dgpu-off.service is not active (journalctl -b -u ws-dgpu-off)"
@@ -142,13 +165,18 @@ newest_kernel="$(ls /boot/vmlinuz-* 2>/dev/null | sort -V | tail -n1)"
 newest_version="${newest_kernel#/boot/vmlinuz-}"
 if [[ -z "$newest_kernel" ]]; then
     fail "no /boot/vmlinuz-* found"
-elif [[ /boot/ws/vmlinuz -ef "$newest_kernel" && /boot/ws/initrd.img -ef "/boot/initrd.img-$newest_version" ]]; then
-    pass "/boot/ws links the newest kernel and initrd: $newest_version"
+elif [[ "$boot" == refind-grub-recovery ]]; then
+    # /boot/ws: the kernel of "Ubuntu (AMD)", relinked by ws-boot-links.
+    if [[ /boot/ws/vmlinuz -ef "$newest_kernel" && /boot/ws/initrd.img -ef "/boot/initrd.img-$newest_version" ]]; then
+        pass "/boot/ws links the newest kernel and initrd: $newest_version"
+    else
+        fail "/boot/ws does not link $newest_version (kernel and initrd); run sudo /usr/local/sbin/ws-boot-links"
+    fi
+    [[ "$t2" != true || "$newest_version" == *-t2-* ]] \
+        || warn "newest kernel $newest_version is not a T2 kernel; rEFInd boots it by default"
 else
-    fail "/boot/ws does not link $newest_version (kernel and initrd); run sudo /usr/local/sbin/ws-boot-links"
+    info "newest kernel: $newest_version (boot ${boot:-unknown})"
 fi
-[[ "$newest_version" == *-t2-* ]] \
-    || warn "newest kernel $newest_version is not a T2 kernel; rEFInd boots it by default"
 
 section "5. Distrobox <-> host NTSync"
 

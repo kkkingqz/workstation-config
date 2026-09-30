@@ -978,6 +978,33 @@ sha256). Эталон `nix-v1` (`--with-sudo`, 2026-09-27): dpkg verify, initrd 
 - Реальная машина: новый `hosts/<name>/` и при необходимости
   hardware-профиль; recovery проверить, как в фазе −1.
 
+Шаги для VM (2026-09-30):
+
+1. ~~Репозиторий под второй хост~~ — **сделано (2026-09-30)**, на mbp16
+   ничего не изменилось (generation home, дерево system и man — те же
+   пути store; `ws check` без FAIL):
+   - хост — каталог `nix/hosts/<name>/` только с `facts.nix` и `apt.txt`;
+     flake собирает `homeConfigurations`, `checks` и `system-<host>` для
+     каждого каталога;
+   - пользовательский слой всех хостов — `nix/home/default.nix` (бывший
+     `hosts/mbp16/home.nix`); `t2bce.nix` подключается при
+     `hardware = "t2-mbp16"`;
+   - `ws host` ищет хост по факту `hostname` (у mbp16 — `MacBookPro-k`),
+     `WS_HOST` переопределяет; `ws fact NAME` печатает строковый факт без
+     Nix (`bootstrap.sh`, проверки);
+   - профили `system/boot/grub.nix` (параметры ядра в `grub.d`, меню GRUB,
+     `system-backup-snapshot`) и `system/hardware/generic-pc.nix` (пусто:
+     только `common.nix`); проверены сборкой временного хоста;
+   - `ws-suspend check` на другом железе ничего не проверяет;
+     `ws-workstation-verify` проверяет T2 и dGPU только на `t2-mbp16`,
+     `/boot/ws` — только с `boot = "refind-grub-recovery"`; `ws system
+     apply` создаёт `/boot/ws`, только если профиль ставит `ws-boot-links`.
+2. VM: Ubuntu 26.04 (полный ISO), разметка Btrfs `@`, `@home` по
+   `rebuild.md` §3, snapshot `clean` после установки.
+3. В VM: `nix/hosts/<vm>/`, `bootstrap.sh` → `ws switch` → `ws system
+   apply` → `ws apply` → `ws check`; каждая ручная правка — факт или баг.
+4. Откат на `clean` и повтор без правок.
+
 **Готово:** вторая машина поднимается без правок в репозитории, кроме её
 каталога в `hosts/` и явно добавленных фактов.
 

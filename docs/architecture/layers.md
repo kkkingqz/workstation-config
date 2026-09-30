@@ -21,8 +21,12 @@ ws apply           владельцы по порядку: расширения,
 ws check           проверки всех владельцев и связей между слоями
 ```
 
-Хост — `nix/hosts/<host>/` (`facts.nix`, `home.nix`, `apt.txt`); сейчас один,
-`mbp16` (MacBookPro16,1, T2), выбирается по hostname (`ws host`).
+Хост — `nix/hosts/<host>/` (`facts.nix`, `apt.txt`); сейчас один, `mbp16`
+(MacBookPro16,1, T2), выбирается по `hostname` в `facts.nix` (`ws host`).
+Пользовательский слой у всех хостов общий (`nix/home/default.nix`),
+системный — `system/common.nix` плюс профили по фактам `boot` и `hardware`
+(`system/boot/`, `system/hardware/`); проверки железа (T2, Touch Bar, dGPU)
+и `/boot/ws` идут только там, где они есть (`ws fact`).
 
 ## Слои и владельцы
 

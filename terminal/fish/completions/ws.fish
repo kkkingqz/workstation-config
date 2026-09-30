@@ -35,6 +35,7 @@ complete -c ws -n __ws_needs_command -a baseline -d 'Functional baseline: captur
 complete -c ws -n __ws_needs_command -a checkpoint -d 'Commit <-> working state'
 complete -c ws -n __ws_needs_command -a collect -d 'Machine state archive for a rebuild'
 complete -c ws -n __ws_needs_command -a host -d 'Flake host of this machine'
+complete -c ws -n __ws_needs_command -a fact -d 'String fact of this host'
 complete -c ws -n __ws_needs_command -a news -d 'home-manager news'
 
 complete -c ws -n '__ws_after apply' -a '(ws steps apply)'

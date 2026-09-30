@@ -28,7 +28,7 @@ ws check                    # все проверки
 ## Слои
 
 ```text
-nix/            flake-хосты (facts.nix, home.nix, apt.txt), home-manager, пакеты
+nix/            flake-хосты (facts.nix, apt.txt), home-manager, пакеты
 system/         системные файлы в /etc, /boot, /usr/local, ядро t2bce (ws system)
 keyboard/       macOS-клавиатура: xremap, сочетания GNOME и Tiling Assistant
 gnome/          профиль GNOME, расширения (свои — gnome/extensions/)
@@ -42,8 +42,8 @@ lib/check.bash  общий формат проверок (--json для ws check
 docs/           документация, из неё собираются man-страницы
 ```
 
-Хост один — `mbp16`, выбирается по hostname (`ws host`); новый хост —
-каталог `nix/hosts/<name>/`.
+Хост один — `mbp16`, выбирается по `hostname` в его `facts.nix` (`ws
+host`); новый хост — каталог `nix/hosts/<name>/` (`facts.nix`, `apt.txt`).
 
 ## Документация
 

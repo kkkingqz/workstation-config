@@ -1,6 +1,8 @@
 # What this machine differs in from the others. New facts are added only
 # when a second machine actually needs another value.
 {
+  # `ws host` finds the host by it.
+  hostname = "MacBookPro-k";
   user = "king";
   # The checkout of this repository, relative to $HOME. home-manager links
   # into it, bootstrap.sh insists on it; scripts find it from their own path.

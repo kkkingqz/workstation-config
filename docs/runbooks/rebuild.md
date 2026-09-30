@@ -191,8 +191,9 @@ ws check            # проверки всех владельцев и verify (
 группы `nix-users`,
 `libvirt` → fish
 как login shell → первый `ws switch` (заменяемые файлы сохраняются как
-`*.pre-hm`). Хост определяется по hostname (`ws host`); для новой машины —
-`WS_HOST=<name>` и каталог `nix/hosts/<name>/`. Повторный запуск ничего не
+`*.pre-hm`). Хост определяется по `hostname` в `nix/hosts/*/facts.nix` (`ws
+host`, переопределяет `WS_HOST=<name>`); для новой машины — каталог
+`nix/hosts/<name>/` с `facts.nix` и `apt.txt`. Повторный запуск ничего не
 меняет.
 
 Шаг `ws apply`, чей preflight не прошёл (exit 69), выводится в конце как

@@ -785,8 +785,9 @@ wsconfig/
 ├── bootstrap.sh          новая машина: @nix → apt → @vms/libvirt → группы → fish → ws switch
 ├── flake.nix, flake.lock nixpkgs 26.05 + home-manager, обновляет ws update nix
 ├── nix/
-│   ├── hosts/            apt.txt всех хостов; <host>/facts.nix, home.nix, apt.txt
-│   ├── home/             links.nix (ссылки на checkout), cli.nix, man.nix
+│   ├── hosts/            apt.txt всех хостов; <host>/facts.nix, apt.txt
+│   ├── home/             default.nix (слой всех хостов), links.nix (ссылки на
+│   │                     checkout), cli.nix, man.nix
 │   ├── pkgs/             xremap.nix (закреплён), man.nix (man из docs/),
 │   │                     gnome-extensions.nix (расширение EGO с pin)
 │   └── nix.conf

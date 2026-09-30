@@ -20,6 +20,7 @@ Usage:
   ws checkpoint create|list|show|diff|remove ...
   ws collect [--no-firmware] [ARCHIVE]
   ws host
+  ws fact NAME
   ws news
 
 switch    home-manager switch for this user and host (pinned by flake.lock);
@@ -84,7 +85,10 @@ collect   archive of the machine state a rebuild needs and the repository
           ~/.local/state/workstation), see ws-collect --help; asks sudo
 checkpoint  which commit matched which working state (home-manager
           generation, system tree, kernel, baseline), see ws-checkpoint --help
-host      print the flake host name used for this machine
+host      print the flake host name used for this machine: WS_HOST, else
+          the nix/hosts/<host> whose facts.nix has hostname = "$(hostname)"
+fact      print a string fact of this host (hardware, boot, user, wsconfig,
+          ...) from nix/hosts/<host>/facts.nix, without Nix
 USAGE
 }
 
@@ -100,16 +104,38 @@ nix_bin() {
         || die "nix not found (apt: nix-bin nix-setup-systemd; helpws history-nix, phase 0)"
 }
 
-# Flake host for this machine: WS_HOST, else by hostname.
+# A string fact of a facts.nix (NAME = "VALUE"; on one line), read without
+# Nix: bootstrap.sh needs the facts before Nix exists, checks read them often.
+fact_in() {
+    sed -nE "s/^[[:space:]]*$2 = \"([^\"]*)\";.*/\1/p" "$1" 2>/dev/null | head -n1
+}
+
+# Flake host for this machine: WS_HOST, else the host whose facts.nix has
+# this hostname.
 host() {
+    local f
     if [[ -n "${WS_HOST:-}" ]]; then
         echo "$WS_HOST"
         return
     fi
-    case "$(hostname)" in
-        MacBookPro-k) echo mbp16 ;;
-        *) die "unknown host $(hostname); set WS_HOST or add it to bin/ws" ;;
-    esac
+    for f in "$repo"/nix/hosts/*/facts.nix; do
+        if [[ "$(fact_in "$f" hostname)" == "$(hostname)" ]]; then
+            f="${f%/facts.nix}"
+            echo "${f##*/}"
+            return
+        fi
+    done
+    die "no nix/hosts/*/facts.nix with hostname = \"$(hostname)\"; add the host or set WS_HOST"
+}
+
+cmd_fact() {
+    local h value
+    [[ $# -eq 1 ]] || die "usage: ws fact NAME"
+    h="$(host)"
+    [[ -r "$repo/nix/hosts/$h/facts.nix" ]] || die "no nix/hosts/$h/facts.nix"
+    value="$(fact_in "$repo/nix/hosts/$h/facts.nix" "$1")"
+    [[ -n "$value" ]] || die "no string fact $1 in nix/hosts/$h/facts.nix"
+    echo "$value"
 }
 
 target() {
@@ -520,7 +546,7 @@ system_record() {
 # nothing reboots.
 cmd_system_apply() {
     local tree kind a b backup tmp unit changed=0 modprobe=false grub=false
-    local refind=false d3cold=false touchbar=false bootlinks=false saved=false dev cfg out rc=0
+    local refind=false d3cold=false touchbar=false bootlinks=false has_bootlinks=false saved=false dev cfg out rc=0
     local -a restart=()
 
     command -v sudo >/dev/null 2>&1 || die "sudo not found"
@@ -543,6 +569,7 @@ cmd_system_apply() {
             file)
                 case "$b" in
                     /etc/udev/rules.d/90-touchbar-native.rules) touchbar=true ;;
+                    /usr/local/sbin/ws-boot-links) has_bootlinks=true ;;
                 esac
                 if [[ -e "$b" ]] && cmp -s "$tree/files$b" "$b" \
                     && [[ "$(stat -c '%a %U:%G' "$b")" == "${a#0} root:root" ]]; then
@@ -616,7 +643,7 @@ cmd_system_apply() {
     sudo udevadm settle || true
 
     # The hooks keep /boot/ws current from now on; create it the first time.
-    if [[ "$bootlinks" == true || ! -e /boot/ws/vmlinuz ]]; then
+    if [[ "$has_bootlinks" == true ]] && [[ "$bootlinks" == true || ! -e /boot/ws/vmlinuz ]]; then
         echo
         echo "== /boot/ws (rEFInd \"Ubuntu (AMD)\")"
         sudo /usr/local/sbin/ws-boot-links
@@ -856,6 +883,7 @@ case "${1:-}" in
     checkpoint) shift; exec "$repo/bin/ws-checkpoint" "$@" ;;
     collect) shift; exec "$repo/bin/ws-collect" "$@" ;;
     host) host ;;
+    fact) shift; cmd_fact "$@" ;;
     # Step names of apply, update and check, one per line: the fish
     # completion reads them from here instead of keeping its own list.
     steps)
