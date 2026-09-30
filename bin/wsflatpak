@@ -172,10 +172,19 @@ def parse_override_line(raw):
     return tuple(parts)
 
 
+def fs_spec(spec):
+    # Flatpak stores SPEC:rw as SPEC (read-write is the default).
+    return spec.removesuffix(":rw")
+
+
 def override_key(entry):
     # An env line is keyed by its name: a new value replaces the old one.
     app, kind, value = entry
-    return app, kind, value.split("=", 1)[0] if kind == "env" else value
+    if kind == "env":
+        return app, kind, value.split("=", 1)[0]
+    if kind == "filesystem":
+        return app, kind, fs_spec(value)
+    return app, kind, value
 
 
 def listed_override_apps():
@@ -273,6 +282,9 @@ def cmd_override(ns):
         raise SystemExit(
             f"wsflatpak: {kind} value must be one word without #: {value!r}"
         )
+
+    if kind == "filesystem":
+        value = fs_spec(value)
 
     if remove:
         overrides_remove((app, kind, value))
@@ -421,7 +433,7 @@ def read_override_config(app):
 def read_managed_filesystems(app):
     cp = read_override_config(app)
     value = cp.get("Context", "filesystems", fallback="")
-    return [x for x in value.split(";") if x]
+    return [fs_spec(x) for x in value.split(";") if x]
 
 
 def read_managed_environment(app):
@@ -475,7 +487,7 @@ def runtime_override_config(app):
 def runtime_filesystems(app):
     cp = runtime_override_config(app)
     value = cp.get("Context", "filesystems", fallback="")
-    return [x for x in value.split(";") if x]
+    return [fs_spec(x) for x in value.split(";") if x]
 
 
 def runtime_host(app):
