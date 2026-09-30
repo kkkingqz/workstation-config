@@ -15,3 +15,4 @@ flathub com.valvesoftware.Steam
 flathub com.jgraph.drawio.desktop
 flathub org.qbittorrent.qBittorrent
 flathub com.notesnook.Notesnook
+flathub org.onlyoffice.desktopeditors
