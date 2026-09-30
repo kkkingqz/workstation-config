@@ -999,8 +999,17 @@ sha256). Эталон `nix-v1` (`--with-sudo`, 2026-09-27): dpkg verify, initrd 
      `ws-workstation-verify` проверяет T2 и dGPU только на `t2-mbp16`,
      `/boot/ws` — только с `boot = "refind-grub-recovery"`; `ws system
      apply` создаёт `/boot/ws`, только если профиль ставит `ws-boot-links`.
-2. VM: Ubuntu 26.04 (полный ISO), разметка Btrfs `@`, `@home` по
-   `rebuild.md` §3, snapshot `clean` после установки.
+2. ~~VM~~ — **сделано (2026-09-30)**: `wsvm` (q35, 6 vCPU, 8 ГБ, диск
+   100 ГБ, UEFI Secure Boot, TPM, NVRAM в qcow2), Ubuntu 26.04 с mini ISO
+   (18 ГБ на время установки), пользователь `test` (другое имя —
+   намеренно, пользователь), hostname по умолчанию
+   `test-Standard-PC-Q35-ICH9-2009`. Установщик при ручной разметке Btrfs
+   subvolumes не создаёт: `/` лёг в корень файловой системы (subvolid=5).
+   Перенесено офлайн с host (`qemu-nbd`, без chroot): snapshot корня в
+   `@`, `/home` в `@home`, fstab, `grub.cfg` и stub на ESP на `/@/boot`,
+   корень очищен; в госте `sudo update-grub`. Snapshots libvirt:
+   `installed` (как после установщика) → `clean` (на `@`/`@home`, до
+   `bootstrap.sh`).
 3. В VM: `nix/hosts/<vm>/`, `bootstrap.sh` → `ws switch` → `ws system
    apply` → `ws apply` → `ws check`; каждая ручная правка — факт или баг.
 4. Откат на `clean` и повтор без правок.

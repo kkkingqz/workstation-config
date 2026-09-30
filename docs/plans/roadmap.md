@@ -42,8 +42,9 @@ volume: User Commands
 
 2. Фаза 6 — второе железо (`helpws history-nix`, «ФАЗА 6»)
    Решение пользователя: после плана virt. Первая машина — VM: чистая
-   Ubuntu 26.04 на generic-ядре, весь путь по `helpws rebuild`. Шаг 1
-   (репозиторий под второй хост) сделан 2026-09-30; дальше — VM.
+   Ubuntu 26.04 на generic-ядре, весь путь по `helpws rebuild`. Шаги 1–2
+   (репозиторий под второй хост, VM `wsvm` на `@`/`@home`) сделаны
+   2026-09-30; дальше — `bootstrap.sh` в VM.
 
 3. `helpws plan-final`
    Инвентаризация, backups, snapshots, restore checkpoints и финальный

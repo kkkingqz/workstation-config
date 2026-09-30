@@ -77,10 +77,12 @@ apply` — из них собираются `refind_linux.conf`, `refind.conf` �
 @vms       состояние VM в /var/lib/vms, создаёт bootstrap.sh; backup — отдельно
 ```
 
-Root грузится с `rootflags=subvol=@`. Проверенного скрипта раскладки нет:
-если installer создал не все subvolumes, их создают из live-системы
-(`btrfs subvolume create`, перенос каталогов, строки в fstab) — прежняя
-раскладка и fstab есть в `boot/` архива.
+Root грузится с `rootflags=subvol=@`. Установщик Ubuntu 26.04 при ручной
+разметке Btrfs subvolumes не создаёт вовсе: `/` оказывается в корне
+файловой системы (subvolid=5; проверено в VM, фаза 6 в `helpws
+history-nix`). Проверенного скрипта раскладки нет: subvolumes создают из
+live-системы (`btrfs subvolume create`, перенос каталогов, строки в fstab) —
+прежняя раскладка и fstab есть в `boot/` архива.
 
 ```bash
 findmnt /
