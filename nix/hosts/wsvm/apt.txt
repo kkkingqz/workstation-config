@@ -1,0 +1,4 @@
+# apt packages of wsvm (libvirt guest) on top of nix/hosts/apt.txt.
+
+# libvirt guest agent: virsh domfsinfo/shutdown --mode=agent, guest-exec
+qemu-guest-agent

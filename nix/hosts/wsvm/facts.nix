@@ -1,0 +1,11 @@
+# Test VM of phase 6 (helpws history-nix): clean Ubuntu 26.04 on the
+# generic kernel in libvirt on mbp16 (helpws virt), GRUB only.
+{
+  # `ws host` finds the host by it (the installer's default).
+  hostname = "test-Standard-PC-Q35-ICH9-2009";
+  user = "test";
+  wsconfig = "wsconfig";
+  hardware = "generic-pc";
+  boot = "grub";
+  kernelParams = [ "quiet" "splash" ];
+}
