@@ -156,9 +156,12 @@ for code in us ru ua; do
     [[ "$sources" == *"'$code'"* ]] \
         && pass "input source configured: $code" \
         || fail "input source missing: $code"
+    # GNOME writes mru-sources only on a switch from its own menu or
+    # popup; workstation-input-source switches without it, so a new
+    # machine has none (phase 6, wsvm).
     [[ "$mru_sources" == *"'$code'"* ]] \
         && pass "MRU source contains: $code" \
-        || warn "MRU source missing: $code"
+        || info "MRU source missing: $code (GNOME fills it on a switch from its menu)"
 done
 
 if [[ -x "$repo/bin/ws-input-source" ]]; then

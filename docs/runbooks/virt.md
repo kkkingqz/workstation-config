@@ -151,9 +151,25 @@ USB-устройство в гостя — «Redirect USB device» в консо
 host не трогает (`keyboard/xremap.yml`, `&vm_consoles`): клавиши уходят в
 гостя как есть, macOS-профиль работает в госте, если он там поставлен
 (`bootstrap.sh`, `ws apply`). Иначе Command+C приходил бы в гостя как Ctrl+C
-(в терминале — прерывание), а CapsLock переключал бы раскладку host. Главное
-окно virt-manager — тот же класс, в нём Command-сочетания тоже не
-переводятся.
+(в терминале — прерывание). Главное окно virt-manager — тот же класс, в нём
+Command-сочетания тоже не переводятся.
+
+Исключение — CapsLock (и Fn/Alt+CapsLock): его host перехватывает всегда.
+SPICE держит lock-клавиши гостя равными host: пропущенный CapsLock включил
+бы блокировку на host, и клиент перенёс бы её в гостя (ЗАГЛАВНЫЕ, которые
+нечем выключить — каждый CapsLock перехватывает xremap). В консоли VM
+CapsLock переключает раскладку host; раскладку гостя — Ctrl+Space
+(Ctrl+Alt+Space — назад). По той же причине `ws-caps-led` в VM индикатор не
+зажигает: горящий для RU CapsLock клиент SPICE «исправляет» нажатием
+CapsLock в гостя, и раскладка возвращается на EN.
+
+Если блокировка CapsLock всё же включилась (заглавные при выключенном
+индикаторе), выключить её в обход xremap:
+
+```console
+systemctl --user stop xremap     # затем нажать CapsLock
+systemctl --user start xremap
+```
 
 Клавиатура гостя — PC (`AT Translated Set 2 keyboard`): работают
 PC-варианты профиля (`helpws keyboard`), например UA — Alt+CapsLock; Fn Apple

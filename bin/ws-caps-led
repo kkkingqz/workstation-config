@@ -2,6 +2,7 @@
 import glob
 import os
 import struct
+import subprocess
 import sys
 
 EV_SYN = 0x00
@@ -61,11 +62,26 @@ def write_led(dev_path, value):
     finally:
         os.close(fd)
 
+def in_vm():
+    # In a VM the keyboard LED is virtual, and the SPICE client (virt-manager)
+    # keeps the guest lock keys equal to the host's by it: a CapsLock LED lit
+    # for RU makes the client send CapsLock into the guest, which xremap takes
+    # for the layout toggle (phase 6, wsvm).
+    try:
+        return subprocess.run(["systemd-detect-virt", "--vm", "--quiet"]).returncode == 0
+    except OSError:
+        return False
+
 def main():
     if len(sys.argv) != 2:
         usage()
 
     action = sys.argv[1].lower()
+
+    if action in ("on", "off", "status") and in_vm():
+        if action == "status":
+            print("virtual machine: the CapsLock LED is not used")
+        return 0
 
     if action == "status":
         found = list(led_capable_events())

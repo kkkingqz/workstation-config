@@ -23,9 +23,11 @@
 #
 # VM consoles (virt-manager, remote-viewer, virt-viewer) get the keys as
 # they are: a guest runs this profile itself (helpws virt). Translated here,
-# Command+C would reach the guest as Ctrl+C (interrupt in its terminal) and
-# CapsLock would switch the host layout, not the guest's. Every keymap
-# without an application filter excludes them (&vm_consoles).
+# Command+C would reach the guest as Ctrl+C (interrupt in its terminal).
+# Every keymap without an application filter excludes them (&vm_consoles),
+# except CapsLock: passed through, it would turn on the host CapsLock lock,
+# and SPICE copies the host lock keys into the guest. In a VM console
+# CapsLock switches the host layout; the guest switches with Ctrl+Space.
 
 modmap:
   - name: Apple Fn mode
@@ -90,20 +92,30 @@ keymap:
       Alt-E: Shift-Ctrl-Alt-Super-E
       # Fn+Option+T: toggle Always on Top
       Alt-T: Shift-Ctrl-Alt-Super-T
+  # Everywhere, VM consoles too: the host CapsLock lock must never turn on.
+  - name: Fn+CapsLock on Apple keyboards
+    exact_match: true
+    mode: apple_fn
+    device:
+      only:
+        - ids:0x05ac:0
+    remap:
       # Fn+CapsLock: select Ukrainian layout
       CapsLock: { launch: ["@repo@/bin/ws-input-source", "ua"] }
       Alt-CapsLock: { launch: ["@repo@/bin/ws-input-source", "ua"] }
   - name: CapsLock input-source selector
     exact_match: true
-    application:
-      not: *vm_consoles
     remap:
       # Logical CapsLock: OFF=EN, ON=RU. Real CapsLock modifier is suppressed.
       CapsLock: { launch: ["@repo@/bin/ws-input-source", "caps"] }
 
       # Ukrainian override; does not change remembered EN/RU Caps state.
       Alt-CapsLock: { launch: ["@repo@/bin/ws-input-source", "ua"] }
-
+  - name: Input-source cycle
+    exact_match: true
+    application:
+      not: *vm_consoles
+    remap:
       # Deterministic input-source cycle
       Ctrl-Space: { launch: ["@repo@/bin/ws-input-source", "next"] }
       Ctrl-Alt-Space: { launch: ["@repo@/bin/ws-input-source", "prev"] }
