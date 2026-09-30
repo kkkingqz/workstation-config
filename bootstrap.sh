@@ -13,7 +13,7 @@ set -euo pipefail
 #
 #   ./bootstrap.sh [--dry-run]
 #
-# Afterwards: log out and in, then ws system apply → ws apply → log out and
+# Afterwards: reboot, then ws system apply → ws apply → log out and
 # in → ws apply → ws check.
 
 repo="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -373,7 +373,10 @@ else
 fi
 
 echo
-echo "Done. Log out and in (nix-users, libvirt, input, PATH from 00-nix.fish), then:"
+# New groups reach only processes of a new systemd user manager, and GNOME
+# starts from it; a log out keeps the old one while another session of the
+# user (ssh) is open.
+echo "Done. Reboot (groups nix-users, libvirt, input; PATH from 00-nix.fish), then:"
 echo "  ws system apply     # system files (sudo)"
 echo "  ws apply            # user layer; log out and in; ws apply again"
 echo "  ws check"

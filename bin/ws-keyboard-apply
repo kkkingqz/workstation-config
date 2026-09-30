@@ -142,7 +142,17 @@ done < <(shortcut_lines required)
 
 command -v xremap >/dev/null 2>&1 || { echo "xremap not found in PATH" >&2; preflight_failed=true; }
 systemctl --user cat xremap.service >/dev/null 2>&1 || { echo "xremap.service not installed; run ws switch" >&2; preflight_failed=true; }
-id -nG | tr ' ' '\n' | grep -Fxq input || { echo "user is not in input group" >&2; preflight_failed=true; }
+if ! id -nG | tr ' ' '\n' | grep -Fxq input; then
+    # A group added by bootstrap.sh reaches GNOME only through a new systemd
+    # user manager: a log out keeps the old one while another session (ssh)
+    # of the user is open.
+    if id -nG "$(id -un)" | tr ' ' '\n' | grep -Fxq input; then
+        echo "user is in group input, this session is not yet: reboot (or end every session of the user)" >&2
+    else
+        echo "user is not in input group (bootstrap.sh adds it)" >&2
+    fi
+    preflight_failed=true
+fi
 [[ -e /dev/uinput && -w /dev/uinput ]] || { echo "/dev/uinput missing or not writable" >&2; preflight_failed=true; }
 busctl --user call org.gnome.Shell /com/k0kubun/Xremap com.k0kubun.Xremap WMClasses >/dev/null 2>&1 || {
     echo "GNOME xremap bridge unavailable" >&2

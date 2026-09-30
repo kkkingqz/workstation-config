@@ -178,7 +178,8 @@ systemctl --user is-active wireplumber
 sudo apt install git
 git clone https://github.com/kkkingqz/wsconfig.git ~/wsconfig
 ~/wsconfig/bootstrap.sh
-# logout/login: группы nix-users, libvirt, input, PATH из 00-nix.fish, fish как login shell
+# reboot: группы nix-users, libvirt, input, PATH из 00-nix.fish, fish как login shell
+#   (logout/login не хватает, пока открыта другая сессия пользователя, например ssh)
 ws system apply     # системные файлы (sudo); затем reboot, если менялись modprobe/udev/cmdline
 ws apply            # расширения → tiling → клавиатура → Flatpak → Distrobox
 # logout/login: новые расширения GNOME активируются только в новой сессии
