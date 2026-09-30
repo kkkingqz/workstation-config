@@ -5,7 +5,7 @@ set -euo pipefail
 # @nix subvolume at /nix → apt packages (nix/hosts/apt.txt, nix/hosts/<host>/apt.txt)
 # → VM state on @vms (images, nvram, qemu XML bound into libvirt), pool and
 # network → groups
-# nix-users, libvirt → fish as login shell → first `ws switch`.
+# nix-users, libvirt, input → fish as login shell → first `ws switch`.
 #
 # Runs as the desktop user from the checkout at ~/<wsconfig of
 # nix/hosts/<host>/facts.nix> and calls sudo itself. Every step checks
@@ -133,6 +133,14 @@ if ((${#missing[@]})); then
 else
     [[ "$added" == false ]] || run sudo apt-get update
     echo "all ${#packages[@]} packages installed"
+fi
+# A listed package the standard install already has as a dependency
+# (python3-gi) stays auto-installed: apt autoremove could take it.
+mapfile -t auto < <(apt-mark showauto "${packages[@]}" 2>/dev/null)
+if ((${#auto[@]})); then
+    run sudo apt-mark manual "${auto[@]}"
+else
+    echo "all listed packages marked manual"
 fi
 for snap in "${snaps_remove[@]}"; do
     if snap list "$snap" >/dev/null 2>&1; then
@@ -332,7 +340,8 @@ else
     run sudo systemctl start nix-daemon.socket
 fi
 user="$(id -un)"
-for group in nix-users libvirt; do
+# input: xremap reads the keyboards (/dev/input/event*).
+for group in nix-users libvirt input; do
     if getent group "$group" | cut -d: -f4 | tr ',' '\n' | grep -qx "$user"; then
         echo "$user is in $group"
     else
@@ -364,7 +373,7 @@ else
 fi
 
 echo
-echo "Done. Log out and in (nix-users, libvirt, PATH from 00-nix.fish), then:"
+echo "Done. Log out and in (nix-users, libvirt, input, PATH from 00-nix.fish), then:"
 echo "  ws system apply     # system files (sudo)"
 echo "  ws apply            # user layer; log out and in; ws apply again"
 echo "  ws check"

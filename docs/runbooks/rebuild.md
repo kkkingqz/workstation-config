@@ -178,7 +178,7 @@ systemctl --user is-active wireplumber
 sudo apt install git
 git clone https://github.com/kkkingqz/wsconfig.git ~/wsconfig
 ~/wsconfig/bootstrap.sh
-# logout/login: группа nix-users, PATH из 00-nix.fish, fish как login shell
+# logout/login: группы nix-users, libvirt, input, PATH из 00-nix.fish, fish как login shell
 ws system apply     # системные файлы (sudo); затем reboot, если менялись modprobe/udev/cmdline
 ws apply            # расширения → tiling → клавиатура → Flatpak → Distrobox
 # logout/login: новые расширения GNOME активируются только в новой сессии
@@ -191,8 +191,7 @@ ws check            # проверки всех владельцев и verify (
 `nix/hosts/apt.txt` и `nix/hosts/<host>/apt.txt` (с PPA fish) → `@vms` в
 `/var/lib/vms` с bind-монтированиями в пути libvirt, пул и сеть `default` →
 группы `nix-users`,
-`libvirt` → fish
-как login shell → первый `ws switch` (заменяемые файлы сохраняются как
+`libvirt`, `input` (xremap читает клавиатуры) → fish как login shell → первый `ws switch` (заменяемые файлы сохраняются как
 `*.pre-hm`). Хост определяется по `hostname` в `nix/hosts/*/facts.nix` (`ws
 host`, переопределяет `WS_HOST=<name>`); для новой машины — каталог
 `nix/hosts/<name>/` с `facts.nix` и `apt.txt`. Повторный запуск ничего не

@@ -68,7 +68,9 @@ system    build the host system file tree (system) and compare it
           check also unit states and prints OK/DIFFERS/MISSING per entry;
           files on the rEFInd ESP are compared only when it is mounted;
           apply (sudo) backs up and installs the files that differ, edits
-          /etc/default/keyboard (GDM: EN only), removes known obsolete files,
+          /etc/default/keyboard (GDM: EN only), resets /etc/default/grub to
+          the package template (an installer may edit it; settings live in
+          grub.d), removes known obsolete files,
           enables and restarts units, reloads udev, rebuilds the initramfs
           if modprobe.d changed and runs update-grub if grub.d changed;
           it does not touch the ESP and does not reboot;
@@ -391,7 +393,7 @@ system_check_extra() {
     if cmp -s /usr/share/grub/default/grub /etc/default/grub; then
         pass "/etc/default/grub is the package template"
     else
-        warn "/etc/default/grub differs from /usr/share/grub/default/grub; settings belong in grub.d (system/)"
+        warn "/etc/default/grub differs from /usr/share/grub/default/grub; settings belong in grub.d (ws system apply resets it)"
     fi
     [[ -e /etc/default/grub.d/90-pcie-aspm.cfg ]] \
         && warn "/etc/default/grub.d/90-pcie-aspm.cfg forces ASPM on GRUB/recovery kernels (helpws suspend)"
@@ -609,6 +611,21 @@ cmd_system_apply() {
         changed=$((changed + 1))
     fi
     rm -f "$tmp"
+
+    # The installer of a new machine edits /etc/default/grub (Ubuntu 26.04:
+    # empty GRUB_CMDLINE_LINUX_DEFAULT); workstation settings are grub.d
+    # drop-ins over the package template.
+    echo
+    echo "== /etc/default/grub"
+    if [[ ! -r /usr/share/grub/default/grub ]] || cmp -s /usr/share/grub/default/grub /etc/default/grub; then
+        echo "unchanged: /etc/default/grub"
+    else
+        save /etc/default/grub
+        sudo install -m0644 -o root -g root /usr/share/grub/default/grub /etc/default/grub
+        echo "reset to the package template: /etc/default/grub"
+        changed=$((changed + 1))
+        grub=true
+    fi
 
     echo
     echo "== Obsolete files"
