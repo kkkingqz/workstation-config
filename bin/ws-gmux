@@ -142,8 +142,9 @@ cmd_boot_gpu() {
         return
     fi
     case "$want" in
-        integrated) bytes='\x07\x00\x00\x00\x01\x00\x00\x00' ;;
-        discrete) bytes='\x07\x00\x00\x00\x00\x00\x00\x00' ;;
+        # octal: the printf of sh (dash) has no \x escapes
+        integrated) bytes='\007\000\000\000\001\000\000\000' ;;
+        discrete) bytes='\007\000\000\000\000\000\000\000' ;;
         *) die "boot-gpu: integrated or discrete" ;;
     esac
     [[ -e "$efi_var" ]] || die "missing EFI variable $efi_var"
