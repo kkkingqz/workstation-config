@@ -40,15 +40,7 @@ volume: User Commands
 1. `helpws plan-t2`
    Touch ID, fan policy, battery audit, optional hibernate/suspend-then-hibernate.
 
-2. Фаза 6 — второе железо (`helpws history-nix`, «ФАЗА 6»)
-   Решение пользователя: после плана virt. Первая машина — VM: чистая
-   Ubuntu 26.04 на generic-ядре, весь путь по `helpws rebuild`. Шаги 1–4
-   (репозиторий под второй хост, VM `wsvm`, прогон с исправлениями, повтор
-   с `clean`) сделаны 2026-09-30…10-01. Повтор потребовал одну правку
-   (`bootstrap.sh` ждёт блокировку dpkg); осталось: ещё один откат на
-   `clean` без правок — строгое подтверждение критерия фазы.
-
-3. `helpws plan-final`
+2. `helpws plan-final`
    Инвентаризация, backups, snapshots, restore checkpoints и финальный
    smoke-test. Уже есть: `ws collect` (состояние машины для rebuild),
    `ws checkpoint` (коммит ↔ рабочее состояние), `ws baseline`.
@@ -75,6 +67,7 @@ Distrobox / Podman      2026-09-26   history-distrobox distrobox
 Windows / Wine / Steam  2026-09-28   history-windows   windows
 VM: KVM / libvirt       2026-09-29   history-virt      virt
 Nix + home-manager      2026-09-28   history-nix       rebuild, workstation
+Второе железо (VM)      2026-10-01   history-nix       rebuild
 ```
 
 ## Главное правило
