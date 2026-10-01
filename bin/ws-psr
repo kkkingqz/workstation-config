@@ -1,0 +1,154 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# i915 with PSR on the Apple panel (system/kernel/i915-psr/apple-psr.patch,
+# helpws plan-t2, section 1): the stock kernel keeps PSR off on every Apple
+# eDP panel; with the vendor handshake a static screen costs ~1 W less.
+# Only i915.ko is rebuilt, from the kernel.org release plus the
+# linux-t2-patches commit the T2 kernel was built from (the same pin as
+# t2bce, system/kernel/t2bce/t2bce.nix).
+
+repo="${WSCONFIG:-$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)}"
+patch_file="$repo/system/kernel/i915-psr/apple-psr.patch"
+# Kernel release -> linux-t2-patches commit, from system/kernel/t2bce/t2bce.nix.
+t2_sources="$HOME/.local/share/workstation/t2bce/sources"
+# Build results per kernel: generated, not edited.
+cache="$HOME/.local/share/workstation/i915-psr"
+# The host release: built with the compiler of the kernel, as t2bce.
+build_image="docker.io/library/ubuntu:$(. /etc/os-release && echo "$VERSION_ID")"
+
+die() {
+    echo "ws-psr: $*" >&2
+    exit 1
+}
+
+usage() {
+    cat <<'USAGE'
+Usage: ws-psr <command> [KERNEL]
+
+  status             patched i915 built / installed / loaded
+  build [KERNEL]     build i915.ko with apple-psr.patch into ~/.local/share/workstation/i915-psr/KERNEL
+  install [KERNEL]   install it into /lib/modules/KERNEL/updates/i915-psr + initramfs (sudo)
+  rollback [KERNEL]  remove it again; the stock i915 (no PSR) takes over (sudo)
+
+KERNEL defaults to the running kernel (uname -r). Off for one boot without
+rollback: i915.t2_apple_psr=0 on the kernel command line (rEFInd F2).
+USAGE
+}
+
+t2_commit() {
+    local kver="$1"
+    [[ -r "$t2_sources" ]] || die "missing $t2_sources (ws switch)"
+    awk -v k="$kver" '!/^#/ && $1 == k { print $2 }' "$t2_sources"
+}
+
+cmd_status() {
+    local kver param
+    kver="$(uname -r)"
+    if [[ -e /sys/module/i915/parameters/t2_apple_psr ]]; then
+        param="patched i915 loaded"
+    else
+        param="stock i915 (no t2_apple_psr)"
+    fi
+    printf 'kernel:          %s\n' "$kver"
+    printf 'pinned t2 base:  %s\n' "$(t2_commit "$kver" 2>/dev/null || true)"
+    printf 'built:           %s\n' "$([[ -r "$cache/$kver/i915.ko" ]] && modinfo -F vermagic "$cache/$kver/i915.ko" | awk '{print $1}' || echo '-')"
+    printf 'resolves to:     %s\n' "$(modinfo -k "$kver" -n i915 2>/dev/null || echo '-')"
+    printf 'running:         %s\n' "$param"
+    echo "PSR state (root): sudo cat /sys/kernel/debug/dri/0000:00:02.0/i915_edp_psr_status"
+}
+
+cmd_build() {
+    local kver="$1" commit ver major work
+    commit="$(t2_commit "$kver")"
+    [[ -n "$commit" ]] || die "no pinned linux-t2-patches commit for $kver in system/kernel/t2bce/t2bce.nix (ws switch after adding it)"
+    [[ -r "/boot/config-$kver" ]] || die "missing /boot/config-$kver"
+    [[ -r "/usr/src/linux-headers-$kver/Module.symvers" ]] || die "kernel headers missing: /usr/src/linux-headers-$kver"
+    command -v podman >/dev/null 2>&1 || die "podman not found"
+    ver="${kver%%-*}"            # 7.2.7-1-t2-resolute -> 7.2.7
+    major="${ver%%.*}"
+
+    work="$cache/$kver"
+    rm -rf -- "$work"
+    mkdir -p "$work"
+
+    echo "== Sources: linux $ver (kernel.org) + linux-t2-patches $commit + apple-psr.patch =="
+    curl -fL# -o "$work/linux.tar.xz" "https://cdn.kernel.org/pub/linux/kernel/v$major.x/linux-$ver.tar.xz"
+    curl -fsSL -o "$work/t2.tar.gz" "https://github.com/t2linux/linux-t2-patches/archive/$commit.tar.gz"
+    cp -- "$patch_file" "$work/apple-psr.patch"
+
+    echo
+    echo "== Build ($build_image) =="
+    podman run --rm \
+        -v /boot:/boot:ro \
+        -v /usr/src:/usr/src:ro \
+        -v "$work:/work:Z" \
+        "$build_image" \
+        bash -euc "
+            export DEBIAN_FRONTEND=noninteractive
+            apt-get update -qq
+            apt-get install -y -qq --no-install-recommends gcc make bc bison flex libelf-dev libssl-dev \
+                xz-utils patch python3 perl kmod >/dev/null
+            mkdir /build /t2 && cd /build
+            tar xf /work/linux.tar.xz --strip-components=1
+            tar xf /work/t2.tar.gz -C /t2 --strip-components=1
+            for p in \$(ls /t2/*.patch | sort); do patch -p1 -s --no-backup-if-mismatch <\"\$p\"; done
+            patch -p1 --no-backup-if-mismatch </work/apple-psr.patch
+            cp /boot/config-$kver .config
+            cp /usr/src/linux-headers-$kver/Module.symvers .
+            make -s olddefconfig
+            make -s KERNELRELEASE=$kver -j\$(nproc) modules_prepare
+            make -s KERNELRELEASE=$kver -j\$(nproc) M=drivers/gpu/drm/i915 modules
+            cp drivers/gpu/drm/i915/i915.ko /work/i915.ko
+        "
+    rm -f -- "$work/linux.tar.xz" "$work/t2.tar.gz"
+
+    echo
+    printf 'i915 %s, %s\n' "$(modinfo -F vermagic "$work/i915.ko" | awk '{print $1}')" \
+        "$(modinfo -F parm "$work/i915.ko" | grep -o '^t2_apple_psr' || echo 'NO t2_apple_psr')"
+    echo "Built into $work. Install with: ws-psr install $kver"
+}
+
+cmd_install() {
+    local kver="$1" ko dest vm
+    ko="$cache/$kver/i915.ko"
+    dest="/lib/modules/$kver/updates/i915-psr"
+    [[ -d "/lib/modules/$kver" ]] || die "kernel $kver is not installed"
+    [[ -r "$ko" ]] || die "missing $ko; run: ws-psr build $kver"
+    vm="$(modinfo -F vermagic "$ko" | awk '{print $1}')"
+    [[ "$vm" == "$kver" ]] || die "vermagic mismatch in i915.ko: $vm"
+
+    sudo install -d -m0755 "$dest"
+    sudo install -m0644 "$ko" "$dest/i915.ko"
+    sudo depmod -a "$kver"
+    printf 'i915 %s\n' "$(modinfo -k "$kver" -n i915)"
+    sudo update-initramfs -u -k "$kver"
+    echo
+    echo "Installed. Reboot into $kver to load it."
+}
+
+cmd_rollback() {
+    local kver="$1"
+    sudo rm -rf -- "/lib/modules/$kver/updates/i915-psr"
+    sudo rmdir --ignore-fail-on-non-empty "/lib/modules/$kver/updates" 2>/dev/null || true
+    sudo depmod -a "$kver"
+    printf 'i915 %s\n' "$(modinfo -k "$kver" -n i915)"
+    sudo update-initramfs -u -k "$kver"
+    echo
+    echo "Stock i915 for $kver after reboot (no PSR on the Apple panel)."
+}
+
+main() {
+    local cmd="${1:-}"
+    [[ $# -gt 0 ]] && shift
+    case "$cmd" in
+        status) cmd_status ;;
+        build) cmd_build "${1:-$(uname -r)}" ;;
+        install) cmd_install "${1:-$(uname -r)}" ;;
+        rollback) cmd_rollback "${1:-$(uname -r)}" ;;
+        -h | --help | help | "") usage ;;
+        *) usage >&2; exit 2 ;;
+    esac
+}
+
+main "$@"

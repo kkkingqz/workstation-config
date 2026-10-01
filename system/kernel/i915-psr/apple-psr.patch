@@ -1,0 +1,98 @@
+Apple eDP panel PSR for i915 (helpws plan-t2, section 1): the panels of T2
+Macs (sink OUI 00:10:fa) are in DP_DPCD_QUIRK_NO_PSR because their TCON
+needs a vendor handshake. KaiT2en traced it under macOS: 0x321 = 3c,
+0x4d2 = 01, 0x4d1 = 03, PSR enable without CRC verification, then the
+capture trigger 0x4d4 = 01. Apple has no VBT, so its PSR enable bit is
+overridden. i915.t2_apple_psr=0 restores the stock behaviour.
+
+Source: kaiT2en/KaiT2en-Fedora patches/currently-testing/
+0001-drm-dp-allow-psr-on-apple-panels.patch and
+0002-drm-i915-psr-apple-tcon-handshake.patch (commit d76ba055,
+2026-08-31; upstream: "[PATCH v3] drm/i915/psr: enable PSR on Apple T2 eDP
+panels", intel-gfx 2026-09-16). Here only i915 changes: the NO_PSR quirk is
+skipped inside i915 for these panels instead of being removed from
+drm_display_helper. Made against 7.2.7 + linux-t2-patches.
+
+diff --git a/drivers/gpu/drm/i915/display/intel_psr.c b/drivers/gpu/drm/i915/display/intel_psr.c
+index beaa1d626..9dfc18ef3 100644
+--- a/drivers/gpu/drm/i915/display/intel_psr.c
++++ b/drivers/gpu/drm/i915/display/intel_psr.c
+@@ -238,12 +238,56 @@ bool intel_psr_needs_aux_io_power(struct intel_encoder *encoder,
+ 	       intel_encoder_can_psr(encoder);
+ }
+ 
++static int t2_apple_psr = 1;
++module_param_named(t2_apple_psr, t2_apple_psr, int, 0400);
++MODULE_PARM_DESC(t2_apple_psr,
++	"Apple eDP TCON PSR handshake: 0=off (Apple panels without PSR), 1=on (default 1)");
++
++#define APPLE_PSR_UNLOCK	0x321
++#define APPLE_PSR_CFG1		0x4d1
++#define APPLE_PSR_CFG2		0x4d2
++#define APPLE_PSR_TRIGGER	0x4d4
++
++/* The internal panel of a T2 Mac: Apple sink OUI on eDP. */
++static bool intel_psr_is_apple_tcon(struct intel_dp *intel_dp)
++{
++	static const u8 apple_oui[] = { 0x00, 0x10, 0xfa };
++
++	return t2_apple_psr && intel_dp_is_edp(intel_dp) &&
++	       memcmp(intel_dp->desc.ident.oui, apple_oui, sizeof(apple_oui)) == 0;
++}
++
++/*
++ * Apple panels (Banksia TCON) do not latch a frame from DP_PSR_EN_CFG alone:
++ * three vendor registers, PSR enable without CRC verification, then the
++ * capture trigger at 0x4d4 (AUX trace of macOS, KaiT2en).
++ */
++static void intel_psr_apple_enable_sink(struct intel_dp *intel_dp)
++{
++	struct intel_display *display = to_intel_display(intel_dp);
++	u8 status = 0, error = 0;
++
++	drm_dp_dpcd_writeb(&intel_dp->aux, APPLE_PSR_UNLOCK, 0x3c);
++	drm_dp_dpcd_writeb(&intel_dp->aux, APPLE_PSR_CFG2, 0x01);
++	drm_dp_dpcd_writeb(&intel_dp->aux, APPLE_PSR_CFG1, 0x03);
++	drm_dp_dpcd_writeb(&intel_dp->aux, DP_PSR_EN_CFG, DP_PSR_ENABLE);
++	drm_dp_dpcd_writeb(&intel_dp->aux, APPLE_PSR_TRIGGER, 0x01);
++
++	drm_dp_dpcd_read_byte(&intel_dp->aux, DP_PSR_STATUS, &status);
++	drm_dp_dpcd_read_byte(&intel_dp->aux, DP_PSR_ERROR_STATUS, &error);
++	drm_dbg_kms(display->drm, "apple psr: armed, sink status=%02x error=%02x\n",
++		    status, error);
++}
++
+ static bool psr_global_enabled(struct intel_dp *intel_dp)
+ {
+ 	struct intel_connector *connector = intel_dp->attached_connector;
+ 
+ 	switch (intel_dp->psr.debug & I915_PSR_DEBUG_MODE_MASK) {
+ 	case I915_PSR_DEBUG_DEFAULT:
++		/* Apple has no VBT, so no PSR enable bit in it */
++		if (intel_psr_is_apple_tcon(intel_dp))
++			return true;
+ 		return intel_dp_is_edp(intel_dp) ?
+ 			connector->panel.vbt.psr.enable : true;
+ 	case I915_PSR_DEBUG_DISABLE:
+@@ -679,7 +723,8 @@ static void _psr_init_dpcd(struct intel_dp *intel_dp, struct intel_connector *co
+ 	drm_dbg_kms(display->drm, "eDP panel supports PSR version %x\n",
+ 		    connector->dp.psr_caps.dpcd[0]);
+ 
+-	if (drm_dp_has_quirk(&intel_dp->desc, DP_DPCD_QUIRK_NO_PSR)) {
++	if (drm_dp_has_quirk(&intel_dp->desc, DP_DPCD_QUIRK_NO_PSR) &&
++	    !intel_psr_is_apple_tcon(intel_dp)) {
+ 		drm_dbg_kms(display->drm,
+ 			    "PSR support not currently available for this panel\n");
+ 		return;
+@@ -825,6 +870,11 @@ static void _psr_enable_sink(struct intel_dp *intel_dp,
+ 	struct intel_display *display = to_intel_display(intel_dp);
+ 	u8 val = 0;
+ 
++	if (intel_psr_is_apple_tcon(intel_dp) && !crtc_state->has_sel_update) {
++		intel_psr_apple_enable_sink(intel_dp);
++		return;
++	}
++
+ 	if (crtc_state->has_sel_update) {
+ 		val |= DP_PSR_ENABLE_PSR2 | DP_PSR_IRQ_HPD_WITH_CRC_ERRORS;
+ 	} else {

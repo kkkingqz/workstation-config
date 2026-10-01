@@ -6,7 +6,7 @@ set -o pipefail
 # agree. Each owner checks its own layer (ws check runs them all):
 #   ws check repo / home, ws-keyboard check, ws-gnome check, wsflatpak check,
 #   wsbox check, wswin check, ws-suspend check, ws system check, ws check apt.
-# Here: GNOME <-> keyboard, kernel <-> t2bce, boot <-> dGPU policy,
+# Here: GNOME <-> keyboard, kernel <-> t2bce and i915 PSR, boot <-> dGPU policy,
 # Distrobox <-> host NTSync. The T2 and dGPU sections run only on hardware
 # t2-mbp16, /boot/ws only with boot refind-grub-recovery (ws fact). Read-only.
 # Exit codes: 0 = no FAIL, 1 = FAIL, 2 = warnings with --strict.
@@ -108,7 +108,7 @@ else
     fail "Tiling Assistant not active"
 fi
 
-section "3. Kernel <-> t2bce"
+section "3. Kernel <-> t2bce, i915 PSR"
 
 # The patched t2bce modules exist per kernel release (system/kernel/t2bce):
 # the running kernel must have them, and apt must not bring a newer one.
@@ -131,6 +131,14 @@ if [[ "$t2" == true ]]; then
         pass "system/kernel/t2bce/t2bce.nix pins sources for $(uname -r)"
     else
         warn "system/kernel/t2bce/t2bce.nix has no entry for $(uname -r)"
+    fi
+
+    # i915 with PSR on the Apple panel (system/kernel/i915-psr): without it
+    # the stock i915 runs, PSR is off and a static screen costs ~1 W more.
+    if [[ -e /sys/module/i915/parameters/t2_apple_psr ]]; then
+        pass "i915 with Apple panel PSR loaded"
+    else
+        warn "stock i915 (no PSR on the Apple panel); run ws-psr build && ws-psr install (helpws plan-t2)"
     fi
 else
     info "no T2 (hardware ${hardware:-unknown}): nothing to check"

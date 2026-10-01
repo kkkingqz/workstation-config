@@ -117,8 +117,8 @@ wpctl status
 bluetoothctl show
 ```
 
-Патченые модули t2bce — `ws-suspend t2bce-build && ws-suspend t2bce-install`
-(раздел 8).
+Патченые модули t2bce — `ws-suspend t2bce-build && ws-suspend t2bce-install`,
+i915 с PSR — `ws-psr build && ws-psr install` (раздел 8).
 
 # 5. Boot / rEFInd
 
@@ -388,8 +388,13 @@ t2bce собираются под установленное ядро:
 ```console
 ws-suspend t2bce-build
 ws-suspend t2bce-install
+ws-psr build
+ws-psr install
 sudo reboot
 ```
+
+`ws-psr` — i915 с PSR на панели Apple (helpws plan-t2, раздел 1), без него
+экран стоит ~1 W больше.
 
 `t2bce-build` требует `podman` и `linux-headers` текущего ядра. Если для
 установленного ядра нет записи в `system/kernel/t2bce/t2bce.nix`, сначала
