@@ -1,0 +1,466 @@
+#!/usr/bin/env python3
+"""Battery audit (helpws plan-t2, 1): power per device of a T2 Mac.
+
+The SMC measures power per supply rail; PSTR is the whole system, PPBR the
+battery. RAPL counters split the CPU package. Devices that have no rail of
+their own (the screen backlight, the radios) are measured by switching them
+off for a few seconds: `ws-battery devices`.
+
+SMC keys are read by index (key_at_index), which needs root: the script
+re-runs itself with sudo.
+"""
+import os
+import re
+import signal
+import struct
+import subprocess
+import sys
+import time
+
+SMC = "/sys/bus/acpi/devices/APP0001:00"
+BAT = "/sys/class/power_supply/BAT0"
+ADP = "/sys/class/power_supply/ADP1"
+RAPL = "/sys/class/powercap"
+SCREEN = "/sys/class/backlight/gmux_backlight"
+KBD = "/sys/class/leds/:white:kbd_backlight"
+TOUCHBAR = "/sys/class/backlight/appletb_backlight"
+STATS = "/sys/power/suspend_stats"
+
+# Rails of MacBookPro16,1 that add up to PSTR. Names are what
+# `ws-battery devices` showed on them; a key missing on another model is
+# skipped.
+RAILS = [
+    ("PC0R", "CPU"),
+    ("PM0C", "memory"),
+    ("PG0R", "AMD dGPU"),
+    ("POLR", "Wi-Fi, Bluetooth, ..."),
+    ("PORR", ""),
+    ("PO5R", "5 V: keyboard backlight, ..."),
+    ("PSLC", ""),
+    ("PH0R", ""),
+    ("PH1R", ""),
+]
+TOTALS = [("PSTR", "system"), ("PPBR", "battery (SMC)"), ("PHPC", "CPU, regulator input")]
+
+USAGE = """\
+usage: ws-battery now [SECONDS]      power per rail, averaged over SECONDS (10)
+       ws-battery devices [SECONDS]  each device off (or on) for SECONDS (10): its power
+       ws-battery idle MINUTES       average over MINUTES, logged
+       ws-battery sleep              suspend now; after resume: energy spent, wakeups
+
+Devices: screen, keyboard and Touch Bar backlight, Wi-Fi, Bluetooth.
+Logs: ~/.local/state/workstation/battery/ (idle-*.tsv, sleep.tsv)."""
+
+
+def die(msg):
+    print(f"ws-battery: {msg}", file=sys.stderr)
+    raise SystemExit(1)
+
+
+def read(path):
+    with open(path, encoding="ascii", errors="replace") as f:
+        return f.read().strip()
+
+
+def write(path, value):
+    with open(path, "w", encoding="ascii") as f:
+        f.write(str(value))
+
+
+def number(path):
+    return int(read(path))
+
+
+class Smc:
+    def __init__(self):
+        if not os.path.exists(f"{SMC}/key_count"):
+            die(f"no Apple SMC ({SMC})")
+        self.count = number(f"{SMC}/key_count")
+        self.keys = {}  # name -> (index, type)
+
+    def _at(self, index, attr):
+        write(f"{SMC}/key_at_index", index)
+        if attr == "data":
+            with open(f"{SMC}/key_at_index_data", "rb") as f:
+                return f.read()
+        with open(f"{SMC}/key_at_index_{attr}", "rb") as f:
+            return f.read().decode("ascii", "replace").rstrip("\n")
+
+    def find(self, name):
+        # The SMC lists its keys sorted (byte order).
+        lo, hi = 0, self.count - 1
+        while lo <= hi:
+            mid = (lo + hi) // 2
+            at = self._at(mid, "name")
+            if at == name:
+                self.keys[name] = (mid, self._at(mid, "type"))
+                return True
+            if at < name:
+                lo = mid + 1
+            else:
+                hi = mid - 1
+        return False
+
+    def value(self, name):
+        index, kind = self.keys[name]
+        data = self._at(index, "data")
+        if kind.strip() == "flt" and len(data) == 4:
+            return struct.unpack("<f", data)[0]
+        return None
+
+
+class Rapl:
+    """CPU energy counters: package-0 (cores + iGPU), core, uncore (iGPU), dram."""
+
+    def __init__(self):
+        self.domains = {}
+        for entry in sorted(os.listdir(RAPL)) if os.path.isdir(RAPL) else []:
+            path = f"{RAPL}/{entry}"
+            if not entry.startswith("intel-rapl:") or not os.path.exists(f"{path}/energy_uj"):
+                continue
+            self.domains[read(f"{path}/name")] = (path, number(f"{path}/max_energy_range_uj"))
+
+    def snapshot(self):
+        return {name: number(f"{path}/energy_uj") for name, (path, _) in self.domains.items()}
+
+    def watts(self, before, after, seconds):
+        out = {}
+        for name, (_, wrap) in self.domains.items():
+            delta = after[name] - before[name]
+            if delta < 0:
+                delta += wrap
+            out[name] = delta / 1e6 / seconds
+        return out
+
+
+def battery_watts():
+    return number(f"{BAT}/current_now") * number(f"{BAT}/voltage_now") / 1e12
+
+
+def on_ac():
+    try:
+        return read(f"{ADP}/online") == "1"
+    except OSError:
+        return False
+
+
+class Meter:
+    def __init__(self):
+        self.smc = Smc()
+        self.rails = [(k, label) for k, label in RAILS if self.smc.find(k)]
+        self.totals = [(k, label) for k, label in TOTALS if self.smc.find(k)]
+        if not any(k == "PSTR" for k, _ in self.totals):
+            die("this SMC has no PSTR (system power) key")
+        self.rapl = Rapl()
+
+    def sample(self):
+        row = {k: self.smc.value(k) for k, _ in self.rails + self.totals}
+        row["battery"] = battery_watts()
+        return row
+
+    def measure(self, seconds, log=None, progress=None):
+        """Mean of one sample per second over SECONDS; RAPL over the span."""
+        rows = []
+        start = time.monotonic()
+        r0 = self.rapl.snapshot()
+        while True:
+            tick = time.monotonic()
+            row = self.sample()
+            rows.append(row)
+            if log:
+                log(row)
+            if progress:
+                progress(rows)
+            if tick - start >= seconds - 1:
+                break
+            time.sleep(max(0.0, 1.0 - (time.monotonic() - tick)))
+        span = time.monotonic() - start
+        mean = {k: sum(r[k] for r in rows) / len(rows) for k in rows[0] if rows[0][k] is not None}
+        mean.update({f"rapl:{k}": v for k, v in self.rapl.watts(r0, self.rapl.snapshot(), span).items()})
+        mean["samples"] = len(rows)
+        return mean
+
+
+def state_line():
+    def level(path):
+        try:
+            return f"{100 * number(f'{path}/brightness') // number(f'{path}/max_brightness')} %"
+        except (OSError, ValueError, ZeroDivisionError):
+            return "-"
+
+    radios = rfkill_state()
+    return (f"screen {level(SCREEN)}, keyboard {level(KBD)}, Touch Bar {level(TOUCHBAR)}, "
+            f"Wi-Fi {radios.get('wlan', '-')}, Bluetooth {radios.get('bluetooth', '-')}")
+
+
+def rfkill_state():
+    out = {}
+    for line in subprocess.run(["rfkill", "-n", "-o", "TYPE,SOFT,HARD"], capture_output=True,
+                               text=True).stdout.splitlines():
+        kind, soft, hard = line.split()
+        out[kind] = "on" if soft == hard == "unblocked" else "off"
+    return out
+
+
+def power_source():
+    if on_ac():
+        return "on AC: PSTR is the system, battery figures are charging, not use"
+    return f"on battery ({read(f'{BAT}/status')}, {read(f'{BAT}/capacity')} %)"
+
+
+def report(meter, m):
+    print(f"  {'':4}  {m['battery']:6.2f} W  battery, current x voltage")
+    for key, label in meter.totals:
+        if key in m:
+            print(f"  {key}  {m[key]:6.2f} W  {label}")
+    print("rails:")
+    total = 0.0
+    for key, label in meter.rails:
+        if key in m:
+            total += m[key]
+            print(f"  {key}  {m[key]:6.2f} W  {label}")
+    print(f"  rest  {m['PSTR'] - total:6.2f} W  PSTR minus the rails")
+    if any(k.startswith("rapl:") for k in m):
+        print("CPU counters (RAPL):")
+        names = [("package-0", "package: cores + iGPU"), ("core", "cores"),
+                 ("uncore", "iGPU"), ("dram", "memory")]
+        for name, label in names:
+            if f"rapl:{name}" in m:
+                print(f"  {m[f'rapl:{name}']:6.2f} W  {label}")
+
+
+def cmd_now(seconds):
+    meter = Meter()
+    print(f"ws-battery: {seconds} s, {power_source()}")
+    print(f"state: {state_line()}")
+    report(meter, meter.measure(seconds))
+
+
+class Backlight:
+    def __init__(self, name, path):
+        self.name, self.path = name, path
+
+    def available(self):
+        return os.access(f"{self.path}/brightness", os.W_OK)
+
+    def toggle(self):
+        """Switch: returns (what was measured, restore)."""
+        was = number(f"{self.path}/brightness")
+        top = number(f"{self.path}/max_brightness")
+        if was > 0:
+            write(f"{self.path}/brightness", 0)
+            what = f"on at {100 * was // top} %"
+        else:
+            write(f"{self.path}/brightness", top)
+            what = "on at 100 %"
+        return was > 0, what, lambda: write(f"{self.path}/brightness", was)
+
+
+class Radio:
+    def __init__(self, name, kind):
+        self.name, self.kind = name, kind
+
+    def available(self):
+        return rfkill_state().get(self.kind) == "on"
+
+    def toggle(self):
+        subprocess.run(["rfkill", "block", self.kind], check=True)
+        return True, "on", lambda: subprocess.run(["rfkill", "unblock", self.kind], check=True)
+
+
+DEVICES = [
+    (Backlight("screen backlight", SCREEN), 3),
+    (Backlight("keyboard backlight", KBD), 3),
+    (Backlight("Touch Bar backlight", TOUCHBAR), 3),
+    (Radio("Wi-Fi", "wlan"), 10),
+    (Radio("Bluetooth", "bluetooth"), 10),
+]
+
+
+def cmd_devices(seconds):
+    meter = Meter()
+    print(f"ws-battery: devices, {seconds} s each, {power_source()}")
+    print(f"state: {state_line()}")
+    print("the screen goes dark for a while; Wi-Fi and Bluetooth reconnect by themselves")
+    keys = ["PSTR"] + [k for k, _ in meter.rails]
+    pending = []
+
+    def restore_all():
+        while pending:
+            try:
+                pending.pop()()
+            except Exception as e:  # keep restoring the rest
+                print(f"ws-battery: restore failed: {e}", file=sys.stderr)
+
+    results = []
+    try:
+        time.sleep(3)
+        base = meter.measure(seconds)
+        for device, settle in DEVICES:
+            if not device.available():
+                print(f"  {device.name}: off or missing, skipped")
+                continue
+            print(f"  {device.name} ...", flush=True)
+            switched_off, what, restore = device.toggle()
+            pending.append(restore)
+            time.sleep(settle)
+            changed = meter.measure(seconds)
+            pending.pop()()
+            time.sleep(settle)
+            after = meter.measure(seconds)
+            sign = 1 if switched_off else -1
+            power = {k: sign * ((base[k] + after[k]) / 2 - changed[k]) for k in keys if k in changed}
+            results.append((device.name, what, power))
+            base = after
+    finally:
+        restore_all()
+
+    print()
+    print(f"{'device':<20} {'state':<12} {'power':>8}  rails that moved")
+    for name, what, power in results:
+        moved = ", ".join(f"{k} {v:+.2f}" for k, v in power.items() if k != "PSTR" and abs(v) >= 0.05)
+        print(f"{name:<20} {what:<12} {power['PSTR']:6.2f} W  {moved or '-'}")
+    print("power = PSTR with the device on minus off (mean of the runs before and after)")
+
+
+def state_dir():
+    user = os.environ.get("SUDO_USER")
+    home = os.path.expanduser(f"~{user}") if user else os.path.expanduser("~")
+    path = f"{home}/.local/state/workstation/battery"
+    os.makedirs(path, exist_ok=True)
+    give_back(path)
+    return path
+
+
+def give_back(path):
+    uid, gid = os.environ.get("SUDO_UID"), os.environ.get("SUDO_GID")
+    if uid and gid:
+        os.chown(path, int(uid), int(gid))
+
+
+def full_wh():
+    return number(f"{BAT}/charge_full") * number(f"{BAT}/voltage_min_design") / 1e12
+
+
+def charge_wh():
+    return number(f"{BAT}/charge_now") * number(f"{BAT}/voltage_now") / 1e12
+
+
+def cmd_idle(minutes):
+    meter = Meter()
+    stamp = time.strftime("%Y%m%d-%H%M%S")
+    path = f"{state_dir()}/idle-{stamp}.tsv"
+    keys = ["battery"] + [k for k, _ in meter.totals + meter.rails]
+    print(f"ws-battery: idle {minutes} min, {power_source()}")
+    print(f"state: {state_line()}")
+    print(f"log: {path}")
+    q0, t0 = number(f"{BAT}/charge_now"), time.time()
+    with open(path, "w", encoding="ascii") as log:
+        give_back(path)
+        log.write("time\t" + "\t".join(keys) + "\n")
+
+        def write_row(row):
+            log.write(f"{time.time():.0f}\t" + "\t".join(f"{row[k]:.3f}" for k in keys) + "\n")
+            log.flush()
+
+        def progress(rows):
+            if len(rows) % 60 == 0:
+                last = rows[-60:]
+                print(f"  {len(rows) // 60:3d} min  PSTR {sum(r['PSTR'] for r in last) / 60:5.2f} W",
+                      flush=True)
+
+        m = meter.measure(minutes * 60, write_row, progress)
+    hours = (time.time() - t0) / 3600
+    print()
+    report(meter, m)
+    q1 = number(f"{BAT}/charge_now")
+    if not on_ac() and q1 < q0:
+        used = (q0 - q1) * number(f"{BAT}/voltage_now") / 1e12
+        print(f"charge counter     {used / hours:6.2f} W  ({(q0 - q1) / 1000:.0f} mAh in {hours * 60:.0f} min)")
+    print(f"at {m['PSTR']:.2f} W a full battery ({full_wh():.1f} Wh) lasts {full_wh() / m['PSTR']:.1f} h")
+
+
+def cmd_sleep():
+    if on_ac():
+        die("on AC the battery charges: unplug first")
+    t0, q0, v0 = time.time(), number(f"{BAT}/charge_now"), number(f"{BAT}/voltage_now")
+    ok0, fail0 = number(f"{STATS}/success"), number(f"{STATS}/fail")
+    print(f"ws-battery: sleep, {power_source()}; wake it when you want the result")
+    time.sleep(2)
+    subprocess.run(["systemctl", "suspend"], check=True)
+    while number(f"{STATS}/success") == ok0 and number(f"{STATS}/fail") == fail0:
+        time.sleep(1)
+    if number(f"{STATS}/fail") != fail0:
+        die(f"suspend failed: {read(f'{STATS}/last_failed_step')} {read(f'{STATS}/last_failed_dev')}")
+    time.sleep(5)  # the battery reading catches up after resume
+    t1, q1, v1 = time.time(), number(f"{BAT}/charge_now"), number(f"{BAT}/voltage_now")
+    hours = (t1 - t0) / 3600
+    wh = (q0 - q1) * (v0 + v1) / 2 / 1e12
+
+    kernel = subprocess.run(["journalctl", "-k", "-q", "-o", "short-iso", f"--since=@{int(t0)}"],
+                            capture_output=True, text=True).stdout.splitlines()
+    entries = [l for l in kernel if "PM: suspend entry" in l]
+    wake_lines = [l for l in kernel if re.search(r"wake", l, re.I)]
+    irq = read("/sys/power/pm_wakeup_irq") if os.path.exists("/sys/power/pm_wakeup_irq") else "-"
+
+    print(f"asleep      {hours * 60:.0f} min ({read('/sys/power/mem_sleep')})")
+    print(f"used        {(q0 - q1) / 1000:.0f} mAh, {wh:.2f} Wh")
+    if hours > 0 and wh > 0:
+        print(f"average     {wh / hours * 1000:.0f} mW, {wh / hours / full_wh() * 100:.2f} %/h of a full battery,"
+              f" {full_wh() / (wh / hours) / 24:.1f} days from full to empty")
+    else:
+        print("average     too short to see a change of charge; sleep longer (30-60 min)")
+    print(f"suspends    {len(entries)} (more than 1: it woke up and went to sleep again)")
+    print(f"wakeup irq  {irq}")
+    for line in wake_lines[-10:]:
+        print(f"  {line}")
+    path = f"{state_dir()}/sleep.tsv"
+    new = not os.path.exists(path)
+    with open(path, "a", encoding="ascii") as log:
+        if new:
+            log.write("start\tminutes\tmAh\tWh\tmW\tsuspends\n")
+        mw = wh / hours * 1000 if hours > 0 else 0
+        log.write(f"{time.strftime('%Y-%m-%dT%H:%M', time.localtime(t0))}\t{hours * 60:.0f}\t"
+                  f"{(q0 - q1) / 1000:.0f}\t{wh:.3f}\t{mw:.0f}\t{len(entries)}\n")
+    give_back(path)
+    print(f"log: {path}")
+
+
+def positive(text, default=None):
+    if text is None and default is not None:
+        return default
+    if text is None or not text.isdigit() or int(text) == 0:
+        print(USAGE, file=sys.stderr)
+        raise SystemExit(2)
+    return int(text)
+
+
+def main(argv):
+    if not argv or argv[0] in ("-h", "--help", "help"):
+        print(USAGE)
+        return
+    cmd, rest = argv[0], argv[1:]
+    if cmd not in ("now", "devices", "idle", "sleep") or len(rest) > 1 or (cmd == "sleep" and rest):
+        print(USAGE, file=sys.stderr)
+        raise SystemExit(2)
+    arg = rest[0] if rest else None
+    amount = {"now": lambda: positive(arg, 10), "devices": lambda: positive(arg, 10),
+              "idle": lambda: positive(arg), "sleep": lambda: None}[cmd]()
+    if os.geteuid() != 0:
+        os.execvp("sudo", ["sudo", "--", sys.executable, os.path.realpath(__file__), *argv])
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(143))
+    if cmd == "now":
+        cmd_now(amount)
+    elif cmd == "devices":
+        cmd_devices(amount)
+    elif cmd == "idle":
+        cmd_idle(amount)
+    else:
+        cmd_sleep()
+
+
+if __name__ == "__main__":
+    try:
+        main(sys.argv[1:])
+    except KeyboardInterrupt:
+        raise SystemExit(130)

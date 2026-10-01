@@ -26,13 +26,34 @@ volume: User Commands
 - повторить несколько раз;
 - сравнить процент и энергию до/после.
 
-Инструменты:
+Инструмент — `ws-battery` (сам перезапускается через sudo: ключи SMC и
+счётчики RAPL читает только root):
 
-```bash
-BAT=$(upower -e | grep battery | head -1)
-upower -i "$BAT"
-cat /sys/power/mem_sleep
+```console
+ws-battery now [SECONDS]      мощность по линиям питания, среднее за SECONDS (10)
+ws-battery devices [SECONDS]  каждое устройство выключить (или включить) на SECONDS: его мощность
+ws-battery idle MINUTES       среднее за MINUTES, лог
+ws-battery sleep              уснуть сейчас; после пробуждения — энергия за сон, пробуждения
 ```
+
+Логи — `~/.local/state/workstation/battery/` (`idle-*.tsv`, `sleep.tsv`).
+
+Откуда цифры (MacBookPro16,1, разведка 2026-10-01):
+
+- SMC меряет мощность по линиям питания: `PSTR` — вся система, `PPBR` —
+  батарея (совпадает с ток × напряжение `BAT0`), линии `PC0R` (CPU),
+  `PM0C` (память), `PG0R` (AMD dGPU, при `ws.dgpu=off` ~0,09 W), `POLR`
+  (на ней видно Wi-Fi и Bluetooth), `PO5R` (5 V, на ней подсветка
+  клавиатуры), `PORR`, `PSLC`, `PH0R`, `PH1R` — назначение последних не
+  установлено; `PHPC` — CPU на входе регулятора.
+- RAPL делит пакет CPU: ядра, iGPU (`uncore`), память (`dram`).
+- Подсветка экрана своей линии не имеет: её и радио `ws-battery devices`
+  меряет выключением на несколько секунд (разница `PSTR`, среднее до и
+  после).
+
+Первая разведка (на батарее, сеанс не в простое, PSTR ~15 W): экран на
+28 % — 1,96 W, Wi-Fi — 1,02 W, Bluetooth — 0,34 W, подсветка клавиатуры
+на 100 % — 0,5 W, Touch Bar — ~0,1 W.
 
 Не применять автоматические Powertop tweaks. Использовать Powertop только как инструмент наблюдения.
 
