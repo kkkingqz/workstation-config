@@ -295,6 +295,11 @@ USB-контроллеры Thunderbolt (`09:00.0`, `7f:00.0`, `8086:15ec`) де�
 на PCH xHCI `00:14.0`. Проверка: `cat /sys/bus/pci/devices/0000:09:00.0/power/control`
 должно быть `on`.
 
+`ws-tb-acpi-seed.service` при загрузке читает регионы ACPI Thunderbolt,
+чтобы ACPICA запомнила их настоящие адреса PCI: иначе `_PS0` прошивки при
+каждом resume опрашивает хост-мост и выход из сна занимает ~23 с вместо
+~3 с (helpws suspend, Thunderbolt).
+
 ---
 
 # GRAPHICS

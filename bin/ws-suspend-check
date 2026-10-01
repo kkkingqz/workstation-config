@@ -62,6 +62,14 @@ t2bce_param="$(cat /sys/module/t2bce_core/parameters/stateful_sleep 2>/dev/null 
     && pass "t2bce stateful sleep enabled" \
     || fail "t2bce_core.stateful_sleep=$t2bce_param (forced no-state test mode left on)"
 
+# Without it the firmware's Thunderbolt _PS0 polls the host bridge and every
+# resume takes ~20 s longer (helpws suspend, Thunderbolt).
+if systemctl is-active --quiet ws-tb-acpi-seed.service 2>/dev/null; then
+    pass "Thunderbolt ACPI regions seeded before the first suspend (ws-tb-acpi-seed)"
+else
+    warn "ws-tb-acpi-seed.service not active: resume ~20 s slower (journalctl -b -u ws-tb-acpi-seed; ws system apply)"
+fi
+
 section "2. Touch Bar native mode"
 
 tb_usb=""

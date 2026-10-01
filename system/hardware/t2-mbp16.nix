@@ -17,6 +17,9 @@
     (file "/usr/local/sbin/broadcom-aspm-suspend-guard" "system/files/usr/local/sbin/broadcom-aspm-suspend-guard" "0755")
     (file "/usr/lib/systemd/system-sleep/80-broadcom-aspm" "system/files/usr/lib/systemd/system-sleep/80-broadcom-aspm" "0755")
     (file "/etc/systemd/system/broadcom-aspm-restore.service" "system/files/systemd/system/broadcom-aspm-restore.service" "0644")
+    # Thunderbolt ACPI regions cached at the right PCI address: resume ~3 s, not ~23 s
+    (file "/usr/local/sbin/ws-tb-acpi-seed" "system/files/usr/local/sbin/ws-tb-acpi-seed" "0755")
+    (file "/etc/systemd/system/ws-tb-acpi-seed.service" "system/files/systemd/system/ws-tb-acpi-seed.service" "0644")
 
     # AMD dGPU off and off the PCI bus when booted with ws.dgpu=off (rEFInd "Ubuntu")
     (file "/usr/local/sbin/ws-dgpu-off" "system/files/usr/local/sbin/ws-dgpu-off" "0755")
@@ -42,6 +45,7 @@
     "get-apple-firmware.service" = "enabled";
     "ws-dgpu-off.service" = "enabled";
     "broadcom-aspm-restore.service" = "static";
+    "ws-tb-acpi-seed.service" = "enabled";
   };
 
   # Restarted by every `ws system apply`, as ws-keyboard-system-apply did.

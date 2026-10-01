@@ -19,13 +19,14 @@ Touch Bar    родной режим (см. helpws touchbar)
 AMD dGPU     ws.dgpu=off: выключена, убрана с шины PCI, порт CPU запаркован
 ```
 
-Слой состоит из четырёх частей:
+Слой состоит из пяти частей:
 
 ```text
 deep-only sleep        systemd никогда не откатывается на s2idle
 Broadcom Wi-Fi guards  ASPM off на время сна, без D3cold
 t2bce fix              no-state fallback не роняет ядро
 dGPU off the bus       amdgpu не участвует в S3 с выключенной картой
+Thunderbolt ACPI seed  resume ~3 с вместо ~23 с
 ```
 
 Всё управляется командой `ws-suspend`:
@@ -168,6 +169,48 @@ ASPM было 16 циклов S3 без сбоев (helpws history-suspend), 202
 `/etc/default/grub.d/90-pcie-aspm.cfg` (forced ASPM для GRUB/recovery не
 нужен).
 
+## Thunderbolt: быстрый resume
+
+```text
+/usr/local/sbin/ws-tb-acpi-seed               читает регионы ACPI Thunderbolt
+/etc/systemd/system/ws-tb-acpi-seed.service   при загрузке, до первого сна
+```
+
+До 2026-10-01 каждый выход из S3 занимал ~23 с (так было с первой
+загрузки, с AMD и без неё). Трассировка (`pm_print_times` +
+`function_graph`): ~20 с уходят в `pci_pm_resume_noirq` двух Titan Ridge —
+мост `UPSB` (06:00.0, 7c:00.0) ~6,7 с и NHI (08:00.0, 7e:00.0) ~3,3 с,
+последовательно из-за `pm_async=off`. Это `_PS0` прошивки (SSDT,
+`OSDW()` = Darwin): `PCED` и `CRMW` ходят в почтовый ящик TB через
+PCI_Config регионы `UPSB` (`H530`, `H548`, `A1E0`..`A1E2`).
+
+Причина в ACPICA: адрес PCI региона вычисляется один раз, при первом
+обращении, и `acpi_hw_get_pci_device_info()` (`drivers/acpi/acpica/hwpci.c`)
+берёт для моста его Primary Bus Number. Первое обращение к регионам `UPSB`
+случается в первом resume, когда мост только что получил питание и
+Primary Bus ещё 0: регионы до конца загрузки смотрят на хост-мост 00:00.0
+(`UPSB.AVND` = `3EC48086` вместо `15EA8086`, `UPSB._BBN` = 0). Почтовый
+ящик там не отвечает, `CIOR`/`CIOW` ждут тайм-аут в цикле `Stall`, `CRMW`
+повторяет 5 раз — отсюда и ~16 с занятого CPU в `systemd-suspend.service`.
+Исправление в ACPICA предложено, не принято:
+open-acpica/acpica#1235 (omarchy-pkgs несёт его патчем `0771`).
+
+`ws-tb-acpi-seed` после загрузки читает по одному полю в каждом регионе
+поддеревьев `\_SB.PCI0.PEG1/PEG2.UPSB` через отладчик ACPI ядра
+(debugfs `acpi/acpidbg`, только чтение), пока номера шин настроены: ACPICA
+запоминает правильные адреса, и `_PS0` проходит за доли секунды. Скрипт
+сверяет `AVND` с ID устройства из sysfs и падает, если адрес уже
+испорчен (запуск после сна): тогда до перезагрузки resume медленный.
+Проверено 2026-10-01: фаза ACPI 20,1 с → 1,0 с, ядро от пробуждения до
+`suspend exit` ~3 с; оба TB, их xHCI (линк x4) и домены bolt на месте.
+
+Состояние вручную:
+
+```console
+journalctl -b -u ws-tb-acpi-seed
+sudo /usr/local/sbin/ws-tb-acpi-seed    # повторная проверка адресов
+```
+
 ## t2bce: отказ stateful suspend
 
 Иногда bridgeOS отвечает на запрос сохранения состояния отказом:
@@ -288,6 +331,7 @@ ws-workstation-verify     # ядро ↔ t2bce
 mem_sleep                 s2idle [deep]
 cmdline                   «Ubuntu»: pcie_aspm=force pcie_aspm.policy=powersave
 AMD CPU port              parked (ws-dgpu-park)
+Thunderbolt ACPI          seeded (ws-tb-acpi-seed)
 t2bce_core                0.07-nostatefix1, stateful_sleep=Y
 runtime files             OK
 ```
@@ -333,6 +377,8 @@ system/files/usr/local/sbin/ws-dgpu-off
 system/files/systemd/system/ws-dgpu-off.service
 system/files/usr/local/sbin/ws-dgpu-park
 system/files/usr/lib/systemd/system-sleep/70-ws-dgpu-park
+system/files/usr/local/sbin/ws-tb-acpi-seed
+system/files/systemd/system/ws-tb-acpi-seed.service
 ```
 
 ## Не использовать

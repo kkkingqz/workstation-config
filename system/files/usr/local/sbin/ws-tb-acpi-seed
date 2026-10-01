@@ -1,0 +1,110 @@
+#!/usr/bin/env python3
+"""Make ACPICA cache the right PCI address for the Thunderbolt ACPI regions.
+
+MacBookPro16,1: on every S3 resume the firmware's UPSB._PS0 and NHI0._PS0
+(SSDT, both Titan Ridge controllers) talk to the TB switch through
+PCI_Config regions of UPSB (06:00.0 / 7c:00.0). ACPICA derives a region's
+PCI address once, on its first access, and reads the bridge's Primary Bus
+Number for it (acpi_hw_get_pci_device_info, drivers/acpi/acpica/hwpci.c).
+The first access normally happens inside the first resume, right after the
+bridge got power back and before its config is restored: Primary Bus is 0,
+so the UPSB regions stay cached at the host bridge 00:00.0 for the rest of
+the boot. The firmware's mailbox polls then never complete (5 retries, busy
+Stall loops) and the noirq resume takes ~20 s instead of ~1 s.
+Upstream fix proposed: https://github.com/open-acpica/acpica/pull/1235
+
+Reading one field of every region once after boot, while the bus numbers
+are configured, makes ACPICA cache the correct address. Reads only: the
+ACPI debugger (debugfs acpidbg, CONFIG_ACPI_DEBUGGER_USER) evaluates the
+field objects. Must run before the first suspend of the boot
+(ws-tb-acpi-seed.service). helpws suspend, Thunderbolt.
+"""
+import os
+import re
+import select
+import sys
+import time
+from pathlib import Path
+
+DBG = "/sys/kernel/debug/acpi/acpidbg"
+SUBTREE = re.compile(r"^\\_SB_\.PCI0\.PEG[0-9]\.UPSB(\.|$)")
+PROMPTS = (b"\n- ", b"\n% ")  # ACPI_DEBUGGER_COMMAND_PROMPT / _EXECUTE_PROMPT
+
+
+def say(msg):
+    print(f"ws-tb-acpi-seed: {msg}", flush=True)
+
+
+def evaluate(fd, obj):
+    """Evaluate obj in the ACPI debugger; the integer value or None."""
+    os.write(fd, f"evaluate {obj}\n".encode())
+    out = b""
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline and not out.endswith(PROMPTS):
+        if not select.select([fd], [], [], 0.5)[0]:
+            continue
+        try:
+            out += os.read(fd, 4096)
+        except BlockingIOError:
+            pass
+    m = re.search(rb"\[Integer\] = ([0-9A-Fa-f]+)", out)
+    return int(m.group(1), 16) if m else None
+
+
+def tb_devices():
+    """(PCI device dir, ACPI path) for every PCI device in the UPSB subtrees."""
+    for dev in sorted(Path("/sys/bus/pci/devices").iterdir()):
+        try:
+            path = (dev / "firmware_node/path").read_text().strip()
+        except OSError:
+            continue
+        if SUBTREE.match(path):
+            yield dev, path
+
+
+def main():
+    if not Path(DBG).exists():
+        say(f"no {DBG} (debugfs not mounted or CONFIG_ACPI_DEBUGGER_USER off)")
+        return 1
+    if (n := Path("/sys/power/suspend_stats/success").read_text().strip()) != "0":
+        say(f"{n} suspend(s) already this boot: the regions may be cached wrong; checking only")
+
+    devices = list(tb_devices())
+    if not devices:
+        say("no Thunderbolt UPSB devices in the ACPI namespace: nothing to do")
+        return 0
+
+    bad = 0
+    fd = os.open(DBG, os.O_RDWR | os.O_NONBLOCK)
+    try:
+        for dev, path in devices:
+            bridge = (dev / "class").read_text().strip().startswith("0x0604")
+            fields = ["AVND"]                         # region A1E0 (all)
+            if bridge:
+                fields += ["LACR", "PSTA"]            # A1E1, A1E2 (bridges)
+            if path.endswith(".UPSB"):
+                fields += ["T2PC", "RDAT"]            # H548, H530 (TB mailbox)
+            values = {f: evaluate(fd, f"{path}.{f}") for f in fields}
+
+            want = int((dev / "device").read_text(), 16) << 16 | int((dev / "vendor").read_text(), 16)
+            avnd = values["AVND"]
+            if avnd == want:
+                state = "ok"
+            elif avnd == 0xFFFFFFFF:
+                state = "device off (D3cold), not verified"
+            else:
+                state = "WRONG ADDRESS" if avnd is not None else "not evaluated"
+                bad += 1
+            got = f"{avnd:08x}" if avnd is not None else "-"
+            say(f"{dev.name} {path}: AVND {got} (want {want:08x}) {state}")
+    finally:
+        os.close(fd)
+
+    if bad:
+        say("ACPICA cached a wrong PCI address (seeded too late?): resume stays slow until reboot")
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

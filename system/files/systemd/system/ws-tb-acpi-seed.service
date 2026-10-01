@@ -1,0 +1,15 @@
+[Unit]
+Description=Cache the Thunderbolt ACPI regions at the right PCI address (fast S3 resume)
+Documentation=file:///usr/local/sbin/ws-tb-acpi-seed
+After=sys-kernel-debug.mount
+Wants=sys-kernel-debug.mount
+# Must run before the first suspend of the boot.
+Before=sleep.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/ws-tb-acpi-seed
+
+[Install]
+WantedBy=multi-user.target
