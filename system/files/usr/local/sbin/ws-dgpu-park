@@ -13,7 +13,8 @@
 # it is config space of 00:01.0 plus gmux port 0x50, so this script does the
 # same with setpci and the apple-gmux debugfs port interface:
 #
-#   power on (0x50: 1, 3), wait for link training, Gen1, LTR off, Q0L2 until
+#   power off first (the firmware powers the card up after S3), power on
+#   (0x50: 1, 3), wait for link training, Gen1, LTR off, Q0L2 until
 #   it clears, PHY down, power off (0x50: 1, 10 ms, 0)
 #
 # Only after ws-dgpu-off: the card and its PCIe switch are off the bus, so no
@@ -56,6 +57,12 @@ cleanup() {
 trap cleanup EXIT
 
 echo on >"$pci/power/control"                  # port in D0 so the link can train
+sleep 0.2
+# Start from the power off. After S3 the firmware powers the card up again,
+# and apple-gmux re-applies only an OFF it made itself (vga_switcheroo), not
+# the one ws-dgpu-off makes without amdgpu: the link is then already up and
+# the power-on below would not train it.
+port_power 1 0
 sleep 0.2
 say "before: $(state)"
 ltss0="$(reg 0xc74.w)"

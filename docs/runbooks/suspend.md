@@ -13,8 +13,8 @@ MacBookPro16,1
 T2 kernel 7.2.7-1-t2-resolute
 sleep        deep / S3 only
 cmdline      intel_iommu=on iommu=pt pm_async=off
-             + «Ubuntu»: ws.dgpu=off pcie_aspm=force pcie_aspm.policy=powersave
-                         drm.edid_firmware=eDP-2:edid/mbp16-edp.bin
+             + «Ubuntu»: ws.dgpu=off modprobe.blacklist=amdgpu
+                         pcie_aspm=force pcie_aspm.policy=powersave
 t2bce        0.07-nostatefix1 (локальная сборка, updates/t2bce)
 Touch Bar    родной режим (см. helpws touchbar)
 AMD dGPU     ws.dgpu=off: выключена, убрана с шины PCI, порт CPU запаркован
@@ -77,15 +77,31 @@ Hook лежит в `/usr/lib/systemd/system-sleep/`, потому что systemd
 ## AMD dGPU при ws.dgpu=off
 
 ```text
-/usr/local/sbin/ws-dgpu-off                  OFF и удаление карты с шины PCI
+/usr/local/sbin/ws-dgpu-off                  удаление карты с шины PCI и снятие питания
 /etc/systemd/system/ws-dgpu-off.service      при загрузке, до GDM
 /usr/local/sbin/ws-dgpu-park                 «парковка» порта CPU 00:01.0, как в macOS
 /usr/lib/systemd/system-sleep/70-ws-dgpu-park  она же после resume
 ```
 
-При загрузке с `ws.dgpu=off` (rEFInd «Ubuntu») `ws-dgpu-off` выключает AMD
-через vga_switcheroo, gmux снимает с неё питание (см. `helpws workstation`,
-GRAPHICS), и скрипт убирает карту с шины PCI.
+При загрузке с `ws.dgpu=off` (rEFInd «Ubuntu») `ws-dgpu-off` убирает AMD с
+шины PCI и выключает её. С 2026-10-01 в этом пункте ещё и
+`modprobe.blacklist=amdgpu`: драйвер карту не трогает вовсе, и скрипт
+
+1. убирает весь пакет с шины (`echo 1 > .../0000:01:00.0/remove`), пока карта
+   включена и без драйвера (HDMI-аудио `03:00.1` с `snd_hda_intel` уходит
+   вместе с ним, как обычное горячее удаление);
+2. снимает питание портом gmux `0x50` (1, 10 мс, 0) — то же, что `apple-gmux`
+   делает при vga_switcheroo `OFF`;
+3. паркует порт CPU (`ws-dgpu-park`, ниже).
+
+Так ~0,8 с вместо ~11 с (инициализация `amdgpu` только ради `OFF`; GDM ждёт
+этот скрипт). После S3 `apple-gmux` питание сам не снимает (`gmux_resume`
+повторяет только `OFF`, а его не было), но хук `70-ws-dgpu-park` всегда
+заканчивает снятием питания. Проверено 2026-10-01: PC7 ~78 %, рельс AMD
+`PG0R` ~0,09 W.
+
+Без `modprobe.blacklist=amdgpu` скрипт идёт старым путём через vga_switcheroo
+(ниже): он и описывает, почему карту нельзя оставлять на шине.
 
 Без удаления S3 не работает. `amdgpu` в `suspend_noirq` для S3 всегда делает
 `MODE1 reset` и не проверяет, что карта выключена (так и в upstream).

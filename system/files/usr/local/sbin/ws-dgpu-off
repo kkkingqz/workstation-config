@@ -22,10 +22,66 @@
 # vga_switcheroo does not check for open clients on OFF. External displays
 # (Thunderbolt DP on the dGPU) need "Ubuntu (AMD)". See helpws workstation,
 # GRAPHICS.
+#
+# Without amdgpu (modprobe.blacklist=amdgpu in the same entry, the default
+# since 2026-10-01): amdgpu needs ~9 s to initialise (4.5 s of it AUX
+# retries on its eDP connector, muxed to i915) only to be switched off, and
+# GDM waits for this script. Then nothing drives the card: the package is
+# removed from the bus while it is still on, gmux cuts the power the way
+# apple-gmux does for vga_switcheroo OFF (port 0x50: 1, 0), and the port is
+# parked. After S3 apple-gmux does not re-apply OFF (it never saw one), but
+# the sleep hook 70-ws-dgpu-park ends with the power off as well.
 set -eu
 
 switch=/sys/kernel/debug/vgaswitcheroo/switch
 pci=/sys/bus/pci/devices
+gmux=/sys/kernel/debug/apple_gmux
+
+if grep -Eq '(^| )modprobe\.blacklist=([^ ]*,)?amdgpu(,| |$)' /proc/cmdline; then
+    gpu=""
+    for dev in "$pci"/*; do
+        [ "$(cat "$dev/vendor")" = 0x1002 ] || continue
+        case "$(cat "$dev/class")" in 0x03*) gpu="${dev##*/}" ;; esac
+    done
+    if [ -z "$gpu" ]; then
+        echo "ws-dgpu-off: no AMD GPU on the PCI bus" >&2
+        exit 1
+    fi
+    if [ -e "$pci/$gpu/driver" ]; then
+        echo "ws-dgpu-off: $gpu has a driver ($(basename "$(readlink "$pci/$gpu/driver")")) although amdgpu is blacklisted; dGPU left on" >&2
+        exit 1
+    fi
+    path="$(readlink -f "$pci/$gpu")"
+    top="$(echo "$path" | cut -d/ -f6)"
+    if [ -z "$top" ] || [ "$(cat "$pci/$top/vendor")" != 0x1002 ]; then
+        echo "ws-dgpu-off: unexpected topology above $gpu (${top:-none}); dGPU left on" >&2
+        exit 1
+    fi
+
+    # apple-gmux is loaded from udev; its debugfs port interface cuts the power.
+    i=0
+    until [ -w "$gmux/selected_port_data" ]; do
+        i=$((i + 1))
+        if [ "$i" -gt 30 ]; then
+            echo "ws-dgpu-off: no $gmux after 30 s; dGPU left on" >&2
+            exit 1
+        fi
+        sleep 1
+    done
+
+    echo 1 > "$pci/$top/remove"
+    if [ -e "$pci/$gpu" ]; then
+        echo "ws-dgpu-off: $gpu is still on the bus after removing $top" >&2
+        exit 1
+    fi
+    echo 80 > "$gmux/selected_port"            # GMUX_PORT_DISCRETE_POWER
+    printf '\001' > "$gmux/selected_port_data"
+    sleep 0.01
+    printf '\000' > "$gmux/selected_port_data"
+    echo "ws-dgpu-off: amdgpu not loaded; $top and everything below it removed from PCI, power cut by gmux"
+    /usr/local/sbin/ws-dgpu-park || echo "ws-dgpu-off: parking the port failed; the CPU package stays in PC3" >&2
+    exit 0
+fi
 
 # amdgpu registers its switcheroo client late (firmware load), well after
 # systemd starts: wait for the discrete client.
