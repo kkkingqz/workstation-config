@@ -32,6 +32,7 @@ case "$topic" in
     virt|vm|vms|libvirt|kvm) open_title ws-virt ;;
     roadmap|plans) open_title ws-roadmap ;;
     plan-t2) open_title ws-plan-t2 ;;
+    plan-dgpu|dgpu|t2gmux) open_title ws-plan-dgpu ;;
     plan-final) open_title ws-plan-final ;;
     history-gnome|plan-gnome) open_title ws-history-gnome ;;
     history-flatpak|plan-flatpak) open_title ws-history-flatpak ;;
@@ -72,6 +73,7 @@ Runbooks (docs/runbooks):
 Plans (docs/plans):
   roadmap          What is left
   plan-t2          T2 optional / power / auth
+  plan-dgpu        AMD dGPU through t2gmux (power off like macOS)
   plan-final       Backup / inventory / finalization
 
 History (docs/history; old plan-* names work too):

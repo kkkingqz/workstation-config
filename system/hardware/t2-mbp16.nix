@@ -21,6 +21,10 @@
     # AMD dGPU off and off the PCI bus when booted with ws.dgpu=off (rEFInd "Ubuntu")
     (file "/usr/local/sbin/ws-dgpu-off" "system/files/usr/local/sbin/ws-dgpu-off" "0755")
     (file "/etc/systemd/system/ws-dgpu-off.service" "system/files/systemd/system/ws-dgpu-off.service" "0644")
+    # t2gmux instead of apple-gmux (helpws plan-dgpu): not loaded by alias
+    # until the switch; sleep hook for a test boot with ws.gmux=t2.
+    (file "/etc/modprobe.d/t2gmux.conf" "system/files/modprobe/t2gmux.conf" "0644")
+    (file "/usr/lib/systemd/system-sleep/70-ws-dgpu-t2gmux" "system/files/usr/lib/systemd/system-sleep/70-ws-dgpu-t2gmux" "0755")
 
     # T2 base (t2linux setup, captured in phase -1)
     (file "/etc/udev/rules.d/30-amdgpu-pm.rules" "system/files/udev/30-amdgpu-pm.rules" "0644")

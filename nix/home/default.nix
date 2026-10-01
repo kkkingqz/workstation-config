@@ -17,8 +17,12 @@
     ../../windows/apps.nix
     ../../virt/virt.nix
   ]
-  # Pinned sources of the patched t2bce modules (helpws suspend).
-  ++ lib.optional (facts.hardware == "t2-mbp16") ../../system/kernel/t2bce/t2bce.nix;
+  # Pinned sources of the patched t2bce modules (helpws suspend) and of
+  # t2gmux (helpws plan-dgpu).
+  ++ lib.optionals (facts.hardware == "t2-mbp16") [
+    ../../system/kernel/t2bce/t2bce.nix
+    ../../system/kernel/t2gmux/t2gmux.nix
+  ];
 
   home.username = facts.user;
   home.homeDirectory = "/home/${facts.user}";

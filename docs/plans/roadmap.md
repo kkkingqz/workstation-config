@@ -39,6 +39,12 @@ volume: User Commands
 
 1. `helpws plan-t2`
    Touch ID, fan policy, battery audit, optional hibernate/suspend-then-hibernate.
+   Идёт battery audit (2026-10-01): forced ASPM принят, выключение AMD — в
+   `helpws plan-dgpu`.
+
+   `helpws plan-dgpu`
+   AMD через t2gmux (KaiT2en): выключение как в macOS (PC7 с выключенной
+   картой), включение без перезагрузки. Решение пользователя 2026-10-01.
 
 2. `helpws plan-final`
    Инвентаризация, backups, snapshots, restore checkpoints и финальный

@@ -1,0 +1,32 @@
+#!/bin/sh
+# helpws plan-dgpu: with t2gmux driving the gmux the switched-off AMD stays on
+# the PCI bus, and amdgpu cannot suspend a card without power (MODE1 reset
+# fails, S3 aborts; helpws suspend). Like KaiT2en's t2-dgpu-control: power
+# the card on before sleep, off again after resume. Does nothing with
+# apple-gmux, which cannot power the card on again (ws-dgpu-off takes it off
+# the bus instead).
+
+switch=/sys/kernel/debug/vgaswitcheroo/switch
+mark=/run/ws-dgpu-t2gmux-was-off
+
+ls /sys/bus/pnp/drivers/t2gmux 2>/dev/null | grep -q ':' || exit 0
+[ -w "$switch" ] || exit 0
+
+case "$1/$2" in
+    pre/suspend|pre/hibernate|pre/hybrid-sleep|pre/suspend-then-hibernate)
+        rm -f "$mark"
+        if grep -q '^[0-9]*:DIS:.:Off:' "$switch"; then
+            echo ON > "$switch" && touch "$mark"
+            logger -t ws-dgpu-t2gmux "dGPU on for sleep: $(grep ':DIS:' "$switch")"
+        fi
+        ;;
+    post/*)
+        if [ -e "$mark" ]; then
+            echo OFF > "$switch"
+            rm -f "$mark"
+            logger -t ws-dgpu-t2gmux "dGPU off after resume: $(grep ':DIS:' "$switch")"
+        fi
+        ;;
+esac
+
+exit 0

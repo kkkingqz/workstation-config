@@ -1,0 +1,165 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# t2gmux, the gmux driver of KaiT2en, in place of apple-gmux (helpws
+# plan-dgpu): the AMD dGPU of MacBookPro16,1 goes off through ACPI PWRD like
+# on macOS (CPU package PC7 with the card off) and can come back on.
+
+repo="${WSCONFIG:-$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)}"
+# REPO COMMIT, from system/kernel/t2gmux/t2gmux.nix (ws switch).
+source_file="$HOME/.local/share/workstation/t2gmux/source"
+# Build results per kernel: generated, not edited.
+cache="$HOME/.local/share/workstation/t2gmux"
+# The host release: built with the compiler of the kernel, as t2bce.
+build_image="docker.io/library/ubuntu:$(. /etc/os-release && echo "$VERSION_ID")"
+# Boot GPU of the firmware: 5th byte 1 = integrated, 0 = discrete.
+efi_var=/sys/firmware/efi/efivars/gpu-power-prefs-fa4ce28d-b62f-4c99-9cc3-6815686e30f9
+
+die() {
+    echo "ws-gmux: $*" >&2
+    exit 1
+}
+
+usage() {
+    cat <<'USAGE'
+Usage: ws-gmux <command> [KERNEL]
+
+  status                     driver bound to the gmux, built/installed t2gmux, boot GPU
+  build [KERNEL]             build t2gmux into ~/.local/share/workstation/t2gmux/KERNEL
+  install [KERNEL]           install it into /lib/modules/KERNEL/updates/t2gmux (sudo)
+  rollback [KERNEL]          remove it again (sudo)
+  boot-gpu [integrated|discrete]
+                             show or set the GPU the firmware gives the panel at boot
+                             (EFI gpu-power-prefs; sudo to set)
+
+KERNEL defaults to the running kernel (uname -r).
+USAGE
+}
+
+pinned() { # -> "REPO COMMIT"
+    [[ -r "$source_file" ]] || die "missing $source_file (ws switch)"
+    awk '!/^#/ && NF == 2 { print; exit }' "$source_file"
+}
+
+boot_gpu() { # -> integrated | discrete | unknown
+    local byte
+    [[ -r "$efi_var" ]] || { echo unknown; return; }
+    byte="$(od -An -tx1 -j4 -N1 "$efi_var" | tr -d ' ')"
+    case "$byte" in
+        01) echo integrated ;;
+        00) echo discrete ;;
+        *) echo "unknown ($byte)" ;;
+    esac
+}
+
+cmd_status() {
+    local kver bound
+    kver="$(uname -r)"
+    bound="$(basename "$(readlink -f /sys/bus/pnp/devices/*/driver 2>/dev/null | grep -E 'gmux' | head -1)" 2>/dev/null || true)"
+    printf 'gmux driver:     %s\n' "${bound:-none}"
+    printf 'pinned source:   %s\n' "$(pinned 2>/dev/null || echo '-')"
+    printf 'built:           %s\n' "$([[ -r "$cache/$kver/t2gmux.ko" ]] && modinfo -F vermagic "$cache/$kver/t2gmux.ko" | awk '{print $1}' || echo '-')"
+    printf 'installed:       %s\n' "$(modinfo -k "$kver" -F filename t2gmux 2>/dev/null || echo '-')"
+    printf 'boot GPU (EFI):  %s\n' "$(boot_gpu)"
+    printf 'blacklisted:     %s\n' "$(grep -hsE '^\s*blacklist\s+(t2gmux|apple_gmux|apple-gmux)\b' /etc/modprobe.d/*.conf | awk '{print $2}' | tr '\n' ' ')"
+    if [[ -r /sys/kernel/debug/vgaswitcheroo/switch ]]; then
+        sed 's/^/switcheroo:      /' /sys/kernel/debug/vgaswitcheroo/switch
+    fi
+}
+
+cmd_build() {
+    local kver="$1" src_repo commit headers work
+    read -r src_repo commit <<<"$(pinned)"
+    [[ -n "$commit" ]] || die "no pinned commit in $source_file"
+    headers="/usr/src/linux-headers-$kver"
+    [[ -d "$headers" ]] || die "kernel headers missing: $headers"
+    command -v podman >/dev/null 2>&1 || die "podman not found"
+
+    work="$cache/$kver"
+    rm -rf -- "$work"
+    mkdir -p "$work/src"
+
+    echo "== Sources: $src_repo $commit (modules/t2gmux) =="
+    for f in t2gmux.c Makefile; do
+        curl -fsSL -o "$work/src/$f" \
+            "https://raw.githubusercontent.com/$src_repo/$commit/modules/t2gmux/$f"
+    done
+
+    echo
+    echo "== Build ($build_image, $headers) =="
+    podman run --rm \
+        -v /usr/src:/usr/src:ro \
+        -v "$work/src:/src:Z" \
+        "$build_image" \
+        bash -euc "
+            export DEBIAN_FRONTEND=noninteractive
+            apt-get update -qq
+            apt-get install -y -qq --no-install-recommends gcc make libc6-dev libelf-dev >/dev/null
+            make -C '$headers' M=/src modules
+        "
+
+    cp -- "$work/src/t2gmux.ko" "$work/t2gmux.ko"
+    echo
+    printf 't2gmux %s %s\n' "$(modinfo -F version "$work/t2gmux.ko")" "$(modinfo -F vermagic "$work/t2gmux.ko" | awk '{print $1}')"
+    echo "Built into $work. Install with: ws-gmux install $kver"
+}
+
+cmd_install() {
+    local kver="$1" ko dest vm
+    ko="$cache/$kver/t2gmux.ko"
+    dest="/lib/modules/$kver/updates/t2gmux"
+    [[ -d "/lib/modules/$kver" ]] || die "kernel $kver is not installed"
+    [[ -r "$ko" ]] || die "missing $ko; run: ws-gmux build $kver"
+    vm="$(modinfo -F vermagic "$ko" | awk '{print $1}')"
+    [[ "$vm" == "$kver" ]] || die "vermagic mismatch in t2gmux.ko: $vm"
+    # apple-gmux and t2gmux both answer pnp:dAPP000B: exactly one of them
+    # must be blacklisted before t2gmux is on the module path.
+    grep -qsE '^\s*blacklist\s+(t2gmux|apple_gmux|apple-gmux)\b' /etc/modprobe.d/*.conf ||
+        die "neither t2gmux nor apple_gmux is blacklisted in /etc/modprobe.d (ws system apply)"
+
+    sudo install -d -m0755 "$dest"
+    sudo install -m0644 "$ko" "$dest/t2gmux.ko"
+    sudo depmod -a "$kver"
+    printf 't2gmux %s\n' "$(modinfo -k "$kver" -F filename t2gmux)"
+    sudo update-initramfs -u -k "$kver"
+    echo
+    echo "Installed. Which driver binds the gmux is chosen by blacklist (helpws plan-dgpu)."
+}
+
+cmd_rollback() {
+    local kver="$1"
+    sudo rm -rf -- "/lib/modules/$kver/updates/t2gmux"
+    sudo rmdir --ignore-fail-on-non-empty "/lib/modules/$kver/updates" 2>/dev/null || true
+    sudo depmod -a "$kver"
+    sudo update-initramfs -u -k "$kver"
+    echo "t2gmux removed for $kver; apple-gmux binds the gmux after reboot (if not blacklisted)."
+}
+
+cmd_boot_gpu() {
+    local want="${1:-}" bytes
+    if [[ -z "$want" ]]; then
+        echo "$(boot_gpu)"
+        return
+    fi
+    case "$want" in
+        integrated) bytes='\x07\x00\x00\x00\x01\x00\x00\x00' ;;
+        discrete) bytes='\x07\x00\x00\x00\x00\x00\x00\x00' ;;
+        *) die "boot-gpu: integrated or discrete" ;;
+    esac
+    [[ -e "$efi_var" ]] || die "missing EFI variable $efi_var"
+    # efivarfs keeps Apple's variables immutable; write as KaiT2en's
+    # t2-dgpu-control does: attributes 0x07, then the 4-byte value.
+    sudo sh -c "chattr -i '$efi_var' && printf '$bytes' > '$efi_var'; rc=\$?; chattr +i '$efi_var'; exit \$rc"
+    echo "boot GPU: $(boot_gpu) (from the next boot)"
+}
+
+cmd="${1:-status}"
+case "$cmd" in
+    status) cmd_status ;;
+    build) cmd_build "${2:-$(uname -r)}" ;;
+    install) cmd_install "${2:-$(uname -r)}" ;;
+    rollback) cmd_rollback "${2:-$(uname -r)}" ;;
+    boot-gpu) cmd_boot_gpu "${2:-}" ;;
+    -h|--help|help) usage ;;
+    *) usage >&2; exit 64 ;;
+esac
