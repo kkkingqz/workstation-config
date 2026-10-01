@@ -92,6 +92,33 @@ PC6–PC10 нулевые с загрузки; `ws-battery now` показыва
   включённом экране PC8+ недостижимы.
 - LTR: Wi-Fi (`SOUTHPORT_A`, `00:1c.0`) — 61 мкс, T2 (`SOUTHPORT_E`) — 2 мс.
 
+Что ещё проверено (2026-10-01, `~/.cache/*-test.sh`, `ws-battery now` по
+10 с на шаг, шаги накопительные):
+
+```text
+                                  обычная загрузка   pcie_aspm=force
+экран включён (59 %)                  15,27 W           13,94 W
+экран погашен (mutter, как GNOME)      8,36 W            6,11 W
++ Thunderbolt спит                     7,48 W            6,02 W
++ PCH xHCI/SRAM/LPC/SEP runtime PM     7,26 W            6,33 W
++ Wi-Fi выключен                       5,84 W            4,96 W
+```
+
+Пакет при этом везде PC2/PC3. Не держат PC6 (каждое проверено отдельно):
+`pkg-cstate-limit` (MSR `0xE2` = 0x8: unlimited, не заперт), экран (при
+погашенном DC5 работает), Thunderbolt, PCH xHCI, Wi-Fi, Bluetooth, LTR (с
+`ltr_ignore` всех IP — то же), Link Disable на порту AMD `00:01.0`, обмен с T2
+(при погашенном экране `bce_dma` — 0 прерываний/с). `pcie_aspm=force
+pcie_aspm.policy=powersave` даёт L1 на Thunderbolt и L0s на Wi-Fi (−1,3 W
+с экраном, −2,25 W без), но выключает L1.1/L1.2, которые прошивка включала
+на T2 и Wi-Fi. Блоки PCH без power gating в простое: OPI-DMI, SPA, SPE,
+LPSS (UART Bluetooth — и при выключенном Bluetooth), NPK (Trace Hub).
+
+Единственный раз PC6/PC7 были в загрузке с `pcie_aspm=force` (0,03 и
+0,82 с), не во время тестов — вероятно, до `ws-dgpu-off`, пока AMD на
+шине; в обычной загрузке — ноль с самого начала. В переписке с ChatGPT
+(до 25.09) AMD была включена и стоял forced ASPM.
+
 Не решено: держать ли Thunderbolt выключенным, пока в USB-C ничего нет
 (без драйвера — нет Thunderbolt-устройств, USB 3 при подключении — см.
 `71-tb-xhci-awake.rules`; S3 в таком состоянии не проверен), и что ещё
