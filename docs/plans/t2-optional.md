@@ -114,10 +114,30 @@ pcie_aspm.policy=powersave` даёт L1 на Thunderbolt и L0s на Wi-Fi (−1
 на T2 и Wi-Fi. Блоки PCH без power gating в простое: OPI-DMI, SPA, SPE,
 LPSS (UART Bluetooth — и при выключенном Bluetooth), NPK (Trace Hub).
 
-Единственный раз PC6/PC7 были в загрузке с `pcie_aspm=force` (0,03 и
-0,82 с), не во время тестов — вероятно, до `ws-dgpu-off`, пока AMD на
-шине; в обычной загрузке — ноль с самого начала. В переписке с ChatGPT
-(до 25.09) AMD была включена и стоял forced ASPM.
+Причина PC3 — выключенная AMD. Загрузка без `ws.dgpu=off` с
+`pcie_aspm=force` (весь путь `00:01.0 → 01:00.0 → 02:00.0 → 03:00.0` в
+L1/L0s): пакет PC7 65–82 % времени. Так же было в переписке с ChatGPT (до
+25.09: AMD на шине, forced ASPM, `powersave` → PC7 ~70 %). После
+`ws-dgpu-off` (gmux снимает питание, пакет AMD убран с шины) порт
+`00:01.0` остаётся без устройства, и пакет — только PC2/PC3; `Link
+Disable` на порту не помогает.
+
+Экран погашен, `ws-battery now` по 10 с (2026-10-01):
+
+```text
+                                       PSTR      CPU PC0R   AMD PG0R   пакет
+AMD выключена, обычная загрузка        8,36 W    3,63 W     0,09 W     PC3
+AMD выключена, force + powersave       6,0 W     2,3 W      0,09 W     PC3
+AMD выключена, force + powersupersave  6,3 W     2,7 W      0,09 W     PC3
+AMD на шине, force + powersave         9,75–10,0 W  2,2–2,8 W  3,2–3,7 W  PC7
+AMD на шине, force + powersupersave    8,5–9,25 W   1,6–1,8 W  —          PC7
+```
+
+PC7 экономит на CPU ~0,6–1 W, но AMD на шине стоит 3,2–4,7 W: выключенная
+AMD выгоднее. Лучшее из проверенного — AMD выключена + `pcie_aspm=force
+pcie_aspm.policy=powersave`: −2,3 W с погашенным экраном, −1,3 W с
+включённым. PC7 при выключенной AMD дал бы ещё ~0,6–1 W, если порт
+`00:01.0` уводить в сон правильно.
 
 Не решено: держать ли Thunderbolt выключенным, пока в USB-C ничего нет
 (без драйвера — нет Thunderbolt-устройств, USB 3 при подключении — см.
