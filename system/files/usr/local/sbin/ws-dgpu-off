@@ -27,12 +27,15 @@ set -eu
 switch=/sys/kernel/debug/vgaswitcheroo/switch
 pci=/sys/bus/pci/devices
 
-# Test boot of helpws plan-dgpu: ws.gmux=t2 (with modprobe.blacklist=apple_gmux)
-# hands the gmux to t2gmux, which switches the card off through ACPI PWRD like
-# macOS and can switch it on again: OFF only, the card stays on the bus.
-t2gmux=no
+# helpws plan-dgpu: ws.gmux=t2 (with modprobe.blacklist=apple_gmux) hands the
+# gmux to t2gmux, whose OFF goes through ACPI PWRD like on macOS: the CPU port
+# of the card is parked in L2 first and the package reaches PC7 (apple-gmux
+# only cuts the power: PC3). Everything else stays as below; t2gmux could
+# switch the card on again, but on MacBookPro16,1 that powers the machine off
+# while amdgpu resumes (2026-10-01), so the card still leaves the bus.
+gmux=apple-gmux
 if grep -qw 'ws.gmux=t2' /proc/cmdline; then
-    t2gmux=yes
+    gmux=t2gmux
     modprobe t2gmux
 fi
 
@@ -58,21 +61,9 @@ if grep -q '^[0-9]*:DIS:.:Off:' "$switch"; then
 fi
 gpu="$(sed -n 's/^[0-9]*:DIS:.:[A-Za-z]*:\(.*\)$/\1/p' "$switch")"
 
-if [ "$t2gmux" = yes ]; then
-    [ -e /sys/bus/pnp/drivers/t2gmux ] && ls /sys/bus/pnp/drivers/t2gmux | grep -q ':' ||
-        { echo "ws-dgpu-off: ws.gmux=t2 but t2gmux is not bound to the gmux; dGPU left on" >&2; exit 1; }
-    echo OFF > "$switch"
-    cat "$switch"
-    grep -q "^[0-9]*:DIS:.:Off:$gpu\$" "$switch" ||
-        { echo "ws-dgpu-off: dGPU did not switch off (t2gmux)" >&2; exit 1; }
-    echo "ws-dgpu-off: dGPU powered off by t2gmux (PWRD), left on the bus"
-    # No S3 in a t2gmux test boot: the card cannot sleep without power and
-    # switching it on kills the machine (helpws plan-dgpu). Block sleep and
-    # the lid until reboot.
-    systemd-run --unit=ws-dgpu-t2gmux-nosleep --description="No sleep in a t2gmux test boot" \
-        systemd-inhibit --what=sleep:handle-lid-switch --who=ws-dgpu-off \
-        --why="t2gmux test boot: S3 is not safe (helpws plan-dgpu)" --mode=block sleep infinity
-    exit 0
+if [ "$gmux" = t2gmux ] && ! ls /sys/bus/pnp/drivers/t2gmux 2>/dev/null | grep -q ':'; then
+    echo "ws-dgpu-off: ws.gmux=t2 but t2gmux is not bound to the gmux; dGPU left on" >&2
+    exit 1
 fi
 
 # /sys/devices/pci0000:00/0000:00:01.0/0000:01:00.0/0000:02:00.0/0000:03:00.0:
@@ -113,4 +104,4 @@ if [ -e "$pci/$gpu" ]; then
     echo "ws-dgpu-off: $gpu is still on the bus after removing $top" >&2
     exit 1
 fi
-echo "ws-dgpu-off: dGPU powered off; $top and everything below it removed from PCI"
+echo "ws-dgpu-off: dGPU powered off ($gmux); $top and everything below it removed from PCI"
