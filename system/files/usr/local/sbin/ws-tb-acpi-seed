@@ -35,20 +35,31 @@ def say(msg):
     print(f"ws-tb-acpi-seed: {msg}", flush=True)
 
 
-def evaluate(fd, obj):
-    """Evaluate obj in the ACPI debugger; the integer value or None."""
-    os.write(fd, f"evaluate {obj}\n".encode())
+def drain(fd, timeout):
+    """Read debugger output until a prompt or the timeout."""
     out = b""
-    deadline = time.monotonic() + 10
+    deadline = time.monotonic() + timeout
     while time.monotonic() < deadline and not out.endswith(PROMPTS):
-        if not select.select([fd], [], [], 0.5)[0]:
+        if not select.select([fd], [], [], 0.2)[0]:
             continue
         try:
             out += os.read(fd, 4096)
         except BlockingIOError:
             pass
-    m = re.search(rb"\[Integer\] = ([0-9A-Fa-f]+)", out)
-    return int(m.group(1), 16) if m else None
+    return out
+
+
+def evaluate(fd, obj):
+    """Evaluate obj in the ACPI debugger; the integer value or None.
+
+    Retried: right after open the debugger thread may not take the first
+    command yet (seen once at boot: no answer for the first object)."""
+    for _ in range(3):
+        os.write(fd, f"evaluate {obj}\n".encode())
+        m = re.search(rb"\[Integer\] = ([0-9A-Fa-f]+)", drain(fd, 5))
+        if m:
+            return int(m.group(1), 16)
+    return None
 
 
 def tb_devices():
@@ -77,6 +88,7 @@ def main():
     bad = 0
     fd = os.open(DBG, os.O_RDWR | os.O_NONBLOCK)
     try:
+        drain(fd, 1)                                  # banner / first prompt
         for dev, path in devices:
             bridge = (dev / "class").read_text().strip().startswith("0x0604")
             fields = ["AVND"]                         # region A1E0 (all)
@@ -93,15 +105,22 @@ def main():
             elif avnd == 0xFFFFFFFF:
                 state = "device off (D3cold), not verified"
             else:
-                state = "WRONG ADDRESS" if avnd is not None else "not evaluated"
+                state = "WRONG ADDRESS" if avnd is not None else "NOT EVALUATED"
                 bad += 1
             got = f"{avnd:08x}" if avnd is not None else "-"
             say(f"{dev.name} {path}: AVND {got} (want {want:08x}) {state}")
     finally:
+        # End the debugger session cleanly: closing it in the middle of a
+        # command read logs "ACPI Error: AE_ERROR, While parsing command line".
+        try:
+            os.write(fd, b"quit\n")
+            select.select([fd], [], [], 1)
+        except OSError:
+            pass
         os.close(fd)
 
     if bad:
-        say("ACPICA cached a wrong PCI address (seeded too late?): resume stays slow until reboot")
+        say("not verified or wrong PCI address (seeded too late?): resume may stay slow until reboot")
         return 1
     return 0
 

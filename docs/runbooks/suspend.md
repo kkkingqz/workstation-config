@@ -14,6 +14,7 @@ T2 kernel 7.2.7-1-t2-resolute
 sleep        deep / S3 only
 cmdline      intel_iommu=on iommu=pt pm_async=off
              + «Ubuntu»: ws.dgpu=off pcie_aspm=force pcie_aspm.policy=powersave
+                         drm.edid_firmware=eDP-2:edid/mbp16-edp.bin
 t2bce        0.07-nostatefix1 (локальная сборка, updates/t2bce)
 Touch Bar    родной режим (см. helpws touchbar)
 AMD dGPU     ws.dgpu=off: выключена, убрана с шины PCI, порт CPU запаркован

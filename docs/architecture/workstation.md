@@ -335,6 +335,11 @@ Recovery        GRUB, AMD включена
   сбрасывает выключенную карту, сон прерывается, и система потом погибает.
   HDMI-аудио карты убирается первым, пока карта включена. Подробности —
   `helpws suspend`.
+- GDM ждёт `ws-dgpu-off`, а тот — полной инициализации `amdgpu`. Дольше всего
+  в ней было чтение EDID разъёма `eDP-2` AMD: панель переключена на i915,
+  ответа нет, 25 попыток DDC, ~6 с. Пункт «Ubuntu» даёт `amdgpu` EDID этой же
+  панели (`drm.edid_firmware=eDP-2:edid/mbp16-edp.bin`, файл
+  `/usr/lib/firmware/edid/mbp16-edp.bin` снят с `card1-eDP-1` i915).
 - `default_selection +`: rEFInd предлагает пункт прошлой загрузки.
 - «Ubuntu (AMD)» — ручной пункт в `system/files/esp/refind.conf` (шаблон).
   Он грузит

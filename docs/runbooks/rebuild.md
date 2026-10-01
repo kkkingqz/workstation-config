@@ -132,8 +132,10 @@ grub.d drop-ins              ставит ws system apply (GRUB — recovery)
 ```
 
 Параметры ядра: `intel_iommu=on iommu=pt pm_async=off`. Пункт «Ubuntu»
-добавляет `ws.dgpu=off pcie_aspm=force pcie_aspm.policy=powersave` (AMD
-выключена и её порт запаркован, ASPM у ядра; `helpws suspend`), ручной
+добавляет `ws.dgpu=off pcie_aspm=force pcie_aspm.policy=powersave
+drm.edid_firmware=eDP-2:edid/mbp16-edp.bin` (AMD выключена и её порт
+запаркован, ASPM у ядра, EDID для eDP AMD без 6 с ожидания; `helpws
+suspend`, `helpws workstation`), ручной
 «Ubuntu (AMD)» грузит `/boot/ws` без них, GRUB (recovery) — тоже. Всё из
 `facts.nix`. Generic Ubuntu kernel остаётся запасным пунктом.
 

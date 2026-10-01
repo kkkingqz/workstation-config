@@ -1,1 +1,7 @@
+# amdgpu power management back to "auto" (t2linux setup). Not with
+# ws.dgpu=off (rEFInd "Ubuntu"): ws-dgpu-off switches the card off right
+# after it appears and the writes only fail ("Failed to write auto").
+IMPORT{cmdline}="ws.dgpu"
+ENV{ws.dgpu}=="off", GOTO="amdgpu_pm_end"
 KERNEL=="card[012]", SUBSYSTEM=="drm", DRIVERS=="amdgpu", ATTR{device/power_dpm_force_performance_level}="auto"
+LABEL="amdgpu_pm_end"

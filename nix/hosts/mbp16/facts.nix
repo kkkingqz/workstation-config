@@ -13,8 +13,14 @@
   # Only the default rEFInd entry "Ubuntu": ws-dgpu-off.service powers the
   # AMD dGPU off and parks its CPU port, and the kernel owns ASPM with the
   # powersave policy (L1 on Thunderbolt, Clock PM; helpws suspend, ASPM).
+  # amdgpu gets the panel's EDID for its eDP connector (the panel is muxed
+  # to i915, eDP-2 never answers: 25 DDC retries, ~6 s before ws-dgpu-off
+  # can switch the card off and GDM may start; helpws workstation, GRAPHICS).
   # "Ubuntu (AMD)" (refind.conf) and GRUB (recovery) boot without them.
-  refindDefaultParams = [ "ws.dgpu=off" "pcie_aspm=force" "pcie_aspm.policy=powersave" ];
+  refindDefaultParams = [
+    "ws.dgpu=off" "pcie_aspm=force" "pcie_aspm.policy=powersave"
+    "drm.edid_firmware=eDP-2:edid/mbp16-edp.bin"
+  ];
   # Btrfs with @, @home, @nix; root= in refind_linux.conf.
   rootUuid = "0cfd2add-849f-47b9-865d-2ac821ca529c";
   # rEFInd ESP (nvme0n1p3), not mounted in normal operation.

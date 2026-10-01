@@ -24,7 +24,9 @@
     # AMD dGPU off and off the PCI bus when booted with ws.dgpu=off (rEFInd "Ubuntu")
     (file "/usr/local/sbin/ws-dgpu-off" "system/files/usr/local/sbin/ws-dgpu-off" "0755")
     (file "/etc/systemd/system/ws-dgpu-off.service" "system/files/systemd/system/ws-dgpu-off.service" "0644")
-    # ... and its CPU port parked like macOS does, at boot and after resume.
+    # The panel's EDID for amdgpu's eDP-2 (drm.edid_firmware, facts.refindDefaultParams).
+    (file "/usr/lib/firmware/edid/mbp16-edp.bin" "system/files/firmware/edid/mbp16-edp.bin" "0644")
+    # The AMD's CPU port parked like macOS does, at boot and after resume.
     (file "/usr/local/sbin/ws-dgpu-park" "system/files/usr/local/sbin/ws-dgpu-park" "0755")
     (file "/usr/lib/systemd/system-sleep/70-ws-dgpu-park" "system/files/usr/lib/systemd/system-sleep/70-ws-dgpu-park" "0755")
     # t2gmux (helpws plan-dgpu) is built and installed but never loaded by
