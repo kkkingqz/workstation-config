@@ -43,7 +43,7 @@ port_power() { # VALUE...: write gmux port 0x50 (GMUX_PORT_DISCRETE_POWER)
     echo 80 >"$gmux/selected_port"
     for v in "$@"; do
         printf "\\$(printf '%03o' "$v")" >"$gmux/selected_port_data"
-        [[ "$v" == 1 ]] && sleep 0.01
+        if [[ "$v" == 1 ]]; then sleep 0.01; fi
     done
 }
 state() { echo "LnkSta $(reg 0xb2.w) LTSS $(reg 0xc74.w) Q0 $(reg 0x248.w) PHY $(reg 0xc20.b)/$(reg 0xc38.b)/$(reg 0x91f.b)"; }
