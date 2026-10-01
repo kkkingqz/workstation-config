@@ -66,6 +66,12 @@ if [ "$t2gmux" = yes ]; then
     grep -q "^[0-9]*:DIS:.:Off:$gpu\$" "$switch" ||
         { echo "ws-dgpu-off: dGPU did not switch off (t2gmux)" >&2; exit 1; }
     echo "ws-dgpu-off: dGPU powered off by t2gmux (PWRD), left on the bus"
+    # No S3 in a t2gmux test boot: the card cannot sleep without power and
+    # switching it on kills the machine (helpws plan-dgpu). Block sleep and
+    # the lid until reboot.
+    systemd-run --unit=ws-dgpu-t2gmux-nosleep --description="No sleep in a t2gmux test boot" \
+        systemd-inhibit --what=sleep:handle-lid-switch --who=ws-dgpu-off \
+        --why="t2gmux test boot: S3 is not safe (helpws plan-dgpu)" --mode=block sleep infinity
     exit 0
 fi
 
