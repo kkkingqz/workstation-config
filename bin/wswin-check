@@ -3,8 +3,8 @@ set -u
 set -o pipefail
 
 # Windows layer (windows/apps.nix, the Windows boxes of distrobox.nix):
-# programs point at Windows boxes, .exe opens in the default box, menu links
-# resolve. Read-only. wswin check; ws check runs it with --json
+# programs point at Windows boxes and are installed in their prefixes, .exe
+# opens in the default box, menu links resolve. Read-only. wswin check; ws check runs it with --json
 # (lib/check.bash).
 
 repo="${WSCONFIG:-$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)}"
@@ -43,6 +43,20 @@ while IFS= read -r app; do
         pass "app $app: box $app_box is a Windows box"
     else
         fail "app $app: box ${app_box:-<none>} is not a Windows box"
+    fi
+    # The program itself is machine state (wswin install, a prefix from a
+    # backup): on a new machine the launcher exists before it (phase 6, wsvm).
+    app_prefix="$(awk -v s="[$app]" '$0 == s { i = 1; next } i && /^\[/ { exit } i && /^prefix=/ { sub(/^prefix=/, ""); print; exit }' "$apps_ini")"
+    app_exe="$(awk -v s="[$app]" '$0 == s { i = 1; next } i && /^\[/ { exit } i && /^exe=/ { sub(/^exe=/, ""); print; exit }' "$apps_ini")"
+    if [[ "$app_prefix" == default ]]; then
+        app_dir="$HOME/distrobox/$app_box/.wine"
+    else
+        app_dir="$HOME/distrobox/$app_box/prefixes/$app_prefix"
+    fi
+    if [[ -f "$app_dir/$app_exe" ]]; then
+        pass "app $app: installed ($app_exe)"
+    else
+        warn "app $app: not installed, the launcher has nothing to run: $app_dir/$app_exe (helpws windows; helpws rebuild)"
     fi
 done < <(sed -nE 's/^\[([^]]+)\]$/\1/p' "$apps_ini" 2>/dev/null)
 

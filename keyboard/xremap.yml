@@ -26,8 +26,9 @@
 # Command+C would reach the guest as Ctrl+C (interrupt in its terminal).
 # Every keymap without an application filter excludes them (&vm_consoles),
 # except CapsLock: passed through, it would turn on the host CapsLock lock,
-# and SPICE copies the host lock keys into the guest. In a VM console
-# CapsLock switches the host layout; the guest switches with Ctrl+Space.
+# and SPICE copies the host lock keys into the guest. In a VM console it is
+# sent as a private chord instead (Shift+Ctrl+Alt+Space, UA: +U), which the
+# xremap of the guest turns back into the CapsLock selector.
 
 modmap:
   - name: Apple Fn mode
@@ -92,6 +93,26 @@ keymap:
       Alt-E: Shift-Ctrl-Alt-Super-E
       # Fn+Option+T: toggle Always on Top
       Alt-T: Shift-Ctrl-Alt-Super-T
+  # CapsLock into VM consoles as private chords; the guest's selector below
+  # takes them. Before the CapsLock rules, which they override there.
+  - name: Fn+CapsLock into VM consoles
+    exact_match: true
+    mode: apple_fn
+    device:
+      only:
+        - ids:0x05ac:0
+    application:
+      only: *vm_consoles
+    remap:
+      CapsLock: Shift-Ctrl-Alt-U
+      Alt-CapsLock: Shift-Ctrl-Alt-U
+  - name: CapsLock into VM consoles
+    exact_match: true
+    application:
+      only: *vm_consoles
+    remap:
+      CapsLock: Shift-Ctrl-Alt-Space
+      Alt-CapsLock: Shift-Ctrl-Alt-U
   # Everywhere, VM consoles too: the host CapsLock lock must never turn on.
   - name: Fn+CapsLock on Apple keyboards
     exact_match: true
@@ -111,6 +132,11 @@ keymap:
 
       # Ukrainian override; does not change remembered EN/RU Caps state.
       Alt-CapsLock: { launch: ["@repo@/bin/ws-input-source", "ua"] }
+
+      # CapsLock and Alt/Fn+CapsLock from a VM console of the host, when
+      # this machine is the guest (CapsLock into VM consoles).
+      Shift-Ctrl-Alt-Space: { launch: ["@repo@/bin/ws-input-source", "caps"] }
+      Shift-Ctrl-Alt-U: { launch: ["@repo@/bin/ws-input-source", "ua"] }
   - name: Input-source cycle
     exact_match: true
     application:

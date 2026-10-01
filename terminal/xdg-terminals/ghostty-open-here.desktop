@@ -6,5 +6,8 @@ TryExec=/usr/bin/ghostty
 Type=Application
 Terminal=false
 Categories=System;TerminalEmulator;
+# Only for xdg-terminal-exec ("Open in Terminal" in Files), which ignores
+# NoDisplay; the menu has Ghostty itself.
+NoDisplay=true
 X-TerminalArgExec=-e
 X-TerminalArgDir=--working-directory=
