@@ -165,8 +165,29 @@ pcie_aspm.policy=powersave` — да; проверки сна (циклы `ws-ba
 как раньше. Отключать Thunderbolt без устройств не нужно: L1 на его
 линках даёт тот же выигрыш.
 
-Дальше: выключать AMD так, чтобы порт `00:01.0` не держал пакет в PC3
-(ACPI-методы `\_SB_.PCI0.PEG0`: power resources у порта нет).
+Дальше: выключать AMD так, чтобы порт `00:01.0` не держал пакет в PC3.
+
+Выключение AMD (2026-10-01). У `PEG0` нет power resources; выключать умеет
+SSDT Apple `PEG0GFX0`: `\_SB.PCI0.PEG0.EGP0.EGP1.GFX0.PWRD(1)` →
+`PUPD(0)`: линк в Gen1, LTR порта выкл., запрос L2 (`Q0L2`, 0x248 бит 7)
+и только после L2 — PHY порта выкл. (`RC20` 0xC20[5:4]=3, `RC38` 0xC38
+бит 3, `BND0..3` бит 31 0x91C/0x93C/0x95C/0x97C); питание снимает gmux
+(порт `0x50`: 1, затем 0; `MBWR` в ACPI — тот же mailbox gmux). Так
+делает macOS (AppleMuxControl2) и t2gmux проекта KaiT2en (замена
+`apple_gmux`, для MacBookPro16,1/16,4 — `PWRD`; включение — `PWRD(0)`,
+карта возвращается без перезагрузки): github.com/kaiT2en/KaiT2en-Fedora
+`modules/t2gmux`, серия в ядро v3 — 2026-08-12. `ws-dgpu-off`
+(switcheroo OFF → `apple-gmux` пишет только 1, 0) этого не делает.
+
+Опыты (`~/.cache/amd-l2-test.sh`, `peg-*-test.sh`, `amd-park-test.sh`):
+карта под питанием без драйвера (`modprobe.blacklist=amdgpu`, 9,6 W!),
+D3hot, затем `Q0L2` → пакет PC7 83 %, пакет RAPL 2,8 → 0,9 W. После
+снятия питания без этой последовательности порт в «нет устройства», PC3;
+`Link Disable`, PHY или `Q0L2` на порту без карты не помогают. Повторный
+«паркинг» в той же загрузке не работает: порт остаётся в L2-состоянии
+(`LTSS` 0x165) и не тренируется. Обращения ядра к карте за линком в L2
+вешают машину — карту сначала убирать из PCI. Отладочный интерфейс
+apple-gmux: `/sys/kernel/debug/apple_gmux/selected_port{,_data}`.
 
 Не применять автоматические Powertop tweaks. Использовать Powertop только как инструмент наблюдения.
 
