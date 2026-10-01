@@ -133,6 +133,25 @@ AMD на шине, force + powersave         9,75–10,0 W  2,2–2,8 W  3,2–3
 AMD на шине, force + powersupersave    8,5–9,25 W   1,6–1,8 W  —          PC7
 ```
 
+Разбор `powersave` (загрузка с `pcie_aspm=force`, политика меняется на ходу,
+экран погашен; `~/.cache/aspm-ab-test.sh`):
+
+```text
+                                   PSTR    POLR    PORR    пакет RAPL
+ASPM прошивки (policy default)     8,04 W  2,71 W  2,08 W  2,62 W
++ L1 на Thunderbolt (setpci)       6,89 W  2,53 W  1,91 W  1,35 W
++ L0s на Wi-Fi (setpci)            7,76 W  2,51 W  1,94 W  1,89 W   шум/хуже
+policy powersave                   6,26 W  2,20 W  1,57 W  1,34 W
+policy powersupersave              6,41 W  2,19 W  1,57 W  1,41 W
+```
+
+L1 на Thunderbolt — ~1,15 W (пакет CPU), остальные ~0,6 W `powersave` даёт
+на `POLR`/`PORR` — вероятно, Clock PM (CLKREQ#), которую ядро включает
+вместе с политикой; L0s на Wi-Fi сам по себе ничего не дал.
+`powersupersave` ≈ `powersave`. С `pcie_aspm=force` и политикой `default`
+переключатели `link/l1_aspm` L1 на Thunderbolt не включают (ядро держит
+состояние прошивки).
+
 PC7 экономит на CPU ~0,6–1 W, но AMD на шине стоит 3,2–4,7 W: выключенная
 AMD выгоднее. Лучшее из проверенного — AMD выключена + `pcie_aspm=force
 pcie_aspm.policy=powersave`: −2,3 W с погашенным экраном, −1,3 W с
