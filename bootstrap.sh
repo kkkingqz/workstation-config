@@ -121,6 +121,9 @@ for ppa in "${ppas[@]}"; do
         added=true
     fi
 done
+# Right after the first boot of a fresh install unattended-upgrades holds
+# the dpkg lock for minutes: wait for it instead of failing (phase 6, wsvm).
+apt_get=(sudo apt-get -o DPkg::Lock::Timeout=600)
 missing=()
 for pkg in "${packages[@]}"; do
     # "hold ok installed" counts too (linux-t2 is held).
@@ -128,17 +131,17 @@ for pkg in "${packages[@]}"; do
         || missing+=("$pkg")
 done
 if ((${#missing[@]})); then
-    run sudo apt-get update
-    run sudo apt-get install -y --no-install-recommends "${missing[@]}"
+    run "${apt_get[@]}" update
+    run "${apt_get[@]}" install -y --no-install-recommends "${missing[@]}"
 else
-    [[ "$added" == false ]] || run sudo apt-get update
+    [[ "$added" == false ]] || run "${apt_get[@]}" update
     echo "all ${#packages[@]} packages installed"
 fi
 # A listed package the standard install already has as a dependency
 # (python3-gi) stays auto-installed: apt autoremove could take it.
 mapfile -t auto < <(apt-mark showauto "${packages[@]}" 2>/dev/null)
 if ((${#auto[@]})); then
-    run sudo apt-mark manual "${auto[@]}"
+    run sudo apt-mark -o DPkg::Lock::Timeout=600 manual "${auto[@]}"
 else
     echo "all listed packages marked manual"
 fi
