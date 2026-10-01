@@ -27,18 +27,6 @@ set -eu
 switch=/sys/kernel/debug/vgaswitcheroo/switch
 pci=/sys/bus/pci/devices
 
-# helpws plan-dgpu: ws.gmux=t2 (with modprobe.blacklist=apple_gmux) hands the
-# gmux to t2gmux, whose OFF goes through ACPI PWRD like on macOS: the CPU port
-# of the card is parked in L2 first and the package reaches PC7 (apple-gmux
-# only cuts the power: PC3). Everything else stays as below; t2gmux could
-# switch the card on again, but on MacBookPro16,1 that powers the machine off
-# while amdgpu resumes (2026-10-01), so the card still leaves the bus.
-gmux=apple-gmux
-if grep -qw 'ws.gmux=t2' /proc/cmdline; then
-    gmux=t2gmux
-    modprobe t2gmux
-fi
-
 # amdgpu registers its switcheroo client late (firmware load), well after
 # systemd starts: wait for the discrete client.
 i=0
@@ -60,11 +48,6 @@ if grep -q '^[0-9]*:DIS:.:Off:' "$switch"; then
     exit 1
 fi
 gpu="$(sed -n 's/^[0-9]*:DIS:.:[A-Za-z]*:\(.*\)$/\1/p' "$switch")"
-
-if [ "$gmux" = t2gmux ] && ! ls /sys/bus/pnp/drivers/t2gmux 2>/dev/null | grep -q ':'; then
-    echo "ws-dgpu-off: ws.gmux=t2 but t2gmux is not bound to the gmux; dGPU left on" >&2
-    exit 1
-fi
 
 # /sys/devices/pci0000:00/0000:00:01.0/0000:01:00.0/0000:02:00.0/0000:03:00.0:
 # everything below the root port belongs to the package and loses its power.
@@ -104,4 +87,8 @@ if [ -e "$pci/$gpu" ]; then
     echo "ws-dgpu-off: $gpu is still on the bus after removing $top" >&2
     exit 1
 fi
-echo "ws-dgpu-off: dGPU powered off ($gmux); $top and everything below it removed from PCI"
+echo "ws-dgpu-off: dGPU powered off; $top and everything below it removed from PCI"
+
+# The CPU port of the card is left looking for a device, which keeps the CPU
+# package in PC3: park it like macOS does (ws-dgpu-park). Not fatal.
+/usr/local/sbin/ws-dgpu-park || echo "ws-dgpu-off: parking the port failed; the CPU package stays in PC3" >&2

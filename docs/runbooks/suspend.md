@@ -76,6 +76,8 @@ Hook лежит в `/usr/lib/systemd/system-sleep/`, потому что systemd
 ```text
 /usr/local/sbin/ws-dgpu-off                  OFF и удаление карты с шины PCI
 /etc/systemd/system/ws-dgpu-off.service      при загрузке, до GDM
+/usr/local/sbin/ws-dgpu-park                 «парковка» порта CPU 00:01.0, как в macOS
+/usr/lib/systemd/system-sleep/70-ws-dgpu-park  она же после resume
 ```
 
 При загрузке с `ws.dgpu=off` (rEFInd «Ubuntu») `ws-dgpu-off` выключает AMD
@@ -114,6 +116,29 @@ D3cold to D0`), `PSP create ring failed`. У автора
 2. `OFF` и проверка: конфигурационное пространство карты и `01:00.0`
    читается как `ffff`.
 3. `echo 1 > /sys/bus/pci/devices/0000:01:00.0/remove`.
+4. `ws-dgpu-park` (ниже).
+
+### Парковка порта CPU (ws-dgpu-park)
+
+`apple-gmux` только снимает питание. Порт CPU `00:01.0` (ACPI `PEG0`)
+после этого ищет устройство и держит пакет CPU в PC2/PC3 (helpws plan-t2,
+раздел 1: −0,9 W на CPU и PC7 ~80 % после парковки). macOS перед снятием
+питания вызывает ACPI `GFX0.PWRD(1)` → `PUPD(0)` (SSDT `PEG0GFX0`): линк в
+Gen1, LTR выкл., запрос L2 (`Q0L2`, 0x248 бит 7), затем PHY порта выкл.
+(`RC20` 0xC20[5:4], `RC38` 0xC38 бит 3, `BND0..3` бит 31 0x91C…0x97C).
+`ws-dgpu-park` делает то же через `setpci` и порт gmux `0x50`
+(`/sys/kernel/debug/apple_gmux/selected_port{,_data}`): на ~0,5 с включает
+карту, ждёт тренировки линка, L2, PHY, снимает питание (`0x50`: 1, 10 мс, 0).
+
+- Только после удаления карты с шины: обращение ядра к карте за линком в L2
+  вешает машину.
+- Запаркованный порт заново не тренируется: повтор в той же загрузке ничего
+  не делает. S3 порт сбрасывает — поэтому хук `70-ws-dgpu-park` после
+  resume.
+- Ошибка парковки не фатальна: карта выключена, пакет просто остаётся в PC3.
+- t2gmux (KaiT2en, `PWRD` из драйвера) на 16,1 пока не подходит: включение
+  выключает машину, а после его `OFF` карту нельзя убрать с шины
+  (helpws plan-dgpu).
 
 Если карта уже выключена, скрипт отказывается работать. Запуск только до GDM:
 vga_switcheroo при `OFF` открытых клиентов не проверяет.
@@ -286,6 +311,8 @@ system/files/usr/lib/systemd/system-sleep/80-broadcom-aspm
 system/files/systemd/system/broadcom-aspm-restore.service
 system/files/usr/local/sbin/ws-dgpu-off
 system/files/systemd/system/ws-dgpu-off.service
+system/files/usr/local/sbin/ws-dgpu-park
+system/files/usr/lib/systemd/system-sleep/70-ws-dgpu-park
 ```
 
 ## Не использовать

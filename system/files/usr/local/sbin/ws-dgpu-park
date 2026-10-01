@@ -1,0 +1,112 @@
+#!/usr/bin/env bash
+# Parks the CPU PCIe port of the switched-off AMD dGPU (00:01.0, ACPI PEG0)
+# the way macOS does before it cuts the power, so the CPU package can go
+# deeper than PC3 (helpws suspend, DGPU; helpws plan-t2 has the measurements:
+# PC3 -> PC7 ~80 %, CPU about -0.9 W).
+#
+# apple-gmux only cuts the card's power. The port is then left looking for a
+# device and keeps the package in PC2/PC3; neither Link Disable nor the PHY
+# bits on that port change it. macOS (AppleMuxControl2) first runs Apple's
+# ACPI GFX0.PWRD(1) -> PUPD(0) from SSDT "PEG0GFX0" while the card still has
+# power: link retrained to Gen1, LTR off, L2 request (Q0L2), then the PEG PHY
+# down (RC20, RC38, BND0..3), and only then the gmux cuts the power. All of
+# it is config space of 00:01.0 plus gmux port 0x50, so this script does the
+# same with setpci and the apple-gmux debugfs port interface:
+#
+#   power on (0x50: 1, 3), wait for link training, Gen1, LTR off, Q0L2 until
+#   it clears, PHY down, power off (0x50: 1, 10 ms, 0)
+#
+# Only after ws-dgpu-off: the card and its PCIe switch are off the bus, so no
+# driver touches buses 1-3 while the link is in L2 (that hangs the machine).
+# Once per port reset: a parked port stays parked and does not train again,
+# then nothing is done. Run by ws-dgpu-off at boot and after resume by the
+# sleep hook 70-ws-dgpu-park (S3 resets the port).
+set -euo pipefail
+
+peg=00:01.0
+pci=/sys/bus/pci/devices/0000:$peg
+gmux=""
+for d in /sys/kernel/debug/apple_gmux /sys/kernel/debug/t2gmux; do
+    [[ -w $d/selected_port_data ]] && { gmux=$d; break; }
+done
+
+say() { echo "ws-dgpu-park: $*"; }
+die() { say "$*" >&2; exit 1; }
+
+[[ -n "$gmux" ]] || die "no gmux debugfs port interface"
+[[ -e $pci ]] || die "no $peg"
+[[ ! -e /sys/bus/pci/devices/0000:01:00.0 ]] || die "the AMD is still on the PCI bus (ws-dgpu-off first)"
+
+reg() { setpci -s "$peg" "$@"; }
+port_power() { # VALUE...: write gmux port 0x50 (GMUX_PORT_DISCRETE_POWER)
+    local v
+    echo 80 >"$gmux/selected_port"
+    for v in "$@"; do
+        printf "\\$(printf '%03o' "$v")" >"$gmux/selected_port_data"
+        [[ "$v" == 1 ]] && sleep 0.01
+    done
+}
+state() { echo "LnkSta $(reg 0xb2.w) LTSS $(reg 0xc74.w) Q0 $(reg 0x248.w) PHY $(reg 0xc20.b)/$(reg 0xc38.b)/$(reg 0x91f.b)"; }
+
+powered=no
+cleanup() {
+    [[ $powered == yes ]] && port_power 1 0
+    echo auto >"$pci/power/control"
+}
+trap cleanup EXIT
+
+echo on >"$pci/power/control"                  # port in D0 so the link can train
+sleep 0.2
+say "before: $(state)"
+ltss0="$(reg 0xc74.w)"
+lnkctl2="$(reg 0xd0.w)"
+
+# PHY up in case firmware or an earlier park left it down (as PUPD(1) does).
+reg 0xc20.b=00:30 0xc38.b=00:08 0x91f.b=00:80 0x93f.b=00:80 0x95f.b=00:80 0x97f.b=00:80
+
+powered=yes
+port_power 1 3
+sleep 0.2
+trained=no
+for i in $(seq 1 60); do
+    st=$((16#$(reg 0xb2.w)))
+    if [[ "$(reg 0xc74.w)" != "$ltss0" ]] && (( !(st & 0x0800) && ((st >> 4) & 0x3f) == 8 )); then
+        trained=yes
+        break
+    fi
+    sleep 0.05
+done
+if [[ $trained != yes ]]; then
+    say "no link training after power-on ($(state)): port already parked or not reset; card off again, nothing changed"
+    reg 0xd0.w="$lnkctl2"
+    exit 0
+fi
+say "link up: $(state)"
+
+# PWG1: Gen1 and retrain; Apple polls LTRN for up to 500 ms.
+reg 0xd0.w=0001:000f 0xb0.w=0020:0020
+for i in $(seq 1 25); do
+    sleep 0.02
+    st=$((16#$(reg 0xb2.w)))
+    (( !(st & 0x0800) && (st & 0xf) == 1 )) && break
+done
+reg 0xc9.b=00:04                               # LTR mechanism off (LTRC = 0)
+
+reg 0x248.b=80:80                              # Q0L2: request L2
+cleared=no
+for i in $(seq 1 50); do
+    sleep 0.02
+    [[ "$(reg 0x248.b)" == 00 ]] && { cleared=yes; break; }
+done
+if [[ $cleared != yes ]]; then
+    say "L2 request did not complete ($(state)); PHY left up, card off again"
+    reg 0xd0.w="$lnkctl2"
+    exit 1
+fi
+
+# PHY down while the link is in L2: RC20 = 3, RC38 = 1, BND0..3 = 1.
+reg 0xc20.b=30:30 0xc38.b=08:08 0x91f.b=80:80 0x93f.b=80:80 0x95f.b=80:80 0x97f.b=80:80
+port_power 1 0
+powered=no
+reg 0xd0.w="$lnkctl2"                          # target speed back for a later power-up
+say "parked: $(state)"

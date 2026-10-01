@@ -21,8 +21,11 @@
     # AMD dGPU off and off the PCI bus when booted with ws.dgpu=off (rEFInd "Ubuntu")
     (file "/usr/local/sbin/ws-dgpu-off" "system/files/usr/local/sbin/ws-dgpu-off" "0755")
     (file "/etc/systemd/system/ws-dgpu-off.service" "system/files/systemd/system/ws-dgpu-off.service" "0644")
-    # t2gmux instead of apple-gmux (helpws plan-dgpu): not loaded by alias
-    # until the switch; a test boot uses ws.gmux=t2.
+    # ... and its CPU port parked like macOS does, at boot and after resume.
+    (file "/usr/local/sbin/ws-dgpu-park" "system/files/usr/local/sbin/ws-dgpu-park" "0755")
+    (file "/usr/lib/systemd/system-sleep/70-ws-dgpu-park" "system/files/usr/lib/systemd/system-sleep/70-ws-dgpu-park" "0755")
+    # t2gmux (helpws plan-dgpu) is built and installed but never loaded by
+    # alias: apple-gmux drives the gmux.
     (file "/etc/modprobe.d/t2gmux.conf" "system/files/modprobe/t2gmux.conf" "0644")
 
     # T2 base (t2linux setup, captured in phase -1)

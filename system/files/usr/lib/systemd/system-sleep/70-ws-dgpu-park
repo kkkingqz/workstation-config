@@ -1,0 +1,15 @@
+#!/bin/sh
+# After resume, park the CPU port of the switched-off AMD dGPU again
+# (ws-dgpu-park): S3 resets the port, and an unparked port keeps the CPU
+# package in PC3 (helpws suspend, DGPU). Only when ws-dgpu-off took the card
+# off the bus in this boot.
+
+case "$1/$2" in
+    post/suspend|post/hibernate|post/hybrid-sleep|post/suspend-then-hibernate) ;;
+    *) exit 0 ;;
+esac
+grep -qw 'ws.dgpu=off' /proc/cmdline || exit 0
+[ ! -e /sys/bus/pci/devices/0000:01:00.0 ] || exit 0
+
+/usr/local/sbin/ws-dgpu-park 2>&1 | logger -t ws-dgpu-park
+exit 0
