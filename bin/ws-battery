@@ -26,9 +26,11 @@ KBD = "/sys/class/leds/:white:kbd_backlight"
 TOUCHBAR = "/sys/class/backlight/appletb_backlight"
 STATS = "/sys/power/suspend_stats"
 
-# Rails of MacBookPro16,1 that add up to PSTR. Names are what
-# `ws-battery devices` showed on them; a key missing on another model is
-# skipped.
+# Power rails of MacBookPro16,1. Names are what `ws-battery devices` showed
+# on them; a key missing on another model is skipped. The screen backlight
+# is on none of them, and together they count ~2 W more than PSTR without
+# it: PSTR minus the rails is the backlight minus ~2 W (2026-10-01: -2.1 W
+# with the screen off, 0 W at 28 %, 5.4 W at 100 %).
 RAILS = [
     ("PC0R", "CPU"),
     ("PM0C", "memory"),
@@ -219,7 +221,7 @@ def report(meter, m):
         if key in m:
             total += m[key]
             print(f"  {key}  {m[key]:6.2f} W  {label}")
-    print(f"  rest  {m['PSTR'] - total:6.2f} W  PSTR minus the rails")
+    print(f"  rest  {m['PSTR'] - total:6.2f} W  PSTR minus the rails: screen backlight minus ~2 W")
     if any(k.startswith("rapl:") for k in m):
         print("CPU counters (RAPL):")
         names = [("package-0", "package: cores + iGPU"), ("core", "cores"),
