@@ -37,10 +37,24 @@ grep -Fq '[deep]' /sys/power/mem_sleep 2>/dev/null \
     && pass "mem_sleep default is deep (S3)" \
     || fail "mem_sleep default is not deep: $(cat /sys/power/mem_sleep 2>/dev/null)"
 
-if grep -Eq '(^| )pcie_aspm(=|\.policy=)' /proc/cmdline; then
-    warn "kernel cmdline forces ASPM ($(grep -Eo 'pcie_aspm[^ ]*' /proc/cmdline | tr '\n' ' ')); all T2 stateful-suspend rejections happened with it"
+# The default entry "Ubuntu" (ws.dgpu=off) forces ASPM with the powersave
+# policy (helpws suspend, ASPM); "Ubuntu (AMD)" and GRUB recovery do not.
+aspm="$(grep -Eo 'pcie_aspm[^ ]*' /proc/cmdline | tr '\n' ' ')"
+if grep -qw 'ws.dgpu=off' /proc/cmdline; then
+    [[ "$aspm" == *pcie_aspm=force* && "$aspm" == *pcie_aspm.policy=powersave* ]] \
+        && pass "kernel owns ASPM: ${aspm% }" \
+        || warn "default entry without pcie_aspm=force pcie_aspm.policy=powersave (${aspm:-none}); ~2 W more idle (refind_linux.conf, ws system apply)"
+    # The AMD's CPU port parked like macOS does (ws-dgpu-park; at boot from
+    # ws-dgpu-off, after resume from its sleep hook): last word of this boot.
+    park="$(journalctl -b -q -o cat _SYSTEMD_UNIT=ws-dgpu-off.service + SYSLOG_IDENTIFIER=ws-dgpu-park 2>/dev/null \
+        | grep -E '^ws-dgpu-park: (parked|no link training|L2 request)|parking the port failed' | tail -1)"
+    case "$park" in
+        *"ws-dgpu-park: parked"*|*"no link training"*) pass "AMD CPU port parked (ws-dgpu-park)" ;;
+        "") warn "no ws-dgpu-park result in this boot's journal (journalctl -b -u ws-dgpu-off)" ;;
+        *) warn "AMD CPU port not parked, CPU package stays in PC3: $park" ;;
+    esac
 else
-    pass "kernel cmdline does not force ASPM"
+    pass "no forced ASPM outside the default entry${aspm:+ (has: $aspm)}"
 fi
 
 t2bce_param="$(cat /sys/module/t2bce_core/parameters/stateful_sleep 2>/dev/null || true)"

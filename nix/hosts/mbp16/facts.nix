@@ -11,8 +11,10 @@
   boot = "refind-grub-recovery";
   kernelParams = [ "quiet" "splash" "intel_iommu=on" "iommu=pt" "pm_async=off" ];
   # Only the default rEFInd entry "Ubuntu": ws-dgpu-off.service powers the
-  # AMD dGPU off. "Ubuntu (AMD)" (refind.conf) and GRUB boot without it.
-  refindDefaultParams = [ "ws.dgpu=off" ];
+  # AMD dGPU off and parks its CPU port, and the kernel owns ASPM with the
+  # powersave policy (L1 on Thunderbolt, Clock PM; helpws suspend, ASPM).
+  # "Ubuntu (AMD)" (refind.conf) and GRUB (recovery) boot without them.
+  refindDefaultParams = [ "ws.dgpu=off" "pcie_aspm=force" "pcie_aspm.policy=powersave" ];
   # Btrfs with @, @home, @nix; root= in refind_linux.conf.
   rootUuid = "0cfd2add-849f-47b9-865d-2ac821ca529c";
   # rEFInd ESP (nvme0n1p3), not mounted in normal operation.

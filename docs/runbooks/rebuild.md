@@ -131,11 +131,11 @@ EFI/BOOT/refind.conf (ESP)   копируется вручную (helpws worksta
 grub.d drop-ins              ставит ws system apply (GRUB — recovery)
 ```
 
-Параметры ядра: `intel_iommu=on iommu=pt pm_async=off`.
-`pcie_aspm=force` и `pcie_aspm.policy=powersave` не добавлять: с ними T2
-отказывала в stateful suspend (`helpws suspend`). Пункт «Ubuntu» добавляет
-`ws.dgpu=off` (AMD выключена), ручной «Ubuntu (AMD)» грузит `/boot/ws` без
-него. Generic Ubuntu kernel остаётся запасным пунктом.
+Параметры ядра: `intel_iommu=on iommu=pt pm_async=off`. Пункт «Ubuntu»
+добавляет `ws.dgpu=off pcie_aspm=force pcie_aspm.policy=powersave` (AMD
+выключена и её порт запаркован, ASPM у ядра; `helpws suspend`), ручной
+«Ubuntu (AMD)» грузит `/boot/ws` без них, GRUB (recovery) — тоже. Всё из
+`facts.nix`. Generic Ubuntu kernel остаётся запасным пунктом.
 
 # 6. GNOME baseline
 

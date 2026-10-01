@@ -19,7 +19,7 @@ volume: User Commands
 - Wi-Fi, Bluetooth, T2 audio, microphone, camera;
 - Intel UHD 630 как primary GPU; AMD dGPU выключена при загрузке (rEFInd «Ubuntu», `helpws workstation`), offload в «Ubuntu (AMD)»;
 - рабочий `deep/S3` suspend/resume;
-- suspend layer: deep-only, Broadcom guard, patched `t2bce` (`helpws suspend`); ASPM не форсируется;
+- suspend layer: deep-only, Broadcom guard, patched `t2bce` (`helpws suspend`); ASPM у ядра в пункте «Ubuntu» (`powersave`), порт выключенной AMD запаркован (`ws-dgpu-park`);
 - Touch Bar в родном режиме (`hid-appletb-kbd` + `ws-touchbar-fn`):
   - F1…F12 по умолчанию;
   - media/brightness при удержании Fn;

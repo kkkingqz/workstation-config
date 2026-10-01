@@ -20,6 +20,11 @@ volume: User Commands
 2026-09-25         pcie_aspm=force убран из refind_linux.conf (все отказы T2 были с ним)
 2026-09-25         no-state путь патченого t2bce проверен (stateful_sleep=N): чисто
 2026-09-26         удалён 90-pcie-aspm.cfg (forced ASPM для ядер GRUB)
+2026-10-01         battery audit (helpws plan-t2): pcie_aspm=force + powersave
+                   снова в пункте «Ubuntu» (−1,3…−2,3 W); порт CPU
+                   выключенной AMD паркуется как в macOS (ws-dgpu-park):
+                   пакет CPU PC3 → PC7, с погашенным экраном 8,4 → 5,1 W;
+                   S3 с этим прошёл чисто, хук после resume паркует снова
 2026-09-27 22:31   прерванный S3 с выключенной AMD (MODE1 reset amdgpu), xHCI TB
 2026-09-28 08:51   «HC died», смерть без логов → ws-dgpu-off убирает карту с шины
 2026-09-28         включение карты на время сна: D3cold → D0 не выходит; удаление

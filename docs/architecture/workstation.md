@@ -383,8 +383,10 @@ t2bce 0.07-nostatefix1     отказ T2 от stateful suspend не роняет
 Touch Bar родной режим     без appletbdrm / tiny-dfr
 ```
 
-ASPM принудительно **не** включается: все отказы T2 от stateful suspend
-случились с `pcie_aspm=force` (`helpws history-suspend`).
+ASPM в пункте «Ubuntu» у ядра (`pcie_aspm=force pcie_aspm.policy=powersave`,
+с 2026-10-01): прошивка оставляет Thunderbolt без ASPM. Отказы T2 2026-09-22…25
+были с forced ASPM, но и с Touch Bar в режиме дисплея (`helpws suspend`,
+ASPM). Порт CPU выключенной AMD паркуется как в macOS (`ws-dgpu-park`).
 
 Управление и подробности:
 

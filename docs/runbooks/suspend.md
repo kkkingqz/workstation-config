@@ -12,10 +12,11 @@ volume: User Commands
 MacBookPro16,1
 T2 kernel 7.2.7-1-t2-resolute
 sleep        deep / S3 only
-cmdline      intel_iommu=on iommu=pt pm_async=off   (без pcie_aspm=force)
+cmdline      intel_iommu=on iommu=pt pm_async=off
+             + «Ubuntu»: ws.dgpu=off pcie_aspm=force pcie_aspm.policy=powersave
 t2bce        0.07-nostatefix1 (локальная сборка, updates/t2bce)
 Touch Bar    родной режим (см. helpws touchbar)
-AMD dGPU     ws.dgpu=off: выключена и убрана с шины PCI
+AMD dGPU     ws.dgpu=off: выключена, убрана с шины PCI, порт CPU запаркован
 ```
 
 Слой состоит из четырёх частей:
@@ -151,11 +152,21 @@ vga_switcheroo при `OFF` открытых клиентов не провер�
 
 ## ASPM
 
-ASPM не форсируется: `pcie_aspm=force` и `pcie_aspm.policy=powersave` нет ни
-в `refind_linux.conf`, ни в GRUB (параметры обоих собираются из `facts.nix`).
-Все отказы T2 случились с forced ASPM и Touch Bar в режиме дисплея.
-`ws-suspend check` предупреждает, если параметры вернутся, `ws system check` —
-если вернётся `/etc/default/grub.d/90-pcie-aspm.cfg`.
+С 2026-10-01 пункт «Ubuntu» снова грузится с `pcie_aspm=force
+pcie_aspm.policy=powersave` (`refindDefaultParams` в `facts.nix`); «Ubuntu
+(AMD)» и GRUB (recovery) — без них. Прошивка объявляет, что ASPM не
+поддерживается (FADT), и оставляет его выключенным на всём Thunderbolt;
+с `force` ядро берёт ASPM себе: L1 на Thunderbolt (~1,15 W), Clock PM и L0s
+на остальных линках (ещё ~0,6 W); L1.1/L1.2 политика `powersave` выключает,
+`powersupersave` не экономнее (helpws plan-t2, раздел 1).
+
+Убирали его 2026-09-25 из осторожности: все отказы T2 случились с forced
+ASPM, но вместе с Touch Bar в режиме дисплея; с родным Touch Bar и forced
+ASPM было 16 циклов S3 без сбоев (helpws history-suspend), 2026-10-01 — ещё
+циклы с t2bce 0.07-nostatefix1. `ws-suspend check` предупреждает, если в
+пункте «Ubuntu» параметров нет; `ws system check` — если вернётся
+`/etc/default/grub.d/90-pcie-aspm.cfg` (forced ASPM для GRUB/recovery не
+нужен).
 
 ## t2bce: отказ stateful suspend
 
@@ -269,7 +280,8 @@ ws-workstation-verify     # ядро ↔ t2bce
 
 ```text
 mem_sleep                 s2idle [deep]
-cmdline                   без pcie_aspm
+cmdline                   «Ubuntu»: pcie_aspm=force pcie_aspm.policy=powersave
+AMD CPU port              parked (ws-dgpu-park)
 t2bce_core                0.07-nostatefix1, stateful_sleep=Y
 runtime files             OK
 ```
@@ -321,7 +333,8 @@ system/files/usr/lib/systemd/system-sleep/70-ws-dgpu-park
 выгрузку t2bce/apple-bce перед сном (t2linux wiki: never unload t2bce)
 T2Linux-Suspend-Fix / t2-suspend.service / t2-resume.service
 s2idle
-pcie_aspm=force, pcie_ports=compat, i915.enable_guc=3
+pcie_aspm=force вместе с Touch Bar в режиме дисплея; pcie_ports=compat, i915.enable_guc=3
+t2gmux на 16,1 (пока): ON выключает машину, после его OFF карту нельзя убрать с шины (helpws plan-dgpu)
 Touch Bar display mode (appletbdrm, tiny-dfr) вместе с suspend
 S3 с AMD, выключенной через vga_switcheroo, но оставленной на шине PCI
 ON для AMD после OFF (карта до перезагрузки не оживает)
