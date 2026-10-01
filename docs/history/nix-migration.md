@@ -1010,8 +1010,34 @@ sha256). Эталон `nix-v1` (`--with-sudo`, 2026-09-27): dpkg verify, initrd 
    корень очищен; в госте `sudo update-grub`. Snapshots libvirt:
    `installed` (как после установщика) → `clean` (на `@`/`@home`, до
    `bootstrap.sh`).
-3. В VM: `nix/hosts/<vm>/`, `bootstrap.sh` → `ws switch` → `ws system
-   apply` → `ws apply` → `ws check`; каждая ручная правка — факт или баг.
+3. ~~Прогон в VM~~ — **сделано (2026-10-01)**: хост `nix/hosts/wsvm/`
+   (`generic-pc`, `grub`, пользователь `test`, `qemu-guest-agent`),
+   `bootstrap.sh` → `ws system apply` → `ws apply` → `ws check` без FAIL и
+   WARN. Найдено и исправлено в репозитории (на mbp16 это было сделано руками
+   или не проявлялось):
+   - `bootstrap.sh`: postinst `nix-setup-systemd` запускает сервис раньше
+     сокета, `systemctl enable --now nix-daemon.socket` падал (1d8d7e4);
+   - группа `input` (xremap) — её добавлял только человек; пакеты из списков,
+     которые чистая Ubuntu ставит зависимостями (`python3-gi`), оставались
+     auto; `/etc/default/grub` правит установщик — `ws system apply`
+     возвращает шаблон пакета (3b66d22);
+   - новые группы доходят до GNOME только с новым systemd user manager:
+     logout не помогает, пока открыта другая сессия (ssh) — после
+     `bootstrap.sh` перезагрузка (0e741e2);
+   - раскладки EN/RU/UA никто не ставил — теперь `ws apply keyboard`
+     (6536889); MRU GNOME заполняет только сам, проверка — info (5bd1de4);
+   - консоль VM на host: xremap переводил Command-сочетания до гостя
+     (06ed721); CapsLock в консоль VM — служебными сочетаниями, блокировка
+     CapsLock host не включается; `ws-caps-led` в VM не зажигает индикатор:
+     SPICE синхронизирует по нему lock-клавиши (5bd1de4, 61c9d9e);
+   - «Ghostty (Open Here)» в меню — `NoDisplay`; ярлык WinBox без программы —
+     `wswin check` предупреждает (программа — состояние машины, `helpws
+     rebuild`) (61c9d9e).
+
+   Факты хоста, которые предполагались в плане, не понадобились: путь
+   `LED_HELPER` и `xremap.yml` уже берутся из домашнего каталога; масштаб
+   Claude/AnyDesk и `keyboard.physical` в VM не мешали (клавиатура гостя —
+   PC, её варианты сочетаний в профиле есть).
 4. Откат на `clean` и повтор без правок.
 
 **Готово:** вторая машина поднимается без правок в репозитории, кроме её
