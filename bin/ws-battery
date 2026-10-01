@@ -421,7 +421,10 @@ def cmd_sleep():
                             capture_output=True, text=True).stdout.splitlines()
     entries = [l for l in kernel if "PM: suspend entry" in l]
     wake_lines = [l for l in kernel if re.search(r"wake", l, re.I)]
-    irq = read("/sys/power/pm_wakeup_irq") if os.path.exists("/sys/power/pm_wakeup_irq") else "-"
+    try:
+        irq = read("/sys/power/pm_wakeup_irq")
+    except OSError:  # missing, or ENODATA when no IRQ woke it (lid, power button via ACPI)
+        irq = "-"
 
     print(f"asleep      {hours * 60:.0f} min ({read('/sys/power/mem_sleep')})")
     print(f"used        {(q0 - q1) / 1000:.0f} mAh, {wh:.2f} Wh")
