@@ -25,6 +25,8 @@ SCREEN = "/sys/class/backlight/gmux_backlight"
 KBD = "/sys/class/leds/:white:kbd_backlight"
 TOUCHBAR = "/sys/class/backlight/appletb_backlight"
 STATS = "/sys/power/suspend_stats"
+# Package C-state residency (intel_pmc_core, debugfs: root), microseconds.
+PKG_CSTATES = "/sys/kernel/debug/pmc_core/package_cstate_show"
 
 # Power rails of MacBookPro16,1. Names are what `ws-battery devices` showed
 # on them; a key missing on another model is skipped. The screen backlight
@@ -146,6 +148,15 @@ def on_ac():
         return False
 
 
+def package_cstates():
+    try:
+        with open(PKG_CSTATES, encoding="ascii") as f:
+            return {line.split(":")[0].replace("Package", "").strip(): int(line.split(":")[1])
+                    for line in f if ":" in line}
+    except OSError:
+        return {}
+
+
 class Meter:
     def __init__(self):
         self.smc = Smc()
@@ -165,6 +176,7 @@ class Meter:
         rows = []
         start = time.monotonic()
         r0 = self.rapl.snapshot()
+        c0 = package_cstates()
         while True:
             tick = time.monotonic()
             row = self.sample()
@@ -179,6 +191,8 @@ class Meter:
         span = time.monotonic() - start
         mean = {k: sum(r[k] for r in rows) / len(rows) for k in rows[0] if rows[0][k] is not None}
         mean.update({f"rapl:{k}": v for k, v in self.rapl.watts(r0, self.rapl.snapshot(), span).items()})
+        c1 = package_cstates()
+        mean.update({f"pc:{k}": (c1[k] - c0[k]) / 1e6 / span * 100 for k in c1 if k in c0})
         mean["samples"] = len(rows)
         return mean
 
@@ -229,6 +243,10 @@ def report(meter, m):
         for name, label in names:
             if f"rapl:{name}" in m:
                 print(f"  {m[f'rapl:{name}']:6.2f} W  {label}")
+    states = [k for k in m if k.startswith("pc:")]
+    if states:
+        print("package C-states, % of time: "
+              + "  ".join(f"{k[3:]} {m[k]:.0f}" for k in states))
 
 
 def cmd_now(seconds):
