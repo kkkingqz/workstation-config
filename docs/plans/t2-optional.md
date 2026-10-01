@@ -167,6 +167,14 @@ pcie_aspm.policy=powersave` — да; проверки сна (циклы `ws-ba
 
 Дальше: выключать AMD так, чтобы порт `00:01.0` не держал пакет в PC3.
 
+**Итог (2026-10-01, `bc7fa35`):** пункт «Ubuntu» — `pcie_aspm=force
+pcie_aspm.policy=powersave`, `ws-dgpu-off` + `ws-dgpu-park` (парковка порта
+AMD как в macOS, после resume — хук). Экран погашен, на батарее: 8,36 W
+(PC3) → **5,1 W, пакет PC7 ~80 %**; после S3 — 5,2–5,6 W, PC7 72–76 %.
+t2gmux отложен (helpws plan-dgpu). Ещё не сделано в этом разделе: замеры
+`ws-battery idle` и `ws-battery sleep` (расход во сне), несколько циклов
+сна в обычном использовании.
+
 Выключение AMD (2026-10-01). У `PEG0` нет power resources; выключать умеет
 SSDT Apple `PEG0GFX0`: `\_SB.PCI0.PEG0.EGP0.EGP1.GFX0.PWRD(1)` →
 `PUPD(0)`: линк в Gen1, LTR порта выкл., запрос L2 (`Q0L2`, 0x248 бит 7)
