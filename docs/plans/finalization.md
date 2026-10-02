@@ -12,38 +12,21 @@ volume: User Commands
 
 # 1. System inventory
 
-Создать:
+Инвентарь — `ws collect` (`helpws rebuild`, раздел 0): эталон `ws baseline
+capture --with-sudo` (проверки, GNOME и расширения, Flatpak, Distrobox,
+ссылки, системные файлы, пакеты apt и Nix), загрузка (cmdline, fstab,
+`refind_linux.conf`, Btrfs), apt (`apt-mark showmanual`, `dpkg -l`,
+sources), `snap list`, firmware Apple из macOS, описания VM. Прежний
+список команд в `~/system-state` им заменён.
 
-```bash
-mkdir -p ~/system-state
+Граница установки (2026-10-02): каждый пакет, поставленный вручную, есть в
+`nix/hosts/apt.txt` или `nix/hosts/<host>/apt.txt`, остальное `apt-mark
+showmanual` — от установщика Ubuntu (`ws check apt`, INFO). Сверено с
+`/var/log/apt/history.log`: недостающие внесены, лишние удаляются
+(`and`, `swayidle`, `brightnessctl`, `mesa-utils`, `powertop`, `evtest`,
+`waveterm`).
 
-apt-mark showmanual | sort \
-  > ~/system-state/apt-manual-final.txt
-
-snap list \
-  > ~/system-state/snap-final.txt
-
-flatpak list --app --columns=application \
-  > ~/system-state/flatpak-apps.txt
-
-distrobox list \
-  > ~/system-state/distroboxes.txt
-
-podman images \
-  > ~/system-state/podman-images.txt
-
-gnome-extensions list --enabled \
-  > ~/system-state/gnome-extensions-final.txt
-```
-
-Дополнительно сохранить:
-
-```text
-uname -r
-/proc/cmdline
-/etc/modprobe.d/tb.conf
-rEFInd relevant config
-```
+Архив хранить вне ноутбука и пересобирать после заметных изменений.
 
 ---
 
