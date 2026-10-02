@@ -22,12 +22,18 @@ sources), firmware Apple из macOS, описания VM. Прежний
 Граница установки (2026-10-02): каждый пакет, поставленный вручную, есть в
 `nix/hosts/apt.txt` или `nix/hosts/<host>/apt.txt`, остальное `apt-mark
 showmanual` — от установщика Ubuntu (`ws check apt`, INFO). Сверено с
-`/var/log/apt/history.log`: недостающие внесены, лишние удаляются
+`/var/log/apt/history.log`: недостающие внесены, лишние удалены
 (`and`, `swayidle`, `brightnessctl`, `mesa-utils`, `powertop`, `evtest`,
 `waveterm`). Snap нет: `purge:snapd` и pin
 (`/etc/apt/preferences.d/ws-no-snapd`), Firefox — Flatpak.
 
 Архив хранить вне ноутбука и пересобирать после заметных изменений.
+
+Чистка 2026-10-02 (решения пользователя): удалены VM `wsvm` и
+`ubuntu-test`, контейнер `ubuntu`, Rust в `arch`, все snap вместе со snapd,
+generic-ядра и старое T2 `7.2.6`, `linux-tools`, логи, остатки сборок и
+настроек удалённых программ; `@root` и `@srv` слиты в `@`. Занято на `/`:
+137 → 99 ГБ.
 
 ---
 
