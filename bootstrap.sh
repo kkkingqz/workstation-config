@@ -326,6 +326,15 @@ else
     run "${virsh[@]}" net-start default
 fi
 
+# virt-manager defines a pool for each directory picked with "Browse Local";
+# through ~/VMs (a link to the images) qemu gets paths in HOME (0750) and
+# must be able to pass through it: search only, not read.
+if getfacl -p "$HOME" 2>/dev/null | grep -qx 'user:libvirt-qemu:--x'; then
+    echo "qemu may pass through $HOME"
+else
+    run setfacl -m u:libvirt-qemu:x "$HOME"
+fi
+
 echo
 echo "== 4. Nix daemon and groups"
 if systemctl is-enabled --quiet nix-daemon.socket 2>/dev/null; then

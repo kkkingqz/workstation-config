@@ -47,13 +47,14 @@ copy-on-write у образов нет контрольных сумм Btrfs и 
 `swtpm/` на прежние пути. Кэш DHCP (`/var/lib/libvirt/dnsmasq`) остаётся на
 `@`: он пересоздаётся.
 
-`~/VMs` — только для рук: класть ISO, смотреть файлы. VM должна получать
-пути пула (`/var/lib/libvirt/images/…`, в virt-manager — «Browse» → пул
-`default`): путь через `~/VMs` qemu не откроет (у него нет доступа в HOME,
-AppArmor разрешает пути пула). virt-manager заводит пул на каждый каталог,
-открытый через «Browse Local»; пул в HOME `ws check virt` отмечает WARN —
-убрать: `virsh -c qemu:///system pool-destroy NAME` и `pool-undefine NAME`
-(файлы остаются).
+`~/VMs` — ссылка на `/var/lib/libvirt/images`: ISO кладутся в
+`~/VMs/iso/`. virt-manager заводит пул на каждый каталог, выбранный через
+«Browse Local» (так появились `iso` и `iso-1` → `~/VMs/iso`), и это
+штатно: qemu получает путь через HOME и проходит его по ACL
+`user:libvirt-qemu:--x` на HOME (только проход, не чтение; ставит
+`bootstrap.sh`, проверяет `ws check virt`). AppArmor пропускает файл по
+настоящему пути в пуле. Проверено 2026-10-02: временная VM с ISO из
+`~/VMs/iso` запускается.
 
 ## Сеть
 
@@ -63,8 +64,8 @@ AppArmor разрешает пути пула). virt-manager заводит пу
 
 ## Создать VM
 
-`virt-manager` → «Create a new virtual machine»: ISO из пула `default`
-(`iso/`, кладётся через `~/VMs/iso/`), диск — в пуле `default`. То же
+`virt-manager` → «Create a new virtual machine»: ISO из `~/VMs/iso/`
+(«Browse Local» или пул), диск — в пуле `default`. То же
 командой (так создана `ubuntu-test`):
 
 ```console

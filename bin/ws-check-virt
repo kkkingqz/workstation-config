@@ -94,13 +94,16 @@ grep -Eq '^State:[[:space:]]+running' <<<"$pool_info" \
     && grep -Eq '^Autostart:[[:space:]]+yes' <<<"$pool_info" \
     && pass "pool default running, autostart" \
     || fail "pool default not running or not autostarted (bootstrap.sh)"
-# virt-manager defines a pool for each directory browsed to; one in HOME
-# (~/VMs/...) hands qemu paths it cannot open.
+# virt-manager defines a pool for each directory picked with "Browse Local";
+# one in HOME (~/VMs/...) hands qemu paths through HOME, which it may only
+# pass through (bootstrap.sh).
+getfacl -p "$HOME" 2>/dev/null | grep -qx 'user:libvirt-qemu:--x' \
+    && pass "qemu may pass through $HOME (ACL; pools in ~/VMs)" \
+    || warn "qemu cannot pass through $HOME: pools in ~/VMs fail (setfacl -m u:libvirt-qemu:x $HOME; bootstrap.sh)"
 while IFS= read -r p; do
-    [[ -n "$p" ]] || continue
+    [[ -n "$p" && "$p" != default ]] || continue
     path="$("${virsh[@]}" pool-dumpxml "$p" 2>/dev/null | sed -n 's|.*<path>\(.*\)</path>.*|\1|p')"
-    [[ "$path" == "$HOME"/* ]] \
-        && warn "pool $p -> $path: qemu cannot open files in HOME; use pool default (virsh pool-destroy $p; virsh pool-undefine $p)"
+    info "pool $p -> $path (virt-manager)"
 done < <("${virsh[@]}" pool-list --all --name 2>/dev/null)
 
 section "4. Network"
