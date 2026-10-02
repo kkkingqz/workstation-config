@@ -45,11 +45,10 @@ volume: User Commands
    amdgpu с запаркованным портом, PSR, быстрый resume; вентиляторы штатно).
 
 2. `helpws plan-final`
-   Инвентаризация, backups, snapshots, restore checkpoints и финальный
-   smoke-test. Уже есть: `ws collect` (состояние машины для rebuild),
-   `ws checkpoint` (коммит ↔ рабочее состояние), `ws baseline`.
-   Обязательно: backup `@vms` (диски VM не входят ни в snapshots `@`, ни в
-   `ws collect`).
+   Сделано 2026-10-02: инвентарь (`ws collect`), граница установки (apt,
+   `purge:snapd`), snapshots и откат — Timeshift с входом из GRUB
+   (проверено), чистка машины. Осталось: backup HOME и `@vms` (носитель —
+   позже, решение пользователя) и финальный smoke-test.
 
 Отложено:
 
