@@ -1,0 +1,23 @@
+#!/bin/sh
+# Timeshift restore hook. A Btrfs restore moves @ into the snapshot
+# directory and makes a new @ (a new subvolume ID). The default subvolume
+# is kept by ID, and rEFInd loads the kernel and initrd from it: without
+# this hook the next boot would take them from the old root. A filesystem
+# whose default is the top level (5, GRUB-only machines) is left alone.
+set -eu
+
+uuid="$(findmnt -no UUID /)"
+top="$(mktemp -d)"
+trap 'umount "$top" 2>/dev/null; rmdir "$top"' EXIT
+mount -o subvolid=5 "UUID=$uuid" "$top"
+
+new="$(btrfs subvolume show "$top/@" | awk '/Subvolume ID:/ { print $3 }')"
+cur="$(btrfs subvolume get-default "$top" | awk '{ print $2 }')"
+if [ "$cur" = 5 ]; then
+    echo "default subvolume is the top level: unchanged"
+elif [ "$cur" = "$new" ]; then
+    echo "default subvolume is already @ (ID $new)"
+else
+    btrfs subvolume set-default "$new" "$top"
+    echo "default subvolume: ID $cur -> $new (@)"
+fi

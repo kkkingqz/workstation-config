@@ -1,0 +1,4 @@
+#!/bin/sh
+# Timeshift backup hook: rebuild the GRUB menu so the new snapshot appears
+# under "Timeshift snapshots" (/etc/grub.d/42_ws_timeshift).
+update-grub 2>&1 | tail -n 2

@@ -40,6 +40,8 @@ steam-devices
 
 # Btrfs subvolumes, snapshots and recovery (system-backup-snapshot)
 btrfs-progs
+# Snapshots of @ and @home, GUI and CLI (Timeshift snapshots in GRUB)
+timeshift
 
 # sg: bootstrap.sh runs the first switch with nix-users before a new login
 # (Ubuntu 26.04 moved sg/newgrp from login to util-linux-extra)

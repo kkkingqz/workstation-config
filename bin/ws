@@ -593,6 +593,7 @@ cmd_system_apply() {
                 case "$b" in
                     /etc/modprobe.d/*) modprobe=true ;;
                     /etc/default/grub.d/*) grub=true ;;
+                    /etc/grub.d/*) grub=true ;;
                     /etc/systemd/logind.conf.d/*) logind=true ;;
                     /boot/refind_linux.conf) refind=true ;;
                     /usr/local/sbin/ws-boot-links) bootlinks=true ;;
