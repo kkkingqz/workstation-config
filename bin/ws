@@ -820,14 +820,14 @@ cmd_check_apt() {
     h="$(host)"
     mapfile -t want < <(cat "$repo/nix/hosts/apt.txt" "$repo/nix/hosts/$h/apt.txt" 2>/dev/null \
         | sed -e 's/#.*//' -e 's/[[:space:]]//g' -e '/^$/d' -e '/^ppa:/d' | sort -u)
-    for pkg in $(printf '%s\n' "${want[@]}" | sed -n 's/^snap-remove://p'); do
-        if snap list "$pkg" >/dev/null 2>&1; then
-            warn "snap installed, the host list removes it: $pkg (bootstrap.sh)"
+    for pkg in $(printf '%s\n' "${want[@]}" | sed -n 's/^purge://p'); do
+        if dpkg-query -W -f='${Status}' "$pkg" 2>/dev/null | grep -q ' installed$'; then
+            warn "installed, the host list purges it: $pkg (bootstrap.sh)"
         else
-            pass "snap removed: $pkg"
+            pass "purged: $pkg"
         fi
     done
-    mapfile -t want < <(printf '%s\n' "${want[@]}" | grep -v '^snap-remove:')
+    mapfile -t want < <(printf '%s\n' "${want[@]}" | grep -v '^purge:')
     while read -r pkg; do
         manual[$pkg]=1
     done < <(apt-mark showmanual)

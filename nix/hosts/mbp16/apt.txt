@@ -6,10 +6,5 @@ linux-t2
 apple-t2-audio-config
 apple-firmware-script
 
-# AppArmor prompting client of Ubuntu: needs the AppArmor notification
-# socket of the Ubuntu kernel, linux-t2 has none; it fails at every login
-# (user session degraded, ws switch warns).
-snap-remove:prompting-client
-
 # SSH access to this machine (sshd on port 22)
 openssh-server

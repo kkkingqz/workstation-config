@@ -29,8 +29,6 @@ let
     { uuid = "ubuntu-appindicators@ubuntu.com"; source = "ubuntu"; }
     { uuid = "ding@rastersoft.com"; source = "ubuntu"; }
     { uuid = "tiling-assistant@ubuntu.com"; source = "ubuntu"; }
-    { uuid = "snapd-prompting@canonical.com"; source = "ubuntu"; }
-    { uuid = "snapd-search-provider@canonical.com"; source = "ubuntu"; }
     { uuid = "web-search-provider@ubuntu.com"; source = "ubuntu"; }
 
     # Used; enabled since before the repository.

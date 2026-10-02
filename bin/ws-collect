@@ -22,7 +22,7 @@ laptop before reinstalling.
               Distrobox, user links, system files, packages)
   boot/       /proc/cmdline, fstab, refind_linux.conf, lsblk, blkid,
               efibootmgr, Btrfs subvolumes and default
-  apt/        sources, manual and held packages, dpkg -l, snap list
+  apt/        sources, manual and held packages, dpkg -l
   firmware/   files of /lib/firmware/brcm that no package owns (taken from
               macOS by get-apple-firmware); --no-firmware skips them
   state/      ~/.local/state/workstation without baseline/ (keyboard backup,
@@ -103,7 +103,6 @@ cp -a /etc/apt/sources.list.d "$dir/apt/"
 apt-mark showmanual > "$dir/apt/manual.txt"
 apt-mark showhold > "$dir/apt/hold.txt"
 dpkg -l > "$dir/apt/dpkg-l.txt"
-run_to "$dir/apt/snap-list.txt" snap list
 
 if [[ "$firmware" == true ]]; then
     echo "== firmware"

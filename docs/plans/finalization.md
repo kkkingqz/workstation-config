@@ -16,7 +16,7 @@ volume: User Commands
 capture --with-sudo` (проверки, GNOME и расширения, Flatpak, Distrobox,
 ссылки, системные файлы, пакеты apt и Nix), загрузка (cmdline, fstab,
 `refind_linux.conf`, Btrfs), apt (`apt-mark showmanual`, `dpkg -l`,
-sources), `snap list`, firmware Apple из macOS, описания VM. Прежний
+sources), firmware Apple из macOS, описания VM. Прежний
 список команд в `~/system-state` им заменён.
 
 Граница установки (2026-10-02): каждый пакет, поставленный вручную, есть в
@@ -24,7 +24,8 @@ sources), `snap list`, firmware Apple из macOS, описания VM. Преж�
 showmanual` — от установщика Ubuntu (`ws check apt`, INFO). Сверено с
 `/var/log/apt/history.log`: недостающие внесены, лишние удаляются
 (`and`, `swayidle`, `brightnessctl`, `mesa-utils`, `powertop`, `evtest`,
-`waveterm`).
+`waveterm`). Snap нет: `purge:snapd` и pin
+(`/etc/apt/preferences.d/ws-no-snapd`), Firefox — Flatpak.
 
 Архив хранить вне ноутбука и пересобирать после заметных изменений.
 

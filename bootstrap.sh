@@ -110,8 +110,8 @@ subvolume_mount @nix /nix noatime,compress=zstd:1
 echo
 echo "== 2. apt"
 mapfile -t ppas < <(apt_lines | sed -n 's/^ppa://p')
-mapfile -t packages < <(apt_lines | grep -v '^ppa:\|^snap-remove:')
-mapfile -t snaps_remove < <(apt_lines | sed -n 's/^snap-remove://p')
+mapfile -t packages < <(apt_lines | grep -v '^ppa:\|^purge:')
+mapfile -t purges < <(apt_lines | sed -n 's/^purge://p')
 added=false
 for ppa in "${ppas[@]}"; do
     if grep -rqsF "ppa.launchpadcontent.net/$ppa/" /etc/apt/sources.list.d/; then
@@ -145,13 +145,15 @@ if ((${#auto[@]})); then
 else
     echo "all listed packages marked manual"
 fi
-for snap in "${snaps_remove[@]}"; do
-    if snap list "$snap" >/dev/null 2>&1; then
-        run sudo snap remove "$snap"
+present=()
+for pkg in "${purges[@]}"; do
+    if dpkg-query -W -f='${Status}' "$pkg" 2>/dev/null | grep -q ' installed$'; then
+        present+=("$pkg")
     else
-        echo "snap not installed: $snap"
+        echo "not installed: $pkg"
     fi
 done
+((${#present[@]} == 0)) || run "${apt_get[@]}" purge -y "${present[@]}"
 
 echo
 echo "== 3. VM state on @vms, libvirt (helpws virt)"

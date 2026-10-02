@@ -15,6 +15,9 @@
     (file "/etc/modules-load.d/ntsync.conf" "system/files/modules-load.d/ntsync.conf" "0644")
     (file "/etc/qemu/firmware/30-edk2-x86_64-secure-enrolled-qcow2-vars.json" "system/files/qemu/firmware/30-edk2-x86_64-secure-enrolled-qcow2-vars.json" "0644")
 
+    # No snaps: snapd is purged (nix/hosts/apt.txt) and pinned out.
+    (file "/etc/apt/preferences.d/ws-no-snapd" "system/files/apt/ws-no-snapd" "0644")
+
     # Timeshift (@ and @home): its snapshots in the GRUB menu, refreshed after
     # every snapshot; after a restore the default subvolume follows the new @
     # (rEFInd boots from it). Settings stay Timeshift's (GUI).

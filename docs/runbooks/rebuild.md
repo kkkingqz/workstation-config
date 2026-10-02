@@ -22,7 +22,7 @@ ws checkpoint create before-reinstall
   сравнивается новая установка (`ws baseline diff`);
 - `boot/` — `/proc/cmdline`, fstab, `refind_linux.conf`, `lsblk`, `blkid`,
   `efibootmgr -v`, subvolumes Btrfs;
-- `apt/` — sources, ручные и held пакеты, `dpkg -l`, `snap list`;
+- `apt/` — sources, ручные и held пакеты, `dpkg -l`;
 - `firmware/` — файлы `/lib/firmware/brcm` без пакета: Wi-Fi/Bluetooth
   Apple, взятые из macOS (без macOS их больше не получить);
 - `state/` — `~/.local/state/workstation` (backup сочетаний, checkpoints);

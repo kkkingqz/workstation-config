@@ -16,3 +16,5 @@ flathub com.jgraph.drawio.desktop
 flathub org.qbittorrent.qBittorrent
 flathub com.notesnook.Notesnook
 flathub org.onlyoffice.desktopeditors
+# Browser (snapd is purged, nix/hosts/apt.txt)
+flathub org.mozilla.firefox

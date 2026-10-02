@@ -1,0 +1,5 @@
+# No snaps on this workstation (nix/hosts/apt.txt: purge:snapd): apt never
+# installs snapd again, not as a dependency and not as a recommendation.
+Package: snapd
+Pin: release a=*
+Pin-Priority: -10
