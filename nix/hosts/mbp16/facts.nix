@@ -9,7 +9,13 @@
   wsconfig = "wsconfig";
   hardware = "t2-mbp16";
   boot = "refind-grub-recovery";
-  kernelParams = [ "quiet" "splash" "intel_iommu=on" "iommu=pt" "pm_async=off" ];
+  kernelParams = [
+    "quiet" "splash" "intel_iommu=on" "iommu=pt" "pm_async=off"
+    # Hibernation: /swap/swapfile in @swap on the root filesystem; the
+    # offset is its first page (ws-suspend swap-setup prints both;
+    # helpws suspend, Hibernate). A new swapfile means a new offset.
+    "resume=UUID=0cfd2add-849f-47b9-865d-2ac821ca529c" "resume_offset=31286754"
+  ];
   # Only the default rEFInd entry "Ubuntu": ws-dgpu-off.service powers the
   # AMD dGPU off and parks its CPU port, and the kernel owns ASPM with the
   # powersave policy (L1 on Thunderbolt, Clock PM; helpws suspend, ASPM).
