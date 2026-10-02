@@ -138,7 +138,10 @@ grub.d drop-ins              ставит ws system apply (GRUB — recovery)
 pcie_aspm.policy=powersave` (AMD без драйвера убрана с шины и выключена, её
 порт запаркован, ASPM у ядра; `helpws suspend`, `helpws workstation`), ручной
 «Ubuntu (AMD)» грузит `/boot/ws` без них, GRUB (recovery) — тоже. Всё из
-`facts.nix`. Generic Ubuntu kernel остаётся запасным пунктом.
+`facts.nix`. Generic-ядро Ubuntu не ставится: ядро только T2 (`linux-t2`),
+запасной путь — пункты GRUB и снапшоты Timeshift (раздел 12). Метапакеты
+`linux-generic-hwe-*`, если их поставил установщик, удалить вместе с
+generic-ядром (2026-10-02).
 
 # 6. GNOME baseline
 
@@ -548,7 +551,7 @@ ws baseline diff before-reinstall after-reinstall
 Затем вручную проверить:
 
 - boot через rEFInd;
-- generic-kernel fallback;
+- загрузка в снапшот Timeshift из GRUB;
 - Wi‑Fi;
 - Bluetooth;
 - speakers/mic;

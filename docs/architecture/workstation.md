@@ -21,7 +21,7 @@ volume: User Commands
 - **GDM3**
 - **rEFInd** как основное boot menu
 - T2 kernel: `7.2.7-1-t2-resolute` (+ локально исправленный `t2bce`, см. `helpws suspend`)
-- Generic Ubuntu kernel оставлен как fallback
+- Generic-ядро Ubuntu удалено (2026-10-02); запасной путь — GRUB и снапшоты Timeshift
 - Secure Boot отключён для T2 Linux
 
 ---
