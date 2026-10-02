@@ -45,6 +45,15 @@ let
     { uuid = "workstation-hibernate@local"; source = "local"; }
   ];
 
+  # Extensions of the Ubuntu session mode that stay off: the mode enables
+  # them whatever enabled-extensions says, only disabled-extensions wins.
+  # snapd is purged (nix/hosts/apt.txt), so its prompt and Snap Store search
+  # have nothing to talk to.
+  disabledUbuntu = [
+    "snapd-prompting@canonical.com"
+    "snapd-search-provider@canonical.com"
+  ];
+
   bySource = source: map (e: e.uuid) (lib.filter (e: e.source == source) extensions);
 
   egoExtension = import ../nix/pkgs/gnome-extensions.nix {
@@ -79,7 +88,7 @@ in
 
   dconf.settings."org/gnome/shell" = {
     enabled-extensions = bySource "ego" ++ bySource "local";
-    disabled-extensions = lib.hm.gvariant.mkEmptyArray lib.hm.gvariant.type.string;
+    disabled-extensions = disabledUbuntu;
   };
 
   xdg.dataFile."workstation/gnome/extensions".text = ''
