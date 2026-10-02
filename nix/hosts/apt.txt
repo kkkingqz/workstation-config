@@ -72,7 +72,8 @@ virtiofsd
 # Desktop and command-line tools on top of the standard install
 # Space preview in Nautilus (org.gnome.NautilusPreviewer)
 gnome-sushi
-# "This computer" (drives) in Nautilus
+# "This computer" (drives) in Nautilus (PPA of its author)
+ppa:yannmasoch/nautilus-my-computer
 nautilus-my-computer
 gnome-system-monitor
 btop
