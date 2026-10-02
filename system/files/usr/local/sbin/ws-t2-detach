@@ -1,0 +1,89 @@
+#!/bin/sh
+# Takes the T2 stack (t2bce) off its PCI functions and brings it back, for
+# hibernation (helpws suspend, Hibernate). t2bce has S3 callbacks only, none
+# for hibernation (freeze/thaw/poweroff/restore): when the image is restored
+# the T2 has been reset and the driver's queues are gone, so the keyboard,
+# trackpad, Touch Bar and audio die (t2linux/T2-Debian-and-Ubuntu-Kernel#213).
+# Unbound before the image is written and bound again after it is restored,
+# the driver starts as at boot. Also run in the initramfs of a resume boot
+# (scripts/local-top/ws-t2-resume), which must not hand an active T2 to the
+# restored kernel.
+#
+#   down          rmmod t2bce_vhci, unbind t2bce_audio and t2bce_core
+#   up            bind t2bce_core and t2bce_audio, modprobe t2bce_vhci; then
+#                 rebind the Touch Bar keys once its backlight is there
+#                 (hid-appletb-kbd looks for the backlight only at probe)
+#   cycle [SEC]   down, SEC seconds (5), up: a test without hibernation
+set -u
+
+say() { echo "ws-t2-detach: $*"; }
+
+pci_dev() { # VENDOR DEVICE -> PCI address
+    for d in /sys/bus/pci/devices/*; do
+        if [ "$(cat "$d/vendor")" = "$1" ] && [ "$(cat "$d/device")" = "$2" ]; then
+            echo "${d##*/}"
+            return 0
+        fi
+    done
+    return 1
+}
+bound() { # ADDRESS DRIVER
+    d="$(readlink "/sys/bus/pci/devices/$1/driver" 2>/dev/null)"
+    [ "${d##*/}" = "$2" ]
+}
+state() { # ADDRESS DRIVER -> bound|unbound|none
+    if [ -z "$1" ]; then echo none; elif bound "$1" "$2"; then echo bound; else echo unbound; fi
+}
+pci_bind() { # bind|unbind ADDRESS DRIVER
+    echo "$2" >"/sys/bus/pci/drivers/$3/$1" || { say "$1 $2 ($3) failed"; rc=1; }
+}
+
+core="$(pci_dev 0x106b 0x1801)" || { say "no T2 bridge (106b:1801)"; exit 1; }
+audio="$(pci_dev 0x106b 0x1803)" || audio=""
+rc=0
+
+down() {
+    if [ -d /sys/module/t2bce_vhci ]; then
+        rmmod t2bce_vhci || { say "rmmod t2bce_vhci failed"; rc=1; }
+    fi
+    if [ -n "$audio" ] && bound "$audio" t2bce_audio; then pci_bind unbind "$audio" t2bce_audio; fi
+    if bound "$core" t2bce_core; then pci_bind unbind "$core" t2bce_core; fi
+    say "down: core $(state "$core" t2bce_core), audio $(state "$audio" t2bce_audio)"
+}
+
+up() {
+    bound "$core" t2bce_core || pci_bind bind "$core" t2bce_core
+    if [ -n "$audio" ] && ! bound "$audio" t2bce_audio; then
+        sleep 1                                   # audio is a client of t2bce_core
+        pci_bind bind "$audio" t2bce_audio
+    fi
+    modprobe t2bce_vhci || { say "modprobe t2bce_vhci failed"; rc=1; }
+
+    kbd=/sys/bus/hid/drivers/hid-appletb-kbd
+    i=0
+    while [ $i -lt 100 ]; do
+        set -- "$kbd"/0003:*
+        if [ -e /sys/class/backlight/appletb_backlight ] && [ -e "$1" ]; then
+            for h in "$@"; do
+                n="${h##*/}"
+                if ! { echo "$n" >"$kbd/unbind" && echo "$n" >"$kbd/bind"; }; then
+                    say "rebind Touch Bar keys $n failed"
+                    rc=1
+                fi
+            done
+            break
+        fi
+        sleep 0.1
+        i=$((i + 1))
+    done
+    [ $i -lt 100 ] || say "Touch Bar keys or backlight not back in 10 s"
+    say "up: core $(state "$core" t2bce_core), audio $(state "$audio" t2bce_audio)"
+}
+
+case "${1:-}" in
+    down) down ;;
+    up) up ;;
+    cycle) down; sleep "${2:-5}"; up ;;
+    *) echo "Usage: ws-t2-detach down|up|cycle [SECONDS]" >&2; exit 64 ;;
+esac
+exit $rc

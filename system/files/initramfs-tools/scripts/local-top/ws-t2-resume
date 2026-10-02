@@ -1,0 +1,38 @@
+#!/bin/sh
+# Resume from hibernation: the T2 stack off before the image is loaded
+# (helpws suspend, Hibernate). The initramfs loads t2bce for the internal
+# keyboard, and t2bce cannot stop the T2 for the restored kernel: it would
+# keep its queues in memory the image overwrites. Only when the resume
+# device holds an image (the check of scripts/local-premount/resume, which
+# runs after local-top); local-bottom/ws-t2-resume brings the stack back if
+# the resume did not happen.
+PREREQ=""
+prereqs() { echo "$PREREQ"; }
+case "$1" in
+    prereqs) prereqs; exit 0 ;;
+esac
+
+[ -z "${noresume:-}" ] && [ -n "${resume:-}" ] && [ -e /sys/power/resume ] || exit 0
+
+. /scripts/functions
+. /scripts/local
+
+local_device_setup "$resume" "suspend/resume device" false || exit 0
+if [ "${resume_offset:-}" -ge 0 ] 2>/dev/null; then
+    type="$(blkid -p -O $((resume_offset * 4096)) "$resume" -s TYPE -o value)"
+else
+    type="$(blkid -p -o value -s TYPE "$resume")"
+fi
+case "$type" in
+    swsuspend|s1suspend|s2suspend|ulsuspend) ;;
+    *) exit 0 ;;
+esac
+
+# No late load by udev; an explicit modprobe (ws-t2-detach up) still works.
+mkdir -p /etc/modprobe.d
+echo "blacklist t2bce_core" >/etc/modprobe.d/ws-t2-resume.conf
+wait_for_udev 10
+log_begin_msg "Hibernation image found: T2 stack off (ws-t2-detach)"
+/usr/sbin/ws-t2-detach down
+log_end_msg
+touch /run/ws-t2-detached

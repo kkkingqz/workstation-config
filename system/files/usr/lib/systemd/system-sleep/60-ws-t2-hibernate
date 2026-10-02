@@ -1,0 +1,19 @@
+#!/bin/sh
+# Hibernation: the T2 stack off before the image is written and on again
+# after it is restored or the hibernation failed (ws-t2-detach; helpws
+# suspend, Hibernate). Not around S3: t2bce keeps the T2 state there. In
+# suspend-then-hibernate only around its hibernation step.
+
+case "$2" in
+    hibernate|hybrid-sleep) ;;
+    suspend-then-hibernate) [ "${SYSTEMD_SLEEP_ACTION:-}" = hibernate ] || exit 0 ;;
+    *) exit 0 ;;
+esac
+case "$1" in
+    pre|post) ;;
+    *) exit 0 ;;
+esac
+
+[ "$1" = pre ] && action=down || action=up
+/usr/local/sbin/ws-t2-detach "$action" 2>&1 | logger -t ws-t2-detach
+exit 0

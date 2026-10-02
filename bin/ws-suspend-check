@@ -70,7 +70,42 @@ else
     warn "ws-tb-acpi-seed.service not active: resume ~20 s slower (journalctl -b -u ws-tb-acpi-seed; ws system apply)"
 fi
 
-section "2. Touch Bar native mode"
+section "2. Hibernation"
+
+# Configured when the kernel command line has resume= (facts.nix
+# kernelParams, ws-suspend swap-setup; helpws suspend, Hibernate).
+resume_arg="$(grep -o 'resume=[^ ]*' /proc/cmdline | grep -v '^resume_' | head -1)"
+offset_arg="$(grep -o 'resume_offset=[0-9]*' /proc/cmdline | head -1)"
+if [[ -z "$resume_arg" ]]; then
+    info "no resume= on the kernel command line: hibernation not set up"
+else
+    swap_kb="$(awk '$1 == "/swap/swapfile" { print $3 }' /proc/swaps)"
+    mem_kb="$(awk '/^MemTotal:/ { print $2 }' /proc/meminfo)"
+    if [[ -z "$swap_kb" ]]; then
+        fail "/swap/swapfile is not active swap (ws-suspend swap-setup)"
+    elif (( swap_kb < mem_kb )); then
+        warn "/swap/swapfile $((swap_kb / 1024)) MiB < RAM $((mem_kb / 1024)) MiB: a large image may not fit"
+    else
+        pass "/swap/swapfile active, $((swap_kb / 1024 / 1024)) GiB"
+    fi
+    [[ "$(cat /sys/power/resume 2>/dev/null)" != "0:0" ]] \
+        && pass "initramfs set the resume device ($(cat /sys/power/resume), $resume_arg)" \
+        || fail "resume device not set by the initramfs (/sys/power/resume 0:0; update-initramfs -u)"
+    [[ "$(cat /sys/power/resume_offset 2>/dev/null)" == "${offset_arg#resume_offset=}" ]] \
+        && pass "resume offset $(cat /sys/power/resume_offset)" \
+        || fail "resume offset $(cat /sys/power/resume_offset 2>/dev/null) != ${offset_arg:-no resume_offset=} (ws-suspend swap-setup prints it)"
+    initrd="/boot/initrd.img-$(uname -r)"
+    newest=""
+    for f in /etc/initramfs-tools/hooks/ws-t2-detach /etc/initramfs-tools/scripts/local-top/ws-t2-resume \
+             /etc/initramfs-tools/scripts/local-bottom/ws-t2-resume /usr/local/sbin/ws-t2-detach; do
+        [[ -e "$f" && "$f" -nt "$initrd" ]] && newest="$f"
+    done
+    [[ -z "$newest" ]] \
+        && pass "initramfs not older than its T2 resume scripts" \
+        || warn "$newest is newer than $initrd: sudo update-initramfs -u"
+fi
+
+section "3. Touch Bar native mode"
 
 tb_usb=""
 for dev in /sys/bus/usb/devices/*; do
