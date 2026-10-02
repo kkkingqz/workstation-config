@@ -74,7 +74,7 @@ apply` — из них собираются `refind_linux.conf`, `refind.conf` �
 Целевая структура:
 
 ```text
-@  @home  @root  @srv  @cache  @tmp  @log
+@  @home  @cache  @tmp  @log
 @nix       создаёт bootstrap.sh (раздел 6.0)
 @vms       состояние VM в /var/lib/vms, создаёт bootstrap.sh; backup — отдельно
 ```

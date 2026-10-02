@@ -114,7 +114,8 @@ Snapshot делать перед:
 snapshots»): корень — снапшот, `ws check` без FAIL. Откат: снапшот →
 `/etc/ws-restore-test` → Restore без @home → rEFInd: файла нет, корень `@`,
 ядро T2, хук перенёс default subvolume 256 → 285. Прежний recovery
-(`system-backup-snapshot`, `/.snapshots`) убран.
+(`system-backup-snapshot`, `/.snapshots`) убран; `@root` и `@srv` слиты в `@`
+(попадают в снапшоты; решение пользователя 2026-10-02).
 
 ---
 

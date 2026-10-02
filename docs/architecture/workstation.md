@@ -35,8 +35,6 @@ Root работает на **Btrfs**.
 ```text
 @
 @home
-@root
-@srv
 @cache
 @tmp
 @log
