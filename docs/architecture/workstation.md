@@ -490,7 +490,6 @@ bin/wsbox, bin/wswin, bin/ws-gpu
 Managed containers:
 
 ```text
-ubuntu   Ubuntu 26.04 base / compatibility
 arch     Arch rolling (archlinux:latest) / AUR applications
 wine-wayland  Arch, Wine с Wayland-драйвером: Windows-программы по умолчанию; WinBox 3.x
 wine     Ubuntu релиза хоста, WineHQ stable, XWayland

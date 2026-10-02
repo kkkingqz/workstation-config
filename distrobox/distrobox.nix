@@ -64,11 +64,6 @@ let
   # such as ~/touchbar are reached as /home/<user>/touchbar.
   containers = [
     {
-      name = "ubuntu";
-      image = "docker.io/library/ubuntu:26.04";
-      packages = [ "ca-certificates" "libgtk-3-bin" "mesa-utils" "qt6-wayland" "vulkan-tools" ];
-    }
-    {
       name = "arch";
       # Arch is rolling: pacman -Syu inside (wsbox update). Recreate only
       # when needed; AUR packages are installed again by hand

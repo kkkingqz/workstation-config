@@ -32,7 +32,6 @@ Host-пакеты (`podman`, `distrobox`, `uidmap`, …) — в `nix/hosts/apt.t
 ## Контейнеры
 
 ```text
-ubuntu          Ubuntu 26.04: GTK/Qt/Vulkan-утилиты
 arch            Arch: AUR (paru), makepkg; без Wine
 wine-wayland    Windows-программы, Wine с Wayland-драйвером (по умолчанию)
 wine            Windows-программы через XWayland, WineHQ stable
@@ -47,7 +46,7 @@ HOME каждого — `~/distrobox/NAME`; он переживает `recreate`
 расходный. HOME хоста смонтирован в контейнер по тому же пути
 (`/home/USER/wsconfig`, `/home/USER/touchbar`).
 
-Образы — теги: `ubuntu:26.04`, `archlinux:latest`, для build-контейнеров и
+Образы — теги: `archlinux:latest`, для build-контейнеров и
 `wine` — релиз host (`@HOST_VERSION_ID@` из `/etc/os-release`). После
 обновления Ubuntu `wsbox check` покажет drift образа → `wsbox recreate NAME`.
 Digest (`repo@sha256:…`) тоже поддерживается.
