@@ -66,7 +66,7 @@ copy-on-write у образов нет контрольных сумм Btrfs и 
 
 `virt-manager` → «Create a new virtual machine»: ISO из `~/VMs/iso/`
 («Browse Local» или пул), диск — в пуле `default`. То же
-командой (так создана `ubuntu-test`):
+командой (так создавалась тестовая `ubuntu-test`, удалена 2026-10-02):
 
 ```console
 virt-install --connect qemu:///system --name NAME --osinfo ubuntu25.10 \

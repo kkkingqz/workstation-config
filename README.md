@@ -42,8 +42,10 @@ lib/check.bash  общий формат проверок (--json для ws check
 docs/           документация, из неё собираются man-страницы
 ```
 
-Хост один — `mbp16`, выбирается по `hostname` в его `facts.nix` (`ws
-host`); новый хост — каталог `nix/hosts/<name>/` (`facts.nix`, `apt.txt`).
+Хосты — `mbp16` (эта машина) и `wsvm` (проверочная VM фазы 6; сама VM
+удалена 2026-10-02, описание оставлено), выбираются по `hostname` в
+`facts.nix` (`ws host`); новый хост — каталог `nix/hosts/<name>/`
+(`facts.nix`, `apt.txt`).
 
 ## Документация
 

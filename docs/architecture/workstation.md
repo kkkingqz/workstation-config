@@ -40,6 +40,7 @@ Root работает на **Btrfs**.
 @log
 @nix          /nix: Nix store, отдельно от @ (откат @ не трогает /nix)
 @vms          /var/lib/vms: состояние VM (диски, UEFI, TPM, XML), вне snapshots @
+@swap         /swap: swapfile 32G для hibernate (swapfile нельзя в томе со snapshots)
 timeshift-btrfs  snapshots Timeshift (@, @home); создаёт Timeshift
 ```
 
@@ -49,7 +50,9 @@ timeshift-btrfs  snapshots Timeshift (@, @home); создаёт Timeshift
 rootflags=subvol=@
 ```
 
-Структура подготовлена для snapshots и отката системы.
+rEFInd берёт ядро из default subvolume (`@`, по ID). Snapshots и откат —
+Timeshift (`@`, `@home`), загрузка в snapshot — GRUB, после restore хук
+переставляет default на новый `@` (`helpws rebuild`, раздел 12).
 
 ---
 
@@ -371,7 +374,8 @@ sudo umount /mnt
 конфигурационное пространство карты читается как `ff ff`, то есть питание
 снято: `power_state` для этого не годится, он остаётся `D3hot` (ACPI power
 resource у dGPU нет, ядро не знает, что gmux снял питание).
-В простое от батареи — около 16 Вт без AMD против около 24 Вт с ней.
+В простое от батареи (2026-10-01, после forced ASPM и парковки порта): около
+9 Вт с экраном на 28 %, 4 Вт с погашенным; с включённой AMD было около 24 Вт.
 
 ---
 
@@ -886,6 +890,7 @@ git diff --cached
 - `mac-touchbar-plus`;
 - `tiny-dfr` и режим дисплея Touch Bar (`appletbdrm`);
 - `powertop --auto-tune`;
+- snap и snapd (удалены 2026-10-02, apt pin; Firefox — Flatpak);
 - TLP;
 - auto-cpufreq;
 - агрессивный USB runtime PM для Touch Bar;
@@ -908,12 +913,13 @@ Touch Bar работает в родном режиме: `hid-appletb-kbd` + `ws
 Ubuntu 26.04.1 LTS
 └── GNOME 50 / Wayland
     ├── T2 kernel 7.2.7-1-t2-resolute + patched t2bce
-    ├── Intel primary + AMD offload
+    ├── Intel primary; AMD выключена («Ubuntu») или offload («Ubuntu (AMD)»)
     ├── Wi-Fi / Bluetooth
     ├── PipeWire audio
     ├── Camera
-    ├── deep / S3 suspend
-    ├── Btrfs + snapshots architecture
+    ├── deep / S3 suspend → hibernate через 24 ч
+    ├── Btrfs + Timeshift snapshots (вход из GRUB)
+    ├── Flatpak / Distrobox / Wine-Proton / KVM
     ├── Touch Bar, родной режим (hid-appletb-kbd)
     │   ├── F1..F12 default
     │   └── hold Fn -> media/brightness (ws-touchbar-fn)

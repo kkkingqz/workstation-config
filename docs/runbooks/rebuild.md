@@ -195,7 +195,8 @@ ws check            # проверки всех владельцев и verify (
 
 `bootstrap.sh` (от пользователя, sudo вызывает сам; `--dry-run` только
 показывает шаги): subvolume `@nix` и строка `/nix` в fstab → пакеты из
-`nix/hosts/apt.txt` и `nix/hosts/<host>/apt.txt` (с PPA fish) → `@vms` в
+`nix/hosts/apt.txt` и `nix/hosts/<host>/apt.txt` (PPA fish и
+nautilus-my-computer; `purge:snapd` — без snap) → `@vms` в
 `/var/lib/vms` с bind-монтированиями в пути libvirt, пул и сеть `default` →
 группы `nix-users`,
 `libvirt`, `input` (xremap читает клавиатуры) → fish как login shell → первый `ws switch` (заменяемые файлы сохраняются как

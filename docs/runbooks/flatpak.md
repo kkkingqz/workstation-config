@@ -25,7 +25,8 @@ bin/wsflatpak           владелец: install, apply, check
 приложения и применяет overrides; overrides управляемого приложения сначала
 сбрасываются, так что строка, убранная из `overrides.txt`, исчезает.
 
-Remotes: `flathub`, `flatpark` (Claude Desktop).
+Remotes: `flathub`, `flatpark` (Claude Desktop). Браузер — Firefox
+(`org.mozilla.firefox`): snap в системе нет (`purge:snapd`, `helpws rebuild`, раздел 6.0).
 
 ## Установить и убрать
 
