@@ -351,6 +351,15 @@ Touch ID является удобным дополнительным метод
 
 # 4. Hibernate — только если нужен
 
+**Итог (2026-10-02): сделано** (`helpws suspend`, Hibernate). Цель —
+suspend-then-hibernate для долгого сна. Swapfile 32G в `@swap`
+(`ws-suspend swap-setup`), resume в cmdline. Upstream hibernate с `t2bce`
+сломан (#213): стек T2 снимается до образа и поднимается после
+(`ws-t2-detach`, хук systemd-sleep, модуль dracut для initrd загрузки с
+образом); сеансы не замораживаются, иначе unbind звука виснет. Ручных
+циклов 3/3 OK (обычный, со звуком, с ВМ на батарее): graphics, T2 audio,
+Wi-Fi, Bluetooth, Touch Bar, порт AMD.
+
 Сейчас `deep/S3` уже работает, поэтому hibernate не нужен для исправления suspend.
 
 Перед настройкой решить, есть ли практическая цель:
@@ -380,6 +389,13 @@ Touch ID является удобным дополнительным метод
 ---
 
 # 5. Suspend-then-hibernate
+
+**Итог (2026-10-02): сделано.** `HibernateDelaySec=24h`,
+`SuspendEstimationSec=24h`. Крышка и Suspend в меню GNOME →
+suspend-then-hibernate; кнопка питания и пункт Hibernate в меню
+(`workstation-hibernate@local`) → hibernate; polkit-правило снимает запрет
+Ubuntu на hibernate. Проверено: RTC будит из S3 и машина уходит в S4;
+открытие крышки до срока — обычный resume из S3.
 
 Только после полностью стабильного ручного hibernate.
 

@@ -38,8 +38,9 @@ volume: User Commands
 ## Что осталось
 
 1. `helpws plan-t2`
-   Осталось: optional hibernate/suspend-then-hibernate. Touch ID отложен до
-   релиза t2touch с проверенным S3 и установкой вне Omarchy (2026-10-02).
+   Hibernate и suspend-then-hibernate сделаны 2026-10-02 (крышка/Suspend →
+   24 ч S3, затем hibernate; `helpws suspend`). Touch ID отложен до релиза
+   t2touch с проверенным S3 и установкой вне Omarchy (2026-10-02).
    Battery audit и fan policy закрыты 2026-10-01 (forced ASPM, AMD без
    amdgpu с запаркованным портом, PSR, быстрый resume; вентиляторы штатно).
 

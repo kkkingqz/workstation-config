@@ -1,6 +1,6 @@
 title: ws-suspend
 section: 1
-date: 2026-09-28
+date: 2026-10-02
 source: Workstation
 volume: User Commands
 
@@ -18,9 +18,12 @@ cmdline      intel_iommu=on iommu=pt pm_async=off
 t2bce        0.07-nostatefix1 (локальная сборка, updates/t2bce)
 Touch Bar    родной режим (см. helpws touchbar)
 AMD dGPU     ws.dgpu=off: выключена, убрана с шины PCI, порт CPU запаркован
+hibernate    /swap/swapfile 32G, resume=UUID=… resume_offset=… (facts.nix)
+крышка, Suspend          suspend-then-hibernate: 24 ч S3, затем hibernate
+кнопка питания, Hibernate  hibernate
 ```
 
-Слой состоит из пяти частей:
+Слой состоит из шести частей:
 
 ```text
 deep-only sleep        systemd никогда не откатывается на s2idle
@@ -28,6 +31,7 @@ Broadcom Wi-Fi guards  ASPM off на время сна, без D3cold
 t2bce fix              no-state fallback не роняет ядро
 dGPU off the bus       amdgpu не участвует в S3 с выключенной картой
 Thunderbolt ACPI seed  resume ~3 с вместо ~23 с
+hibernate              стек T2 снимается до образа и поднимается после
 ```
 
 Всё управляется командой `ws-suspend`:
@@ -38,6 +42,8 @@ ws-suspend apply
 ws-suspend t2bce-build [KERNEL]
 ws-suspend t2bce-install [KERNEL]
 ws-suspend t2bce-rollback [KERNEL]
+ws-suspend swap-setup [SIZE]
+ws-suspend check
 ```
 
 `ws-suspend apply` — обёртка над `ws system apply`: ставит все системные
@@ -295,6 +301,115 @@ echo Y | sudo tee /sys/module/t2bce_core/parameters/stateful_sleep
 ```
 
 
+## Hibernate
+
+### Почему стек T2 снимается
+
+У `t2bce` есть только колбэки S3 (`.suspend/.resume`), для hibernation
+(`freeze/thaw/poweroff/restore`) их нет. После восстановления образа T2
+сброшен, очередей драйвера в нём нет: клавиатура, трекпад, Touch Bar и звук
+мертвы (t2linux/T2-Debian-and-Ubuntu-Kernel#213, t2linux/kernel#22). Поэтому
+перед записью образа стек T2 снимается, после восстановления поднимается,
+и драйвер стартует как при загрузке:
+
+```text
+ws-t2-detach down   rmmod t2bce_vhci, unbind t2bce_audio (04:00.3), unbind t2bce_core (04:00.1)
+ws-t2-detach up     bind core, 1 с, bind audio, modprobe t2bce_vhci,
+                    затем rebind hid-appletb-kbd, когда появится appletb_backlight
+                    (иначе «Failed to get backlight device», Touch Bar без подсветки)
+ws-t2-detach cycle  down, 5 с, up: проверка без hibernate
+```
+
+Кто вызывает:
+
+```text
+60-ws-t2-hibernate     хук systemd-sleep: pre → down, post → up; hibernate,
+                       hybrid-sleep и шаг hibernate в suspend-then-hibernate
+                       (SYSTEMD_SLEEP_ACTION=hibernate); не вокруг S3
+ws-t2-nofreeze.conf    SYSTEMD_SLEEP_FREEZE_USER_SESSIONS=0 для служб с hibernate
+95ws-t2-resume         модуль dracut: в initrd загрузки с образом T2 снимается
+                       до загрузки образа и поднимается, если образа нет
+```
+
+systemd-sleep по умолчанию замораживает `user.slice` до хуков. Unbind звука
+ждёт (`snd_card_free`), пока PipeWire закроет карту, а замороженный PipeWire
+её не закроет: unbind висит в D state, заморозка задач падает через 20 с,
+hibernate отменяется, клавиатура и трекпад остаются мёртвыми. Сеансы поэтому
+не замораживаются (ядро всё равно замораживает все задачи перед образом);
+`ws-t2-detach down` отказывается работать при замороженном `user.slice`.
+
+Initramfs собирает dracut (`update-initramfs` — его обёртка, файлы в
+`/etc/initramfs-tools` не читаются). Ubuntu кладёт драйверы клавиатуры
+(`t2bce`) в initrd, поэтому initrd загрузки с образом поднимает T2 — его
+нужно снять до загрузки образа. Модуль `resume` dracut в hostonly-режиме
+попадает в initrd, только если `resume=` уже был в cmdline при сборке;
+`ws-hibernate.conf` добавляет его всегда.
+
+### Swap и resume
+
+```console
+ws-suspend swap-setup 32g    # @swap → /swap, /swap/swapfile, fstab; печатает offset
+```
+
+Swapfile — в отдельном subvolume `@swap` (без снапшотов, без CoW).
+Параметры resume — в `nix/hosts/mbp16/facts.nix` (`kernelParams`, все пункты
+rEFInd и GRUB):
+
+```text
+resume=UUID=0cfd2add-849f-47b9-865d-2ac821ca529c   корневая ФС
+resume_offset=31286754                              btrfs inspect-internal map-swapfile -r
+```
+
+После пересоздания swapfile offset меняется: обновить `facts.nix`,
+`ws system apply`, перезагрузка. После изменения модуля dracut или
+`ws-t2-detach` — `sudo update-initramfs -u` (`ws-suspend check`
+предупреждает, если initrd старше).
+
+### Когда
+
+```text
+крышка (от батареи и от сети)   suspend-then-hibernate   logind.conf.d/ws-sleep-keys.conf
+Suspend в меню GNOME            suspend-then-hibernate   systemd-suspend.service.d/ws-suspend-then-hibernate.conf
+systemctl suspend               suspend-then-hibernate   то же
+Hibernate в меню GNOME          hibernate                workstation-hibernate@local
+кнопка питания (Touch ID)       hibernate                power-button-action (gnome/gnome.nix), вне сеанса logind
+```
+
+Обычного S3 без перехода в hibernate больше нет: GNOME вызывает logind
+`SuspendWithFlags`, и `systemd-suspend.service` переопределена на
+`systemd-sleep suspend-then-hibernate`.
+
+`85-ws-hibernate-delay.conf`: `HibernateDelaySec=24h`,
+`SuspendEstimationSec=24h`. Через 24 ч S3 машину будит RTC, она уходит в
+hibernate. Встроенное правило systemd 259, не отключается: на батарее, если
+по замеренной скорости разряда заряд дойдёт до ~5% раньше 24 ч, systemd
+будит машину раньше и уходит в hibernate. Скорость он замеряет только в
+suspend-then-hibernate на батарее (заряд до и после S3, целые проценты) и
+хранит в `/var/lib/systemd/sleep/`. Пока замера нет, первый такой сон —
+24 ч без учёта заряда; при ~1,2 W в S3 риск только при заряде ниже
+примерно трети.
+
+Ubuntu запрещает hibernate пользователю (`com.ubuntu.desktop.rules`,
+policykit-desktop-privileges). `50-ws-hibernate.rules` в
+`/usr/local/share/polkit-1/rules.d` разрешает его активной локальной
+сессии: polkit читает правила всех каталогов по имени файла, первое
+сработавшее побеждает. `/etc/polkit-1/rules.d` пользователю не читается,
+и `ws system check` не смог бы его сверить.
+
+### Аварийный выход
+
+Если загрузка с образом виснет — при следующем включении в rEFInd на
+пункте F2 (или Insert): подменю, ещё раз F2 — правка строки параметров;
+добавить `noresume`: система загрузится начисто,
+образ будет проигнорирован (несохранённое в нём пропадёт). Ядро сбрасывает
+подпись образа, когда читает его, поэтому зависание на resume не
+повторяется в цикле.
+
+Hibernate проверен только с пунктом rEFInd «Ubuntu» (`ws.dgpu=off`).
+После hibernate включать тот же пункт. Восстановление в «Ubuntu (AMD)» не
+проверено: ядро из образа считает AMD убранной с шины, а та загрузка её
+включает.
+
 ## Обновление ядра
 
 `linux-t2` заморожен (`apt-mark hold`): модули в `updates/` привязаны к одной
@@ -355,6 +470,10 @@ t2bce_core                0.07-nostatefix1, stateful_sleep=Y
 runtime files             OK
 ```
 
+`ws-suspend check`, раздел Hibernation: swapfile активен и не меньше
+MemTotal, `/sys/power/resume` выставлен initrd, `resume_offset` совпадает
+с cmdline, initrd не старше модуля dracut и `ws-t2-detach`.
+
 ## Подтверждённый baseline
 
 2026-09-25/26:
@@ -372,6 +491,19 @@ Touch Bar native mode S3 cycles            OK
 S3 с AMD, убранной с шины (ws-dgpu-off вручную)       OK
 S3 с AMD, убранной с шины при загрузке (8 минут)      OK
 ```
+
+2026-10-02, hibernate (образ 9–10,5 ГБ, ~4 с на подъём T2):
+
+```text
+ручной hibernate                                    3/3 OK (обычный, со звуком, с ВМ на батарее)
+suspend-then-hibernate (RTC через 2 мин → S4)       OK
+Hibernate в меню, крышка 30 с (S3), крышка 4 мин (S4),
+Suspend в меню (S4), кнопка питания (S4)             OK
+```
+
+После каждого: клавиатура, трекпад, Touch Bar с подсветкой, 2 звуковые
+карты T2, Wi-Fi, Bluetooth, порт AMD снова запаркован. Работавшая ВМ
+пережила hibernate.
 
 После resume оба xHCI Thunderbolt пишут `xHC error in resume, USBSTS 0x401,
 Reinit` и работают дальше; так же было и с включённой AMD.
@@ -398,12 +530,25 @@ system/files/usr/local/sbin/ws-dgpu-park
 system/files/usr/lib/systemd/system-sleep/70-ws-dgpu-park
 system/files/usr/local/sbin/ws-tb-acpi-seed
 system/files/systemd/system/ws-tb-acpi-seed.service
+system/files/usr/local/sbin/ws-t2-detach
+system/files/usr/lib/systemd/system-sleep/60-ws-t2-hibernate
+system/files/systemd/system/ws-t2-nofreeze.conf
+system/files/systemd/system/ws-suspend-then-hibernate.conf
+system/files/sleep.conf.d/85-ws-hibernate-delay.conf
+system/files/logind.conf.d/ws-sleep-keys.conf
+system/files/polkit/50-ws-hibernate.rules
+system/files/dracut/ws-hibernate.conf
+system/files/dracut/95ws-t2-resume/
+gnome/extensions/workstation-hibernate@local/
+nix/hosts/mbp16/facts.nix              resume=, resume_offset=
 ```
 
 ## Не использовать
 
 ```text
-выгрузку t2bce/apple-bce перед сном (t2linux wiki: never unload t2bce)
+выгрузку t2bce/apple-bce перед S3 (t2linux wiki: never unload t2bce); перед hibernate — только ws-t2-detach
+hibernate без снятия стека T2; заморозку user.slice systemd-sleep вокруг hibernate
+скрипты /etc/initramfs-tools (initramfs собирает dracut)
 T2Linux-Suspend-Fix / t2-suspend.service / t2-resume.service
 s2idle
 pcie_aspm=force вместе с Touch Bar в режиме дисплея; pcie_ports=compat, i915.enable_guc=3

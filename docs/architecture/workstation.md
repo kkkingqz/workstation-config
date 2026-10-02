@@ -382,7 +382,9 @@ resource у dGPU нет, ядро не знает, что gmux снял пита
 Рабочий режим:
 
 ```text
-deep / S3
+deep / S3, после 24 ч — hibernate (suspend-then-hibernate)
+крышка, Suspend          suspend-then-hibernate
+кнопка питания, Hibernate  hibernate
 ```
 
 Слой сна:
@@ -392,6 +394,8 @@ deep / S3
 Broadcom ASPM guard        ASPM Wi-Fi off на время сна, без D3cold
 t2bce 0.07-nostatefix1     отказ T2 от stateful suspend не роняет ядро
 Touch Bar родной режим     без appletbdrm / tiny-dfr
+ws-t2-detach               стек T2 снят на время hibernate (у t2bce нет колбэков hibernation)
+/swap/swapfile 32G         resume= / resume_offset= в facts.nix
 ```
 
 ASPM в пункте «Ubuntu» у ядра (`pcie_aspm=force pcie_aspm.policy=powersave`,
