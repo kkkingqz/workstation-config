@@ -25,7 +25,12 @@ bin/wsflatpak           владелец: install, apply, check
 приложения и применяет overrides; overrides управляемого приложения сначала
 сбрасываются, так что строка, убранная из `overrides.txt`, исчезает.
 
-Remotes: `flathub`, `flatpark` (Claude Desktop). Браузер — Firefox
+Remotes: `flathub`, `flatpark` (Claude Desktop). Новый remote — строка
+`NAME = "URL.flatpakrepo";` в `remotes` файла `flatpak/flatpak.nix`
+(`wsflatpak remote-add NAME URL` печатает её), затем `ws switch &&
+wsflatpak apply`; приложение из него — `wsflatpak install --remote NAME
+APP`. Только user remotes: system remotes `wsflatpak check` считает ошибкой,
+remote не из `flatpak.nix` — предупреждением. Браузер — Firefox
 (`org.mozilla.firefox`): snap в системе нет (`purge:snapd`, `helpws rebuild`, раздел 6.0).
 
 ## Установить и убрать
