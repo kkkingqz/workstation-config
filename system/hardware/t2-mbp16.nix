@@ -32,6 +32,12 @@
     (file "/usr/lib/dracut/modules.d/95ws-t2-resume/ws-t2-resume.sh" "system/files/dracut/95ws-t2-resume/ws-t2-resume.sh" "0755")
     (file "/usr/lib/dracut/modules.d/95ws-t2-resume/ws-t2-resume.service" "system/files/dracut/95ws-t2-resume/ws-t2-resume.service" "0644")
     (file "/usr/lib/dracut/modules.d/95ws-t2-resume/ws-t2-resume-up.service" "system/files/dracut/95ws-t2-resume/ws-t2-resume-up.service" "0644")
+    # When: lid and GNOME Suspend -> suspend-then-hibernate (24 h of S3),
+    # power key and GNOME Hibernate (workstation-hibernate@local) -> hibernate.
+    (file "/etc/systemd/sleep.conf.d/85-ws-hibernate-delay.conf" "system/files/sleep.conf.d/85-ws-hibernate-delay.conf" "0644")
+    (file "/etc/systemd/logind.conf.d/ws-sleep-keys.conf" "system/files/logind.conf.d/ws-sleep-keys.conf" "0644")
+    (file "/etc/systemd/system/systemd-suspend.service.d/ws-suspend-then-hibernate.conf" "system/files/systemd/system/ws-suspend-then-hibernate.conf" "0644")
+    (file "/usr/local/share/polkit-1/rules.d/50-ws-hibernate.rules" "system/files/polkit/50-ws-hibernate.rules" "0644")
 
     # AMD dGPU off and off the PCI bus when booted with ws.dgpu=off (rEFInd "Ubuntu")
     (file "/usr/local/sbin/ws-dgpu-off" "system/files/usr/local/sbin/ws-dgpu-off" "0755")

@@ -267,7 +267,8 @@ done < <(git -C "$repo" ls-files -z)
 
 if have udevadm; then
     while IFS= read -r -d '' path; do
-        [[ "$path" == *.rules ]] || continue
+        # polkit rules (JavaScript) share the suffix.
+        [[ "$path" == *.rules && "$path" != */polkit/* ]] || continue
         if udevadm verify --resolve-names=never "$repo/$path" >/dev/null 2>&1; then
             pass "udev syntax: $path"
         else

@@ -556,7 +556,7 @@ system_record() {
 # Only files that differ are backed up and replaced; the ESP is not touched,
 # nothing reboots.
 cmd_system_apply() {
-    local tree kind a b backup tmp unit changed=0 modprobe=false grub=false
+    local tree kind a b backup tmp unit changed=0 modprobe=false grub=false logind=false
     local refind=false d3cold=false touchbar=false bootlinks=false has_bootlinks=false saved=false dev cfg out rc=0
     local -a restart=()
 
@@ -593,6 +593,7 @@ cmd_system_apply() {
                 case "$b" in
                     /etc/modprobe.d/*) modprobe=true ;;
                     /etc/default/grub.d/*) grub=true ;;
+                    /etc/systemd/logind.conf.d/*) logind=true ;;
                     /boot/refind_linux.conf) refind=true ;;
                     /usr/local/sbin/ws-boot-links) bootlinks=true ;;
                     */70-bcm4364-no-d3cold.rules) d3cold=true ;;
@@ -666,6 +667,11 @@ cmd_system_apply() {
         sudo systemctl restart "$unit"
         echo "restarted: $unit"
     done
+    # logind rereads logind.conf.d on reload; a restart would end sessions.
+    if [[ "$logind" == true ]]; then
+        sudo systemctl reload systemd-logind
+        echo "reloaded: systemd-logind"
+    fi
 
     echo
     echo "== udev"

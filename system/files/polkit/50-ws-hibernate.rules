@@ -1,0 +1,15 @@
+// Hibernation for the active local session (GNOME's Hibernate menu item,
+// power-button-action = hibernate, suspend-then-hibernate). Ubuntu forbids
+// it in com.ubuntu.desktop.rules (policykit-desktop-privileges). polkit
+// reads the rules of all its directories sorted by file name, and the first
+// rule that returns a result wins: this file sorts first. Not in
+// /etc/polkit-1/rules.d, which users cannot read (ws system check).
+// helpws suspend, Hibernate.
+polkit.addRule(function(action, subject) {
+    if ((action.id == "org.freedesktop.login1.hibernate" ||
+         action.id == "org.freedesktop.login1.handle-hibernate-key" ||
+         action.id == "org.freedesktop.login1.hibernate-multiple-sessions") &&
+        subject.active && subject.local) {
+        return polkit.Result.YES;
+    }
+});

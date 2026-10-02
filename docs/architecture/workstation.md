@@ -88,6 +88,7 @@ Tiling Assistant
 workstation-smart-popup@local
 workstation-dock-spring@local
 workstation-input-source@local
+workstation-hibernate@local
 ```
 
 `Window Monitor Pro` используется и входит в baseline расширений; keyboard/Touch Bar
@@ -244,6 +245,7 @@ bin/ws-keyboard-check
 gnome/extensions/workstation-input-source@local/
 gnome/extensions/workstation-smart-popup@local/
 gnome/extensions/workstation-dock-spring@local/
+gnome/extensions/workstation-hibernate@local/
 
 keyboard/xremap.nix
 system/files/udev/99-workstation-uinput.rules

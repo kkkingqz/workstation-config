@@ -14,7 +14,7 @@
 #
 # ws-gnome check compares the session with ~/.local/share/workstation/gnome/
 # settings.conf (SCHEMA|KEY|VALUE), built from the same attribute set.
-{ config, lib, pkgs, ... }:
+{ config, lib, pkgs, facts, ... }:
 let
   profile = {
     "org/gnome/desktop/interface" = {
@@ -42,6 +42,12 @@ let
       show-mounts = true;
       multi-monitor = true;
       click-action = "focus-minimize-or-appspread";
+    };
+  } // lib.optionalAttrs (facts.hardware == "t2-mbp16") {
+    # The power key hibernates (helpws suspend, Hibernate); logind does the
+    # same outside a session (system/files/logind.conf.d/ws-sleep-keys.conf).
+    "org/gnome/settings-daemon/plugins/power" = {
+      power-button-action = "hibernate";
     };
   };
 

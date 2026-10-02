@@ -43,6 +43,8 @@ let
     { uuid = "workstation-smart-popup@local"; source = "local"; }
     { uuid = "workstation-input-source@local"; source = "local"; }
     { uuid = "workstation-dock-spring@local"; source = "local"; }
+    # Hibernate in the power menu where logind allows it (helpws suspend).
+    { uuid = "workstation-hibernate@local"; source = "local"; }
   ];
 
   bySource = source: map (e: e.uuid) (lib.filter (e: e.source == source) extensions);
