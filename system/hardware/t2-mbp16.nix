@@ -21,12 +21,14 @@
     (file "/usr/local/sbin/ws-tb-acpi-seed" "system/files/usr/local/sbin/ws-tb-acpi-seed" "0755")
     (file "/etc/systemd/system/ws-tb-acpi-seed.service" "system/files/systemd/system/ws-tb-acpi-seed.service" "0644")
     # Hibernation: t2bce off before the image, on after it (ws-t2-detach), in
-    # the system and in the initramfs of a resume boot (update-initramfs -u).
+    # the system and in the dracut initrd of a resume boot (update-initramfs -u).
     (file "/usr/local/sbin/ws-t2-detach" "system/files/usr/local/sbin/ws-t2-detach" "0755")
     (file "/usr/lib/systemd/system-sleep/60-ws-t2-hibernate" "system/files/usr/lib/systemd/system-sleep/60-ws-t2-hibernate" "0755")
-    (file "/etc/initramfs-tools/hooks/ws-t2-detach" "system/files/initramfs-tools/hooks/ws-t2-detach" "0755")
-    (file "/etc/initramfs-tools/scripts/local-top/ws-t2-resume" "system/files/initramfs-tools/scripts/local-top/ws-t2-resume" "0755")
-    (file "/etc/initramfs-tools/scripts/local-bottom/ws-t2-resume" "system/files/initramfs-tools/scripts/local-bottom/ws-t2-resume" "0755")
+    (file "/etc/dracut.conf.d/ws-hibernate.conf" "system/files/dracut/ws-hibernate.conf" "0644")
+    (file "/usr/lib/dracut/modules.d/95ws-t2-resume/module-setup.sh" "system/files/dracut/95ws-t2-resume/module-setup.sh" "0755")
+    (file "/usr/lib/dracut/modules.d/95ws-t2-resume/ws-t2-resume.sh" "system/files/dracut/95ws-t2-resume/ws-t2-resume.sh" "0755")
+    (file "/usr/lib/dracut/modules.d/95ws-t2-resume/ws-t2-resume.service" "system/files/dracut/95ws-t2-resume/ws-t2-resume.service" "0644")
+    (file "/usr/lib/dracut/modules.d/95ws-t2-resume/ws-t2-resume-up.service" "system/files/dracut/95ws-t2-resume/ws-t2-resume-up.service" "0644")
 
     # AMD dGPU off and off the PCI bus when booted with ws.dgpu=off (rEFInd "Ubuntu")
     (file "/usr/local/sbin/ws-dgpu-off" "system/files/usr/local/sbin/ws-dgpu-off" "0755")

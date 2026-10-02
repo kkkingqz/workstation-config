@@ -96,8 +96,8 @@ else
         || fail "resume offset $(cat /sys/power/resume_offset 2>/dev/null) != ${offset_arg:-no resume_offset=} (ws-suspend swap-setup prints it)"
     initrd="/boot/initrd.img-$(uname -r)"
     newest=""
-    for f in /etc/initramfs-tools/hooks/ws-t2-detach /etc/initramfs-tools/scripts/local-top/ws-t2-resume \
-             /etc/initramfs-tools/scripts/local-bottom/ws-t2-resume /usr/local/sbin/ws-t2-detach; do
+    for f in /etc/dracut.conf.d/ws-hibernate.conf /usr/lib/dracut/modules.d/95ws-t2-resume/* \
+             /usr/local/sbin/ws-t2-detach; do
         [[ -e "$f" && "$f" -nt "$initrd" ]] && newest="$f"
     done
     [[ -z "$newest" ]] \

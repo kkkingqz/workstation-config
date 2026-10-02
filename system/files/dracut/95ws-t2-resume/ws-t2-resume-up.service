@@ -1,0 +1,14 @@
+[Unit]
+Description=T2 stack on again: the hibernation resume did not happen (ws-t2-detach)
+DefaultDependencies=no
+ConditionPathExists=/run/ws-t2-detached
+After=ws-t2-resume.service systemd-hibernate-resume.service
+Before=initrd.target
+
+[Service]
+Type=oneshot
+ExecStart=/bin/rm -f /etc/modprobe.d/ws-t2-resume.conf /run/ws-t2-detached
+ExecStart=/usr/sbin/ws-t2-detach up
+
+[Install]
+WantedBy=initrd.target

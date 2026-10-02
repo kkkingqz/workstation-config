@@ -1,0 +1,14 @@
+[Unit]
+Description=T2 stack off before resuming from hibernation (ws-t2-detach)
+DefaultDependencies=no
+ConditionKernelCommandLine=resume
+ConditionKernelCommandLine=!noresume
+After=systemd-udevd.service systemd-udev-trigger.service
+Before=systemd-hibernate-resume.service local-fs-pre.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/ws-t2-resume
+
+[Install]
+WantedBy=initrd.target
