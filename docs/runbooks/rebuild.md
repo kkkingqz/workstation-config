@@ -74,7 +74,7 @@ apply` — из них собираются `refind_linux.conf`, `refind.conf` �
 Целевая структура:
 
 ```text
-@  @home  @root  @srv  @cache  @tmp  @log  .snapshots
+@  @home  @root  @srv  @cache  @tmp  @log
 @nix       создаёт bootstrap.sh (раздел 6.0)
 @vms       состояние VM в /var/lib/vms, создаёт bootstrap.sh; backup — отдельно
 ```
@@ -566,16 +566,66 @@ ws baseline diff before-reinstall after-reinstall
 
 # 12. Recovery
 
-Из проверенного состояния (после раздела 11) обновить recovery:
+Снапшоты — Timeshift (`timeshift`, GUI и CLI), тип BTRFS: `@` и `@home`
+(включить «Include @home subvolume in backups»), BTRFS qgroups выключены.
+Расписание и хранение — в GUI, `/etc/timeshift/timeshift.json` принадлежит
+Timeshift. Снапшоты лежат на верхнем уровне Btrfs в
+`timeshift-btrfs/snapshots/<дата>/{@,@home}`. Другие subvolumes Timeshift не
+умеет: `@nix`, `@vms`, `@log`, `@cache` в снапшоты не входят (VM — своими
+снапшотами libvirt, `helpws virt`, и backup `@vms`, `helpws plan-final`).
+
+Из проверенного состояния (после раздела 11) — первый снапшот:
 
 ```console
-sudo system-backup-snapshot
+sudo timeshift --create --comments "after-reinstall"
 ```
 
-Он делает `/.snapshots/backup-ro` и загружаемый `/.snapshots/recovery`
-(предыдущее поколение — `*.previous`) и пункт в меню GRUB. Проверить один
-раз: загрузиться в recovery через GRUB и вернуться.
+Что добавляет репозиторий (`system/common.nix`, `ws system apply`):
+
+```text
+/etc/grub.d/42_ws_timeshift          подменю GRUB «Timeshift snapshots»
+/etc/timeshift/backup-hooks.d/50-ws-update-grub
+                                     update-grub после каждого снапшота
+/etc/timeshift/restore-hooks.d/50-ws-default-subvolume
+                                     default subvolume → новый @ после restore
+```
+
+## Загрузка в снапшот
+
+rEFInd → GRUB → «Timeshift snapshots» → снапшот (новые сверху; в названии
+метка, комментарий и ядро). Грузится самое новое ядро T2 с initrd внутри
+снапшота, корень — сам снапшот (`findmnt -no SOURCE /` показывает
+`[/timeshift-btrfs/snapshots/…/@]`). Пункты GRUB идут без
+`facts.refindDefaultParams`, как «Ubuntu (AMD)»: AMD с `amdgpu`. Снапшоты
+Timeshift доступны для записи: изменения такой загрузки остаются в
+снапшоте. Снапшот, удалённый Timeshift, пропадает из меню при следующем
+`update-grub`. Проверено 2026-10-02.
+
+## Откат
+
+Timeshift → снапшот → Restore (из обычной системы или из загрузки в
+снапшот). `@home` откатывается только с галочкой @home в окне Restore —
+иначе HOME остаётся как есть. Timeshift переносит текущий `@` в каталог
+снапшотов (он виден в списке, удалить, когда всё проверено) и делает новый
+`@` из снапшота. rEFInd берёт ядро и initrd из default subvolume, а он
+хранится по ID: хук `50-ws-default-subvolume` переставляет его на новый `@`
+(если default — верхний уровень, 5, как на машинах только с GRUB, — не
+трогает). Перед перезагрузкой проверить:
+
+```console
+sudo btrfs subvolume get-default /     # новый ID, path @
+```
+
+Затем перезагрузка через rEFInd «Ubuntu». Проверено 2026-10-02: файл,
+созданный после снапшота, исчез, ядро T2, default 256 → 285.
 
 `/nix` лежит в отдельном `@nix`: откат `@` не ломает ссылки home-manager в
-`/nix/store`. Возврат `@` из recovery — `helpws history-nix`, раздел
-«Возврат `@` из recovery».
+`/nix/store`.
+
+## До Timeshift
+
+До 2026-10-02 recovery делал `system-backup-snapshot`: `/.snapshots/backup-ro`
+и `/.snapshots/recovery`, пункт GRUB «Backup snapshot», копии ядра в
+`/boot/recovery` (`helpws history-nix`). Скрипт, пункт GRUB и `/boot/recovery*`
+убирает `ws system apply`; subvolume `.snapshots` со старыми снапшотами и его
+строку в fstab — вручную.

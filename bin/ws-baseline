@@ -184,7 +184,7 @@ cmd_capture() {
         cat /sys/module/t2bce_core/version 2>/dev/null || echo "t2bce_core: not loaded"
         apt-mark showhold 2>/dev/null
     } > "$dir/system/t2bce.txt"
-    findmnt -rno TARGET,SOURCE,FSTYPE,OPTIONS / /home /nix /.snapshots 2>/dev/null \
+    findmnt -rno TARGET,SOURCE,FSTYPE,OPTIONS / /home /nix 2>/dev/null \
         > "$dir/system/mounts.txt" || true
 
     echo "== packages"
@@ -215,8 +215,8 @@ cmd_capture() {
     if [[ "$with_sudo" == true ]]; then
         echo "== sudo"
         sudo dpkg --verify > "$dir/system/dpkg-verify.txt" 2>&1 || true
-        # After @ is restored from recovery the default must be the new @
-        # (helpws history-nix, «Возврат @ из recovery»).
+        # After a Timeshift restore the default must be the new @ (its restore
+        # hook sets it; rEFInd boots from it; helpws rebuild, Recovery).
         sudo btrfs subvolume get-default / > "$dir/system/get-default.txt" 2>&1 || true
         sudo lsinitrd "/boot/initrd.img-$(uname -r)" 2>/dev/null \
             | awk '{ print $NF }' | grep -E 't2bce|appletb|modprobe\.d|modules-load' \

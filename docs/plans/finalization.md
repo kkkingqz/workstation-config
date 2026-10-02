@@ -89,6 +89,12 @@ Snapshot делать перед:
 
 Не создавать snapshot перед каждым обычным Flatpak update.
 
+Инструмент — Timeshift (`@` и `@home`; решение пользователя 2026-10-02),
+`helpws rebuild`, раздел 12. Перед перечисленным — ручной снапшот с
+комментарием (GUI или `sudo timeshift --create --comments "…"`);
+расписание пользователь настраивает в GUI. Пары до/после для apt не
+нужны (решение пользователя).
+
 ---
 
 # 4. Restore test
@@ -103,6 +109,12 @@ Snapshot делать перед:
 
 Отдельно помнить: rollback root не восстанавливает HOME, `@vms` и projects —
 у них свой backup.
+
+**Итог (2026-10-02): проверено.** Загрузка в снапшот из GRUB («Timeshift
+snapshots»): корень — снапшот, `ws check` без FAIL. Откат: снапшот →
+`/etc/ws-restore-test` → Restore без @home → rEFInd: файла нет, корень `@`,
+ядро T2, хук перенёс default subvolume 256 → 285. Прежний recovery
+(`system-backup-snapshot`, `/.snapshots`) убран.
 
 ---
 

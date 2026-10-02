@@ -1,7 +1,7 @@
 # GRUB boots the kernel (a machine without rEFInd). Kernel parameters come
 # from facts.kernelParams; GRUB finds the root itself. The menu shows for
-# five seconds, so older kernels and snapshots (system-backup-snapshot) stay
-# reachable.
+# five seconds, so older kernels and Timeshift snapshots (42_ws_timeshift,
+# system/common.nix) stay reachable.
 { lib, facts, file, text, ... }:
 let
   cmdline = lib.concatStringsSep " " facts.kernelParams;
@@ -14,7 +14,6 @@ in
       GRUB_CMDLINE_LINUX_DEFAULT="${cmdline}"
     '' "0644")
     (file "/etc/default/grub.d/99-recovery-menu.cfg" "system/files/default/grub.d/99-recovery-menu.cfg" "0644")
-    (file "/usr/local/sbin/system-backup-snapshot" "system/files/usr/local/sbin/system-backup-snapshot" "0755")
   ];
 
   # Not installed, edited or checked by content here, but part of the boot

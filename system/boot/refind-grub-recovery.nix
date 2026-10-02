@@ -23,7 +23,6 @@ in
       GRUB_CMDLINE_LINUX_DEFAULT="${cmdline}"
     '' "0644")
     (file "/etc/default/grub.d/99-recovery-menu.cfg" "system/files/default/grub.d/99-recovery-menu.cfg" "0644")
-    (file "/usr/local/sbin/system-backup-snapshot" "system/files/usr/local/sbin/system-backup-snapshot" "0755")
 
     # /boot/ws for "Ubuntu (AMD)": relinked after every kernel and initramfs change.
     (file "/usr/local/sbin/ws-boot-links" "system/files/usr/local/sbin/ws-boot-links" "0755")

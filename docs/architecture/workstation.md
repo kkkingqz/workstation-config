@@ -42,7 +42,7 @@ Root работает на **Btrfs**.
 @log
 @nix          /nix: Nix store, отдельно от @ (откат @ не трогает /nix)
 @vms          /var/lib/vms: состояние VM (диски, UEFI, TPM, XML), вне snapshots @
-.snapshots
+timeshift-btrfs  snapshots Timeshift (@, @home); создаёт Timeshift
 ```
 
 ## Root boot

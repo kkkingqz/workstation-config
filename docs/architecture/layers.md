@@ -95,5 +95,5 @@ Distrobox ↔ NTSync) проверяет `ws-workstation-verify`. Формат �
 ws baseline capture|diff    функциональный снимок: проверки, GNOME, Flatpak, ...
 ws checkpoint create|diff   коммит ↔ поколение home-manager, системное дерево, ядро
 ws collect                  архив машины для rebuild (helpws rebuild, раздел 0)
-system-backup-snapshot      Btrfs snapshot для recovery (helpws rebuild, раздел 12)
+Timeshift                   snapshots @ и @home, вход из GRUB (helpws rebuild, раздел 12)
 ```

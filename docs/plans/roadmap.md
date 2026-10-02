@@ -15,7 +15,7 @@ volume: User Commands
 - Ubuntu 26.04.1 LTS;
 - GNOME 50 / Wayland / GDM3;
 - rEFInd + T2 kernel `7.2.7-1-t2-resolute`;
-- Btrfs root с `@`, `@home`, `@root`, `@srv`, `@cache`, `@tmp`, `@log`, `.snapshots`;
+- Btrfs root с `@`, `@home`, `@root`, `@srv`, `@cache`, `@tmp`, `@log`; snapshots — Timeshift;
 - Wi-Fi, Bluetooth, T2 audio, microphone, camera;
 - Intel UHD 630 как primary GPU; AMD dGPU выключена при загрузке (rEFInd «Ubuntu», `helpws workstation`), offload в «Ubuntu (AMD)»;
 - рабочий `deep/S3` suspend/resume;
