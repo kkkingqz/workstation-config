@@ -10,3 +10,6 @@ apple-firmware-script
 # socket of the Ubuntu kernel, linux-t2 has none; it fails at every login
 # (user session degraded, ws switch warns).
 snap-remove:prompting-client
+
+# SSH access to this machine (sshd on port 22)
+openssh-server
