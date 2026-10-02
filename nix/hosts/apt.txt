@@ -61,3 +61,21 @@ ovmf
 swtpm-tools
 # Shared folders (virtiofs)
 virtiofsd
+
+# Desktop and command-line tools on top of the standard install
+# Space preview in Nautilus (org.gnome.NautilusPreviewer)
+gnome-sushi
+# "This computer" (drives) in Nautilus
+nautilus-my-computer
+gnome-system-monitor
+btop
+# GitHub CLI (gh auth for git push)
+gh
+# MPRIS players and PipeWire from the command line (playerctl, pactl)
+playerctl
+pulseaudio-utils
+# Crash dumps (coredumpctl)
+systemd-coredump
+# Non-free codecs and Microsoft fonts (multiverse); the font installer asks
+# to accept its EULA during bootstrap.sh
+ubuntu-restricted-extras

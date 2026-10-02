@@ -666,10 +666,6 @@ lt
 
 Используются icons, hyperlinks, directories first и Git metadata для long modes.
 
-## Wave Terminal
-
-Wave Terminal остаётся отдельным тяжёлым workspace terminal. Ghostty используется как быстрый ежедневный terminal.
-
 ---
 
 # HELP SYSTEM
