@@ -44,10 +44,6 @@ volume: User Commands
    Battery audit и fan policy закрыты 2026-10-01 (forced ASPM, AMD без
    amdgpu с запаркованным портом, PSR, быстрый resume; вентиляторы штатно).
 
-   `helpws plan-dgpu`
-   AMD через t2gmux (KaiT2en): выключение как в macOS (PC7 с выключенной
-   картой), включение без перезагрузки. Решение пользователя 2026-10-01.
-
 2. `helpws plan-final`
    Инвентаризация, backups, snapshots, restore checkpoints и финальный
    smoke-test. Уже есть: `ws collect` (состояние машины для rebuild),
@@ -57,6 +53,10 @@ volume: User Commands
 
 Отложено:
 
+- `helpws plan-dgpu` — AMD через t2gmux (KaiT2en), отложен 2026-10-01
+  (решение пользователя): у 16,1 включение карты выключает машину. Сейчас
+  `apple-gmux` + `ws-dgpu-park` (PC7 с выключенной картой); вернуться, когда
+  KaiT2en починит включение;
 - фикс t2bce через DKMS — только если сборка в podman станет неудобной;
   `build-essential` на host противоречит правилу про toolchains.
 
