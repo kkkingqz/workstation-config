@@ -8,3 +8,8 @@ apple-firmware-script
 
 # SSH access to this machine (sshd on port 22)
 openssh-server
+
+# Intel CPU microcode (i7-9750H) and Intel thermal daemon: auto-installed with
+# the generic kernel; kept when it was purged (2026-10-02)
+intel-microcode
+thermald
