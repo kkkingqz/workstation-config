@@ -316,6 +316,18 @@ sensors
 
 Touch ID — отдельная optional feature.
 
+**Итог (2026-10-02): отложено до релиза.** Проверено: рабочий вариант один —
+`macintog/t2touch` (форк `jmurth1234/t2-touchid-linux`; BiometricKit
+bridgeOS через BridgeXPC по `t2_ncm`, отпечатки — через штатный fprintd,
+регистрация из Linux). MacBookPro16,1 — его эталонная модель, но это
+исследовательский прототип (0.0.1–0.1.0 за 15–19.09.2026): установщик
+только для Omarchy (Arch), PAM — раскладки Arch; модули через DKMS
+(транспорт SEP, при необходимости — подменённый `applesmc`); suspend/resume
+на 16,1 «unqualified»; после холодного сброса bridgeOS бывает нужна
+повторная регистрация. Сейчас SEP (`04:00.2`) без драйвера, `fprintd-list`
+— «No devices available». Вернуться, когда будет выпуск с проверенным S3 и
+установкой вне Omarchy.
+
 План:
 
 1. Сохранить парольный login/PAM как обязательный fallback.
