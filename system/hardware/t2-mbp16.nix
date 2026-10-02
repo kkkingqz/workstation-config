@@ -24,6 +24,9 @@
     # the system and in the dracut initrd of a resume boot (update-initramfs -u).
     (file "/usr/local/sbin/ws-t2-detach" "system/files/usr/local/sbin/ws-t2-detach" "0755")
     (file "/usr/lib/systemd/system-sleep/60-ws-t2-hibernate" "system/files/usr/lib/systemd/system-sleep/60-ws-t2-hibernate" "0755")
+    (file "/etc/systemd/system/systemd-hibernate.service.d/ws-t2-nofreeze.conf" "system/files/systemd/system/ws-t2-nofreeze.conf" "0644")
+    (file "/etc/systemd/system/systemd-hybrid-sleep.service.d/ws-t2-nofreeze.conf" "system/files/systemd/system/ws-t2-nofreeze.conf" "0644")
+    (file "/etc/systemd/system/systemd-suspend-then-hibernate.service.d/ws-t2-nofreeze.conf" "system/files/systemd/system/ws-t2-nofreeze.conf" "0644")
     (file "/etc/dracut.conf.d/ws-hibernate.conf" "system/files/dracut/ws-hibernate.conf" "0644")
     (file "/usr/lib/dracut/modules.d/95ws-t2-resume/module-setup.sh" "system/files/dracut/95ws-t2-resume/module-setup.sh" "0755")
     (file "/usr/lib/dracut/modules.d/95ws-t2-resume/ws-t2-resume.sh" "system/files/dracut/95ws-t2-resume/ws-t2-resume.sh" "0755")

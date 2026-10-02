@@ -38,11 +38,28 @@ pci_bind() { # bind|unbind ADDRESS DRIVER
     echo "$2" >"/sys/bus/pci/drivers/$3/$1" || { say "$1 $2 ($3) failed"; rc=1; }
 }
 
+# One at a time: a down stuck in the kernel and an up from the post hook
+# interleaved once and left the T2 half bound.
+if command -v flock >/dev/null 2>&1; then
+    exec 9>/run/ws-t2-detach.lock
+    flock -w 120 9 || { say "another ws-t2-detach is still running"; exit 1; }
+fi
+
 core="$(pci_dev 0x106b 0x1801)" || { say "no T2 bridge (106b:1801)"; exit 1; }
 audio="$(pci_dev 0x106b 0x1803)" || audio=""
 rc=0
 
 down() {
+    # Unbinding the audio function waits (snd_card_free) until every
+    # process closes the sound card. In a frozen user.slice (systemd-sleep
+    # freezes the sessions before its hooks) PipeWire never does, and the
+    # unbind hangs in D state, so does the hibernation; the drop-in
+    # ws-t2-nofreeze.conf keeps the sessions running.
+    if grep -qx 'frozen 1' /sys/fs/cgroup/user.slice/cgroup.events 2>/dev/null; then
+        say "user.slice is frozen: the sound card cannot be released; T2 stack left on"
+        rc=1
+        return
+    fi
     if [ -d /sys/module/t2bce_vhci ]; then
         rmmod t2bce_vhci || { say "rmmod t2bce_vhci failed"; rc=1; }
     fi
